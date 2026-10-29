@@ -147,6 +147,32 @@ to look at when porting.
 - Not done: custom icon art. That, or labels, would need new resources (the
   game's text is `text/*.po`, six files, one set of numbered messages).
 
+### 6. Menu text as game messages
+- Patch: `0006-Arena-menu-text-as-game-messages-icon-highlight-foll.patch`
+- Files: `games/tbs/text/en.po` (30 messages appended, `MsgArena*`, ids
+  10723 to 10752), `scene/battle_arena.c`, `window/screens/icon_menu.c`,
+  `include/module/window/screens.h`.
+- Why: text drawn from C strings uses a different, monospaced font and does not
+  wrap. Messages draw in the game's own font. The first patch-5 menu also kept
+  its own selection counter, so the icon highlight did not follow the label.
+- `ArenaMenu_IconChoose(prompt, icons, labelBase, count)` now opens the prompt
+  as a message window the way `Shop_ShowKeeperMessage` does
+  (`Message_OpenWindow(prompt, 5, 0, 0x22)`), then runs the stock
+  `IconMenu_Run`, with `labelBase` as `IconMenu_Center`'s label messages (label =
+  `labelBase` + position; hence consecutive messages).
+- Numbers and names go through messages too: `MsgArenaNumber`
+  (`{argument_signed_number}`) and `MsgArenaName` (`{argument_actor_name:1}`),
+  with `MessageArgument_Push` before the draw. They draw left-aligned.
+- The win report is the attendant speaking `MsgArenaVictory`.
+- **Editions:** only `en.po` has the new messages. The other five `.po` files
+  are untouched, so those editions do not build with these changes (the code
+  names messages they lack). Message keys must be contiguous from 0
+  (`validateCatalog` in `tools/ags-text/catalog.c`); `X-Alchemy-Symbol-Count`
+  is the glyph alphabet, not a message count, and is left alone. New messages go
+  at the end; `MsgEnd` moves up with them.
+- The list screens' cursor is still a tile `>` (no cursor glyph exists in any
+  message), and the party strip has no custom text.
+
 ## Planned
 
 - Save and load the upgraded party.
