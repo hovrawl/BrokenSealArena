@@ -61,8 +61,35 @@ to look at when porting.
 - Port notes: formation and enemy rows differ in The Lost Age; re-pick the
   teams from its `enemy_table.c`.
 
+### 3. Training menu (stats and Psynergy)
+- Patch: `0003-Arena-training-menu-for-stats-and-Psynergy.patch`
+- Files: `games/tbs/src/scene/battle_arena.c`,
+  `games/tbs/src/scene/import/battle_arena.s`,
+  `games/tbs/src/system/overlay/imports.inc`,
+  `games/tbs/src/scene/file_screen.c` (starting coins)
+- Switch: `ARENA_TRAINING` (top of `battle_arena.c`).
+- What: `Training_Run` opens a full-screen window (the debug menus' pattern:
+  `Window_Create`, `Text_Draw*`, keys from `gKeysRepeat`) with a character
+  list, a stat screen and a Psynergy shop. Stats add to the unit's `base*`
+  fields and call `Unit_Calculate`; Psynergy goes through
+  `Unit_LearnPsynergy`. Prices: HP = base, PP = 2 x base, Attack 3 x,
+  Defense and Agility 4 x, Luck (base + 1) x 100; Psynergy 150 + 50 per PP.
+  `gTraining_PsynergyShop` is the shop list (ability ids; names come from
+  `MsgAbilityName`).
+- Hooks: after a monster win (`BattleArena_RunRoundResult`, which also pays
+  the coins: 200 plus 100 per earlier win in the series) and at the start of
+  the attendant's talk (`BattleArena_ChooseBattleMode`). It heals the party
+  (`Party_RestoreHpPp(1)`) on exit.
+- Overlay imports: `Unit_LearnPsynergy` had no row in `imports.inc`, so one
+  was added (its far stub already existed in `gamepak/far_call/GAME.S`).
+- Not done: the upgrades live in RAM only. They persist only if the stock save
+  is used; this build has no save step yet. Text is English only, written as
+  global `const u8` arrays (scene overlays use no string literals elsewhere).
+- Port notes: ability ids and enemy/unit layouts match across the two games
+  only partly; check `ability_table.c` in The Lost Age.
+
 ## Planned
 
-- Upgrade menu: spend winnings on stats and Psynergy between fights.
+- Save and load the upgraded party.
 - Stock arena text still mentions link cables.
 - Stock arena resets the party to Isaac, Garet, Ivan and Mia on a save load.
