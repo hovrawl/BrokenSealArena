@@ -120,6 +120,33 @@ to look at when porting.
 - Build note: `make` through `wsl ... ; echo rc=$?` reported 0 on a failed
   build; check the log for `***`, or that the ROM's timestamp changed.
 
+### 5. Shop-style icon menus and the character strip
+- Patch: `0005-Arena-shop-style-icon-menus-and-character-strip.patch`
+- Files: `games/tbs/src/window/screens/icon_menu.c` (new
+  `ArenaMenu_IconChoose`), `games/tbs/src/shop/shop/item_picker.c` (new
+  `ItemPicker_ChooseMember`), `gamepak/far_call/WINDOW.S` and `SHOP.S` (one
+  export each, appended to the bank tables), `system/overlay/imports.inc`,
+  `scene/import/battle_arena.s`, `include/module/window/screens.h`,
+  `include/module/shop/shop.h`, `scene/battle_arena.c`.
+- Why in the main image: the icon menu and the shop's party strip use private
+  state and have no far-call stubs, so an overlay cannot drive them. The new
+  functions live beside that state and are exported.
+- `ArenaMenu_IconChoose(prompt, icons, labels, count)`: a prompt window across
+  the top, and `IconMenu_Open`/`AddIcon`/`Center` for the icon row at tile row
+  17, as `Menu_SelectShopCommand` does. Each icon's name is a fixed message
+  (`MsgCommandName + icon`), so the label is drawn from the caller's text. Icons
+  used: Fight and Cable (Solo, Multiplayer), Battle (the gauntlet), Status,
+  Djinn, Psynergy and Item (the manager), Equip, Defend and Item (the shops).
+  They are existing art, so some do not suit their label.
+- `ItemPicker_ChooseMember()`: `ItemPicker_Run` without the item choice, plus
+  the coins window from `Shop_ChooseMember`. Returns the unit id or -1.
+- The list screens now use the tile text calls (`Text_Draw*InWindow`,
+  `Text_DrawMessageAsTiles`) at 16-pixel rows. The canvas calls
+  (`Text_DrawString`, `Text_DrawNumber`) ignore `Window_ClearInteriorTiles`,
+  which left old cursors and numbers showing.
+- Not done: custom icon art. That, or labels, would need new resources (the
+  game's text is `text/*.po`, six files, one set of numbered messages).
+
 ## Planned
 
 - Save and load the upgraded party.

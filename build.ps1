@@ -8,5 +8,12 @@ if ($Verify) { $cmd += ' && make compare-tbs-en' }
 wsl -d Ubuntu -- bash -lc $cmd
 if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 $src = '\\wsl.localhost\Ubuntu\home\nathan\alchemy\out\tbs-en\tbs-en.gba'
-Copy-Item $src $dest -Force
-Write-Host "ROM: $dest"
+try {
+  Copy-Item $src $dest -Force -ErrorAction Stop
+  Write-Host "ROM: $dest"
+} catch {
+  # An emulator holding the ROM open locks it; leave that copy alone.
+  $alt = Join-Path $PSScriptRoot 'build\tbs-en.new.gba'
+  Copy-Item $src $alt -Force
+  Write-Host "ROM is in use; wrote $alt instead"
+}
