@@ -1,0 +1,76 @@
+From 8916441f78e93c2dd20ed37645a5714e5fcc44f7 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 30 Oct 2026 10:11:06 +1100
+Subject: [PATCH] Arena: New Game boots straight into the Battle Arena
+
+Skips the prologue and name entry and enters the Battle Arena with a level 30
+Isaac, Garet, Mia and Ivan, so no save file is needed. Guarded by ARENA_BOOT in
+scene/file_screen.c; the overlay imports Unit_LevelUpTo and Unit_Calculate.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/scene/file_screen.c        | 27 ++++++++++++++++++++++++
+ games/tbs/src/scene/import/file_screen.s |  2 ++
+ 2 files changed, 29 insertions(+)
+
+diff --git a/games/tbs/src/scene/file_screen.c b/games/tbs/src/scene/file_screen.c
+index f0c1ff6fdd..a31c2fbe4f 100644
+--- a/games/tbs/src/scene/file_screen.c
++++ b/games/tbs/src/scene/file_screen.c
+@@ -3,6 +3,10 @@
+ /// continue, copy and delete), the door to the Battle Arena and the transfer of
+ /// a save's data, by link or as a password.
+ 
++#ifndef ARENA_BOOT
++#define ARENA_BOOT 1
++#endif
++
+ #include "scene_ids.h"
+ #include "module/scene/file_screen.h"
+ #include "module/field/field_sequence.h"
+@@ -515,6 +519,29 @@ menu_top:;
+     MainRoutineWork_InitializeDefaults();
+     WindowColor_Apply(gMainRoutineWork.windowColor[0],
+                       gMainRoutineWork.windowColor[1]);
++#if ARENA_BOOT
++    // Arena romhack: "New Game" skips the prologue and enters the Battle Arena
++    // with a ready-made level 30 party, no save file needed.
++    Party_AddMember(GARET);
++    Party_AddMember(MIA);
++    Party_AddMember(IVAN);
++    Unit_LevelUpTo(ISAAC, 30);
++    Unit_LevelUpTo(GARET, 30);
++    Unit_LevelUpTo(MIA, 30);
++    Unit_LevelUpTo(IVAN, 30);
++    Unit_Calculate(ISAAC);
++    Unit_Calculate(GARET);
++    Unit_Calculate(MIA);
++    Unit_Calculate(IVAN);
++    gMainRoutineWork.leaderActorId = 0;
++    GameFlag_Clear(FLAG_KEEP_PARTY_POSITION);
++    GameFlag_Clear(FLAG_MENU_OPEN);
++    GameFlag_Set(FLAG_IN_BATTLE_ARENA);
++    gSleepDisabled = 1;
++    Event_SetDestination((s32)&SceneId_BattleArena,
++                         BATTLE_ARENA_FROM_FILE_SCREEN);
++    goto leave;
++#endif
+     v5 = 1;
+     v7 = 0;
+     for (;;) {
+diff --git a/games/tbs/src/scene/import/file_screen.s b/games/tbs/src/scene/import/file_screen.s
+index 34ae43548a..b275b4cda5 100644
+--- a/games/tbs/src/scene/import/file_screen.s
++++ b/games/tbs/src/scene/import/file_screen.s
+@@ -45,6 +45,8 @@
+ 	.set import.Party_AddMember, 1
+ 	.set import.Party_RemoveMember, 1
+ 	.set import.Party_StartChildhood, 1
++	.set import.Unit_LevelUpTo, 1
++	.set import.Unit_Calculate, 1
+ 	.set import.BuildStamp_GetTime, 1
+ 	.set import.InventorySnapshot_Restore, 1
+ 	.set import.Event_Wait, 1
+-- 
+2.53.0
+
