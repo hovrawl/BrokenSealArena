@@ -88,6 +88,38 @@ to look at when porting.
 - Port notes: ability ids and enemy/unit layouts match across the two games
   only partly; check `ability_table.c` in The Lost Age.
 
+### 4. Attendant and party manager menus
+- Patch: `0004-Arena-attendant-and-party-manager-menus.patch`
+- Files: `games/tbs/src/scene/battle_arena.c`,
+  `games/tbs/src/scene/import/battle_arena.s`,
+  `games/tbs/src/system/overlay/imports.inc` (a row for
+  `Window_ClearInteriorTiles`; its far stub already existed)
+- Switch: `ARENA_TRAINING` (also guards patch 3).
+- `ArenaMenu_Choose(prompt, options, count)`: a prompt window across the top
+  and up to six options across the bottom (three to a column, A chooses, B
+  cancels). There is no shop-style icon row: the game's command icons are
+  fixed graphics with fixed names, so this one draws plain text.
+- Attendant (`BattleArena_ChooseBattleMode`): `ArenaMenu_AttendantMode` asks
+  Solo or Multiplayer, then for Solo the tournament. Solo takes the stock
+  "start a monster series" branch, Multiplayer the stock "wait for a link"
+  branch; the stock yes/no question is skipped (`answer` is set from the menu).
+  Not asked when a series is already running. Tournaments: the Monster
+  Gauntlet (`gArenaLadder`) is the only one. A second would need a way for
+  battle code (`ArenaLadder_Select`) to know which one is chosen, for example
+  a game flag byte.
+- Party manager (`BattleArena_PartyManager`): replaces the talk trigger of
+  `ACTOR_LINKED_WINS_TELLER`, the man to the right of the counter (the
+  linked-win reporting is no longer reachable). Characters (stats), Djinn
+  (all 28, 500 coins, given and set at once through `Djinn_Give` and
+  `Djinn_Set`), Psynergy (patch 3's shop), and Items, which opens the real
+  `Shop_Run` on Xian's weapon, armor and item stock rows (16 to 18).
+- After a win, `ArenaMenu_ShowWin` shows the coins won and heals the party; the
+  training menu no longer opens by itself.
+- The screens call `Window_ClearInteriorTiles` before every redraw. Without it
+  the previous draw showed through wherever the new text was shorter.
+- Build note: `make` through `wsl ... ; echo rc=$?` reported 0 on a failed
+  build; check the log for `***`, or that the ROM's timestamp changed.
+
 ## Planned
 
 - Save and load the upgraded party.
