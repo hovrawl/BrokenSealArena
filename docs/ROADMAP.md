@@ -229,12 +229,24 @@ above.
   checksums them, and the struct has unnamed spare bytes ("no code names it":
   about 0x84 after the Lucky Wheel prizes and 0x50 after the halt fields, plus a
   few small gaps). A few bytes per tournament (attempts, wins, losses, clears,
-  best round) fit and are saved and checksummed for free. Caveats to check first:
-  "no code names it" is not proof the original never used it (the Lost Age may
-  read some of it when a TBS file is transferred); and the tournament flag (Phase
-  1) must exist so there is a key. Until then the stock tallies are enough and
-  the stock record write into the file stays off. Detailed fight data (below) does
-  not fit in the save.
+  best round) fit and are saved and checksummed for free. Where to put them, in
+  order of safety:
+  1. **Story-only persistent flags.** The game flags are 0x200 bytes; the hack only
+     reaches the arena, so most story flags are never read. We can list which flags
+     the code reachable from the arena (the shops, battle, saving, the arena
+     itself) refers to, and the rest are free to hold counters (the scene and area
+     temp ranges are cleared on a scene change, so they are not candidates). This
+     needs only the TBS source, not the Lost Age.
+  2. **The struct's unnamed bytes.** "No code names it" is not proof the original
+     never used it: the Lost Age may read some of it when a TBS file is
+     transferred. Wait for the Lost Age decomp, then compare what its transfer
+     reads before claiming any.
+  We would not delete or shrink anything: the struct's size and offsets are fixed
+  by asserts and by code that reads fields by offset (`units` at 0x2c0), and the
+  file has room, so the gain is repurposing bytes, not saving space. Keep every
+  claimed byte named in one header so a later move is a one-file change. The
+  tournament flag (Phase 1) must exist first, as the key. Until then the stock
+  tallies are enough and the stock record write into the file stays off.
 - **Post-battle events.** Today every outcome is the attendant speaking a line
   and the standard spawn. Wanted: a minor event for each win, a major one for
   winning a whole tournament (rung 12 is a plain win for now), and a bespoke one
@@ -247,9 +259,15 @@ above.
   target, the damage or healing, the element and type), then derive the numbers
   by replaying the log: damage by character, by move type, by element, turns.
   Logging each action is the base; the breakdowns can be simulated later from it.
-  It would also feed the balance pass. Open: where the log lives in a game with
-  very little free memory (the battle work block and the save are both tight), and
-  whether it can be written by the headless driver's `peek` instead of in game.
+  It would also feed the balance pass. **The log is not saved** (decided): it is
+  kept in memory for one fight round, used for a summary or the post-battle event,
+  and cleared at the next round. A round is a few dozen actions at about 8 bytes
+  each, so 1 to 2 KB. Where it lives is not yet measured: the general EWRAM heap
+  (`gEwramHeap`, 0x02030000 to 0x02038000) is 32 KB shared by the field, battle and
+  menu work, and nobody has checked what a battle leaves free. First step: read the
+  heap's free space during a battle with the headless driver's `peek`. The battle
+  also has its own random seed (`gBattleRandomSeed`), so recording the seed and the
+  chosen commands may be enough to replay a fight and derive the numbers offline.
 - **Difficulty modifiers.** Switch off the automatic heal after a win, probably
   per tournament and maybe as a player option. Keep the heal one call a
   tournament setting can skip.
