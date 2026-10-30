@@ -1,0 +1,142 @@
+# Both consoles: buy a Djinni for Isaac and for Garet at the manager, walk back to the
+# attendant, link, and fight; look at the command row, then read the Djinn state.
+# Prefix: New Game, step through the greeter, walk to the manager (the man at the
+# right counter) and talk to him. Ends with his icon menu open.
+wait 900
+tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 60
+press U 80
+press R 50
+press R 8
+tap A
+wait 150
+tap R
+wait 20
+# Isaac: Djinn counter, buy the first
+tap A
+wait 150
+tap A
+wait 150
+tap A
+wait 60
+shot /tmp/shots/p0_b1.png
+tap B
+wait 120
+# Garet: next in the strip, counter, buy the first
+tap R
+wait 40
+tap A
+wait 150
+tap A
+wait 60
+shot /tmp/shots/p0_b2.png
+tap B
+wait 120
+tap B
+wait 120
+tap B
+wait 120
+peek 0x0200061C 4
+peek 0x02000748 4
+# back to the lobby spot, then the attendant and the stock link flow
+press L 58
+press D 80
+wait 30
+shot /tmp/shots/p0_b3.png
+press U 40
+press L 44
+press U 60
+press L 10
+press U 10
+wait 30
+tap A
+wait 150
+tap R
+wait 20
+tap A
+wait 200
+tap A
+wait 200
+wait 200
+tap A
+wait 150
+tap A
+wait 150
+tap A
+wait 150
+tap A
+wait 150
+tap A
+wait 100
+tap A
+wait 100
+tap A
+wait 100
+press R 40
+press U 30
+press R 14
+wait 120
+shot /tmp/shots/p0_g.png
+wait 240
+shot /tmp/shots/p0_h.png
+wait 300
+shot /tmp/shots/p0_i.png
+wait 300
+shot /tmp/shots/p0_j.png
+wait 150
+tap A
+wait 100
+shot /tmp/shots/p0_d0.png
+tap A
+wait 100
+shot /tmp/shots/p0_d1.png
+tap A
+wait 60
+shot /tmp/shots/p0_d2.png
+tap A
+wait 100
+# Fight, Attack: the enemy target cursor, then through the four opponents
+tap A
+wait 50
+tap A
+wait 70
+shot /tmp/shots/p0_t1.png
+# objects 8..11 (EnemyIsaac, Garet, Mia, Ivan): resource +4, overlay +6, animation +8, shadow +A, palette +0x14, scale +0x18, active +0x26
+# slot 8
+peekp 0x03001E74 1d8 4
+peekp 0x03001E74 1da 4
+peekp 0x03001E74 1dc 4
+peekp 0x03001E74 1de 4
+peekp 0x03001E74 1e8 4
+peekp 0x03001E74 1ec 4
+peekp 0x03001E74 1fa 4
+# slot 9
+peekp 0x03001E74 204 4
+peekp 0x03001E74 206 4
+peekp 0x03001E74 208 4
+peekp 0x03001E74 20a 4
+peekp 0x03001E74 214 4
+peekp 0x03001E74 218 4
+peekp 0x03001E74 226 4
+# slot 10
+peekp 0x03001E74 230 4
+peekp 0x03001E74 232 4
+peekp 0x03001E74 234 4
+peekp 0x03001E74 236 4
+peekp 0x03001E74 240 4
+peekp 0x03001E74 244 4
+peekp 0x03001E74 252 4
+# slot 11
+peekp 0x03001E74 25c 4
+peekp 0x03001E74 25e 4
+peekp 0x03001E74 260 4
+peekp 0x03001E74 262 4
+peekp 0x03001E74 26c 4
+peekp 0x03001E74 270 4
+peekp 0x03001E74 27e 4

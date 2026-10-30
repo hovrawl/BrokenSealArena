@@ -221,6 +221,47 @@ frames 7 apart while choosing a target, zoomed crops, and a party-order swap:
   anything indexed by enemy place, and compare against a monster formation with four enemies.
 - It is not an OAM overflow: 11 of 128 sprite entries were drawing at target selection.
 
+**Chased down (2026-10-31): the cause is the sprite VRAM budget.** What was measured, in
+order (all with the two-console driver's new `peekp`, `peekpp` and `peekp3` reads):
+
+1. EnemyIvan's actor never moves (x -80, z constant) and his facing is constant (all four
+   opponents face within a few degrees of straight on), so it is not geometry or turning.
+2. The four opponents' battle objects are identical in shape: resources 300 to 303, the same
+   palette (1), scale and shadow. Removing every opponent's weapon overlay did **not** stop
+   the flicker (tested and reverted), so it is not the overlays.
+3. Their `Sprite` records are identical and unchanging in every frame: cache slots 4, 5, 6, 7
+   (Ivan is 7), width 64, the same animation number, `dirty` 0, three layers.
+4. **The VRAM block table at target selection** (`gVramCacheBlockOwners`, 512 blocks of 64
+   bytes, the whole 32 KB of sprite memory): the opponents' entries 4 to 7 and the party's 0 to
+   2 are resident at **64 blocks (4 KB) each**; **entry 3, the party's fourth, is missing**;
+   entries 8, 9 and 10 (the target markers and the like) hold 16, 8 and 4 blocks; 2 more
+   blocks belong to entry 93; **34 blocks are free**. A resident entry 3 would need 64, so the
+   cache is **about 30 blocks over budget**.
+
+So: eight full-size character sprites need 8 x 64 = 512 blocks, which is *all* of sprite
+VRAM, leaving nothing for the cursors, windows and status icons that a battle also needs.
+The stock game never gets there (a link battle has at most six characters, 384 blocks; a normal
+battle has four characters and monsters). The game copes by evicting an entry, and the loser is
+the last one loaded. The party's Ivan and the opponent's Ivan use the same resource (302), so
+they share the cache's idea of that sprite, which fits Ivan's front view (opponent) and back
+view (party) taking turns in the same tiles. I did not prove that last step (it needs the
+OAM entries and the tile contents at a flip), but the budget itself is measured, and it
+explains why only the last-loaded character misbehaves and why a swap of the order moves
+the problem to whoever is fourth.
+
+**What this means for 4v4**
+- It is a hardware limit, not a bug in the layout code: 32 KB of sprite memory cannot hold
+  eight 4 KB characters plus the UI. Anything that keeps all eight at full size needs about
+  30 more blocks.
+- Ways to find them (not tried): free the UI sprites for the duration of the link battle;
+  make the opponents' sprites cheaper (the entry is 64 blocks because the frame is 64 x 64 at
+  one byte a pixel, so a smaller frame or 4 bits a pixel would halve it, but that is art and
+  engine work); let the party and the opponent share one set of tiles per character (not
+  possible as is, since one is seen from behind and the other from the front); or draw the
+  fourth opponent differently (a smaller sprite, a simpler picture).
+- Test of the diagnosis, worth doing first: a 4v3 (four of ours, three of theirs) should fit
+  (7 x 64 + 28 = 476) and Ivan should be stable. That is the stock limit plus one.
+
 **Control, to prove the offset is needed:** the same four-a-side build with only the table
 put back in unit 3 shows **three** opposing characters, and the intro reads "EnemyMia
 appeared! (blank) appeared!": the table overwrote the fourth unit's record, so its name is

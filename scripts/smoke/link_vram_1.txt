@@ -1,0 +1,270 @@
+# Both consoles: buy a Djinni for Isaac and for Garet at the manager, walk back to the
+# attendant, link, and fight; look at the command row, then read the Djinn state.
+# Prefix: New Game, step through the greeter, walk to the manager (the man at the
+# right counter) and talk to him. Ends with his icon menu open.
+wait 900
+tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 60
+press U 80
+press R 50
+press R 8
+tap A
+wait 150
+tap R
+wait 20
+# Isaac: Djinn counter, buy the first
+tap A
+wait 150
+tap A
+wait 150
+tap A
+wait 60
+shot /tmp/shots/p1_b1.png
+tap B
+wait 120
+# Garet: next in the strip, counter, buy the first
+tap R
+wait 40
+tap A
+wait 150
+tap A
+wait 60
+shot /tmp/shots/p1_b2.png
+tap B
+wait 120
+tap B
+wait 120
+tap B
+wait 120
+peek 0x0200061C 4
+peek 0x02000748 4
+# back to the lobby spot, then the attendant and the stock link flow
+press L 58
+press D 80
+wait 30
+shot /tmp/shots/p1_b3.png
+press U 40
+press L 44
+press U 60
+press L 10
+press U 10
+wait 30
+tap A
+wait 150
+tap R
+wait 20
+tap A
+wait 200
+tap A
+wait 200
+wait 200
+tap A
+wait 150
+tap A
+wait 150
+tap A
+wait 150
+tap A
+wait 150
+tap A
+wait 100
+tap A
+wait 100
+tap A
+wait 100
+press R 40
+press U 30
+press R 14
+wait 120
+shot /tmp/shots/p1_g.png
+wait 240
+shot /tmp/shots/p1_h.png
+wait 300
+shot /tmp/shots/p1_i.png
+wait 300
+shot /tmp/shots/p1_j.png
+wait 150
+tap A
+wait 100
+shot /tmp/shots/p1_d0.png
+tap A
+wait 100
+shot /tmp/shots/p1_d1.png
+tap A
+wait 60
+shot /tmp/shots/p1_d2.png
+tap A
+wait 100
+# Fight, Attack: the enemy target cursor, then through the four opponents
+tap A
+wait 50
+tap A
+wait 70
+shot /tmp/shots/p1_t1.png
+wait 20
+peek 0x03001810 4
+peek 0x03001814 4
+peek 0x03001818 4
+peek 0x0300181C 4
+peek 0x03001820 4
+peek 0x03001824 4
+peek 0x03001828 4
+peek 0x0300182C 4
+peek 0x03001830 4
+peek 0x03001834 4
+peek 0x03001838 4
+peek 0x0300183C 4
+peek 0x03001840 4
+peek 0x03001844 4
+peek 0x03001848 4
+peek 0x0300184C 4
+peek 0x03001850 4
+peek 0x03001854 4
+peek 0x03001858 4
+peek 0x0300185C 4
+peek 0x03001860 4
+peek 0x03001864 4
+peek 0x03001868 4
+peek 0x0300186C 4
+peek 0x03001870 4
+peek 0x03001874 4
+peek 0x03001878 4
+peek 0x0300187C 4
+peek 0x03001880 4
+peek 0x03001884 4
+peek 0x03001888 4
+peek 0x0300188C 4
+peek 0x03001890 4
+peek 0x03001894 4
+peek 0x03001898 4
+peek 0x0300189C 4
+peek 0x030018A0 4
+peek 0x030018A4 4
+peek 0x030018A8 4
+peek 0x030018AC 4
+peek 0x030018B0 4
+peek 0x030018B4 4
+peek 0x030018B8 4
+peek 0x030018BC 4
+peek 0x030018C0 4
+peek 0x030018C4 4
+peek 0x030018C8 4
+peek 0x030018CC 4
+peek 0x030018D0 4
+peek 0x030018D4 4
+peek 0x030018D8 4
+peek 0x030018DC 4
+peek 0x030018E0 4
+peek 0x030018E4 4
+peek 0x030018E8 4
+peek 0x030018EC 4
+peek 0x030018F0 4
+peek 0x030018F4 4
+peek 0x030018F8 4
+peek 0x030018FC 4
+peek 0x03001900 4
+peek 0x03001904 4
+peek 0x03001908 4
+peek 0x0300190C 4
+peek 0x03001910 4
+peek 0x03001914 4
+peek 0x03001918 4
+peek 0x0300191C 4
+peek 0x03001920 4
+peek 0x03001924 4
+peek 0x03001928 4
+peek 0x0300192C 4
+peek 0x03001930 4
+peek 0x03001934 4
+peek 0x03001938 4
+peek 0x0300193C 4
+peek 0x03001940 4
+peek 0x03001944 4
+peek 0x03001948 4
+peek 0x0300194C 4
+peek 0x03001950 4
+peek 0x03001954 4
+peek 0x03001958 4
+peek 0x0300195C 4
+peek 0x03001960 4
+peek 0x03001964 4
+peek 0x03001968 4
+peek 0x0300196C 4
+peek 0x03001970 4
+peek 0x03001974 4
+peek 0x03001978 4
+peek 0x0300197C 4
+peek 0x03001980 4
+peek 0x03001984 4
+peek 0x03001988 4
+peek 0x0300198C 4
+peek 0x03001990 4
+peek 0x03001994 4
+peek 0x03001998 4
+peek 0x0300199C 4
+peek 0x030019A0 4
+peek 0x030019A4 4
+peek 0x030019A8 4
+peek 0x030019AC 4
+peek 0x030019B0 4
+peek 0x030019B4 4
+peek 0x030019B8 4
+peek 0x030019BC 4
+peek 0x030019C0 4
+peek 0x030019C4 4
+peek 0x030019C8 4
+peek 0x030019CC 4
+peek 0x030019D0 4
+peek 0x030019D4 4
+peek 0x030019D8 4
+peek 0x030019DC 4
+peek 0x030019E0 4
+peek 0x030019E4 4
+peek 0x030019E8 4
+peek 0x030019EC 4
+peek 0x030019F0 4
+peek 0x030019F4 4
+peek 0x030019F8 4
+peek 0x030019FC 4
+peek 0x03001A00 4
+peek 0x03001A04 4
+peek 0x03001A08 4
+peek 0x03001A0C 4
+peek 0x03001B10 4
+peek 0x03001B14 4
+peek 0x03001B18 4
+peek 0x03001B1C 4
+peek 0x03001B20 4
+peek 0x03001B24 4
+peek 0x03001B28 4
+peek 0x03001B2C 4
+peek 0x03001B30 4
+peek 0x03001B34 4
+peek 0x03001B38 4
+peek 0x03001B3C 4
+peek 0x03001B40 4
+peek 0x03001B44 4
+peek 0x03001B48 4
+peek 0x03001B4C 4
+peek 0x03001B50 4
+peek 0x03001B54 4
+peek 0x03001B58 4
+peek 0x03001B5C 4
+peek 0x03001B60 4
+peek 0x03001B64 4
+peek 0x03001B68 4
+peek 0x03001B6C 4
+peek 0x03001B70 4
+peek 0x03001B74 4
+peek 0x03001B78 4
+peek 0x03001B7C 4
+peek 0x03001B80 4
+peek 0x03001B84 4
+peek 0x03001B88 4
+peek 0x03001B8C 4

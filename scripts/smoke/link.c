@@ -42,7 +42,7 @@
 #define MAX_EVENTS 20000
 #define BARRIER_SLACK 2
 
-enum EvType { EV_KEYS, EV_SHOT, EV_PEEK, EV_POKE, EV_PEEKP };
+enum EvType { EV_KEYS, EV_SHOT, EV_PEEK, EV_POKE, EV_PEEKP, EV_PEEKPP, EV_PEEKP3 };
 
 struct Event {
   int frame;
@@ -174,6 +174,20 @@ static void compile(struct Player *p, const char *path, const char *dir, int *fr
       n = 1;
       sscanf(line, "%*s %x %x %d", &a, &off, &n);
       addEvent(p, *frame, EV_PEEKP, 0, NULL, a, n, off);
+    } else if (!strcmp(cmd, "peekpp")) {
+      /* peekpp PTRADDR OFF1 OFF2 SIZE: p = [PTRADDR]; q = [p + OFF1]; read SIZE at q + OFF2 */
+      unsigned off1 = 0, off2 = 0;
+      n = 1;
+      sscanf(line, "%*s %x %x %x %d", &a, &off1, &off2, &n);
+      addEvent(p, *frame, EV_PEEKPP, off2, NULL, a, n, off1);
+    } else if (!strcmp(cmd, "peekp3")) {
+      /* peekp3 PTRADDR OFF1 OFF2 OFF3 SIZE: p = [PTRADDR]; q = [p + OFF1]; r = [q + OFF2]; read SIZE at r + OFF3 */
+      unsigned off1 = 0, off2 = 0, off3 = 0;
+      char off3text[16];
+      n = 1;
+      sscanf(line, "%*s %x %x %x %x %d", &a, &off1, &off2, &off3, &n);
+      snprintf(off3text, sizeof off3text, "%x", off3);
+      addEvent(p, *frame, EV_PEEKP3, off2, off3text, a, n, off1);
     } else if (!strcmp(cmd, "poke")) {
       b = 0;
       sscanf(line, "%*s %x %d %u", &a, &n, &b);
@@ -264,6 +278,34 @@ static void applyEvents(struct Player *p, int frame) {
       else
         printf("P%d f%d +%x = %08x: %u\n", p->id, frame, e->value, at,
                p->core->busRead8(p->core, at));
+      fflush(stdout);
+      pthread_mutex_unlock(&printLock);
+      break;
+    }
+    case EV_PEEKPP: {
+      uint32_t first = p->core->busRead32(p->core, e->addr);
+      uint32_t second = p->core->busRead32(p->core, first + e->value);
+      uint32_t at = second + e->keys;
+      uint32_t v = e->size == 4   ? p->core->busRead32(p->core, at)
+                   : e->size == 2 ? p->core->busRead16(p->core, at)
+                                  : p->core->busRead8(p->core, at);
+      pthread_mutex_lock(&printLock);
+      printf("P%d f%d pp +%x +%x = %08x: %u\n", p->id, frame, e->value, e->keys, at, v);
+      fflush(stdout);
+      pthread_mutex_unlock(&printLock);
+      break;
+    }
+    case EV_PEEKP3: {
+      uint32_t first = p->core->busRead32(p->core, e->addr);
+      uint32_t second = p->core->busRead32(p->core, first + e->value);
+      uint32_t third = p->core->busRead32(p->core, second + e->keys);
+      unsigned off3 = (unsigned)strtoul(e->path, NULL, 16);
+      uint32_t at = third + off3;
+      uint32_t v = e->size == 4   ? p->core->busRead32(p->core, at)
+                   : e->size == 2 ? p->core->busRead16(p->core, at)
+                                  : p->core->busRead8(p->core, at);
+      pthread_mutex_lock(&printLock);
+      printf("P%d f%d p3 +%x +%x +%x = %08x: %u\n", p->id, frame, e->value, e->keys, off3, at, v);
       fflush(stdout);
       pthread_mutex_unlock(&printLock);
       break;

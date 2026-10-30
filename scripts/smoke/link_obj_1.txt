@@ -1,0 +1,543 @@
+# Both consoles: buy a Djinni for Isaac and for Garet at the manager, walk back to the
+# attendant, link, and fight; look at the command row, then read the Djinn state.
+# Prefix: New Game, step through the greeter, walk to the manager (the man at the
+# right counter) and talk to him. Ends with his icon menu open.
+wait 900
+tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 60
+press U 80
+press R 50
+press R 8
+tap A
+wait 150
+tap R
+wait 20
+# Isaac: Djinn counter, buy the first
+tap A
+wait 150
+tap A
+wait 150
+tap A
+wait 60
+shot /tmp/shots/p1_b1.png
+tap B
+wait 120
+# Garet: next in the strip, counter, buy the first
+tap R
+wait 40
+tap A
+wait 150
+tap A
+wait 60
+shot /tmp/shots/p1_b2.png
+tap B
+wait 120
+tap B
+wait 120
+tap B
+wait 120
+peek 0x0200061C 4
+peek 0x02000748 4
+# back to the lobby spot, then the attendant and the stock link flow
+press L 58
+press D 80
+wait 30
+shot /tmp/shots/p1_b3.png
+press U 40
+press L 44
+press U 60
+press L 10
+press U 10
+wait 30
+tap A
+wait 150
+tap R
+wait 20
+tap A
+wait 200
+tap A
+wait 200
+wait 200
+tap A
+wait 150
+tap A
+wait 150
+tap A
+wait 150
+tap A
+wait 150
+tap A
+wait 100
+tap A
+wait 100
+tap A
+wait 100
+press R 40
+press U 30
+press R 14
+wait 120
+shot /tmp/shots/p1_g.png
+wait 240
+shot /tmp/shots/p1_h.png
+wait 300
+shot /tmp/shots/p1_i.png
+wait 300
+shot /tmp/shots/p1_j.png
+wait 150
+tap A
+wait 100
+shot /tmp/shots/p1_d0.png
+tap A
+wait 100
+shot /tmp/shots/p1_d1.png
+tap A
+wait 60
+shot /tmp/shots/p1_d2.png
+tap A
+wait 100
+# Fight, Attack: the enemy target cursor, then through the four opponents
+tap A
+wait 50
+tap A
+wait 70
+shot /tmp/shots/p1_t1.png
+# Sampled every 4 frames: object slot 11 (EnemyIvan) and slot 10 (EnemyMia): its resource (+4), overlay (+6),
+# anchorX (+0xC) anchorZ (+0x10); then its actor (+0) x (+8) z (+0x10) facing (+6) and sprite pointer (+0x50)
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s01.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s02.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s03.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s04.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s05.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s06.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s07.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s08.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s09.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s10.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s11.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s12.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s13.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s14.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s15.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s16.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s17.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s18.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s19.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s20.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s21.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s22.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s23.png
+wait 4
+peekp 0x03001E74 25c 2
+peekp 0x03001E74 25e 2
+peekp 0x03001E74 264 4
+peekp 0x03001E74 268 4
+peekpp 0x03001E74 258 8 4
+peekpp 0x03001E74 258 10 4
+peekpp 0x03001E74 258 6 2
+peekpp 0x03001E74 258 50 4
+peekp 0x03001E74 230 2
+peekp 0x03001E74 232 2
+peekp 0x03001E74 238 4
+peekp 0x03001E74 23c 4
+peekpp 0x03001E74 22c 8 4
+peekpp 0x03001E74 22c 10 4
+peekpp 0x03001E74 22c 6 2
+peekpp 0x03001E74 22c 50 4
+shot /tmp/shots/p1_s24.png

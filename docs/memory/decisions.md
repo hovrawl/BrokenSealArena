@@ -83,3 +83,8 @@
   driven (each console sends its own chosen actions over the link; the enemy AI is not
   used). Online play therefore rests on the emulator carrying the link cable. Records
   plus an AI opponent is a later fallback, not the plan. Next: investigate 4v4.
+- **4v4 hits the sprite VRAM limit** (2026-10-31): at link-battle target selection the 512
+  blocks of sprite VRAM (32 KB) are 94 percent used; eight 64-block character sprites need
+  all of it, so one (the party's 4th) is evicted and the 4th opponent flickers. Roughly 30
+  blocks short. See `docs/MULTIPLAYER.md`. The data and exchange work at 4v4; the picture is
+  what does not fit.
