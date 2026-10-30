@@ -181,6 +181,8 @@ static void runScript(const char *path, const char *dir) {
         mCoreSaveStateNamed(core, vf, SAVESTATE_SAVEDATA | SAVESTATE_SCREENSHOT);
         vf->close(vf);
       }
+    } else if (!strcmp(cmd, "reset")) {
+      core->reset(core);
     } else if (!strcmp(cmd, "load")) {
       struct VFile *vf = VFileOpen(arg, O_RDONLY);
       if (vf) {

@@ -43,6 +43,7 @@ a C compiler are already there for the build).
 | `peek HEXADDR N` | print N (1, 2 or 4) bytes at an address |
 | `poke HEXADDR N VALUE` | write VALUE (decimal) as N bytes |
 | `save FILE` / `load FILE` | savestate |
+| `reset` | restart the console; the cartridge save is kept (to test Continue) |
 
 Keys: `A B`, `S` select, `T` start, `U D L R` the D-pad, `l r` the shoulders.
 Combine them: `press AD 3`.
@@ -73,6 +74,29 @@ Tests (each ends in shots; `build\smoke\shots\sheet.png` shows them all):
 - `lose.txt`: the win count poked to 11 before the circle, so the fight is round 12
   and mashing A loses; shots every few presses to catch the loss line (more A
   presses open the field menu, which shows the party restored).
+- `rungs.txt`: the first frame of every Gauntlet rung. It reaches the series once,
+  saves a state, then for each rung loads it, pokes the win count and walks into the
+  circle (all twelve teams render, within six sprite slots).
+- `resume.txt`: save mid-series through the Pause menu, `reset`, choose Continue,
+  `peek` the win count (0x020004EA) and the series flag (0x0200006E, 8 when set),
+  walk up and talk: "Round 6 of 12. Do you want to give up?". The title needs
+  Continue chosen with D, A, A, A (with waits); Isaac starts at the door with no
+  greeter walk-in, so the walk to the attendant differs from `to_solo.txt`.
+- `tournaments.txt`: the tournament menu (two icons), choosing the Boss Rush, the
+  give-up question saying "of 6", and the tournament byte (`peek 0x0200013F`).
+  `to_rush.txt` is the prefix that picks it.
+- `rungs_rush.txt`: the first frame of each of the six Boss Rush rungs.
+- `rush_round.txt` / `heal_round.txt`: win round 1 and walk into the next fight; the
+  HUD shows the HP carried over (Boss Rush) or full HP (Gauntlet).
+- `rush_manager.txt`: after a Boss Rush win, leave the manager with B and read
+  Garet's HP in his Characters panel (it stays hurt; the exit does not heal).
+- `rush_clear.txt`: clear the Boss Rush (win count poked to 5): 700 coins, the
+  cleared line, "You won 6 battles."
+- `resume_rush.txt`: save in the Boss Rush, `reset`, Continue: "Round 4 of 6.", and
+  the tournament byte is kept.
+  Boss Rush round 1 cannot be won by pressing A (bosses), so the scripts that need
+  a win start the battle as the Gauntlet's easy first team (poke the tournament byte
+  to 0), then poke it back to 1 once the battle is under way.
 - `pause.txt`, `save.txt`: the Pause menu and Save your quest.
 - `boot.txt`, `walk.txt`: calibration runs.
 ## Tips

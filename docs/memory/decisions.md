@@ -64,3 +64,10 @@
   persistent flags and, after the Lost Age decomp shows what its transfer reads, the
   struct's unnamed bytes could hold per-gauntlet stats later. Repurpose, never shrink.
   Fight logs are kept in memory per round, not saved. See `docs/ROADMAP.md`, "Later".
+- **Tournaments are data plus a persistent byte** (2026-10-30): the tournament of the
+  running series is `FLAG_ARENA_TOURNAMENT` (0x7f8, a byte flag found by scanning every
+  computed flag range; claimed flags are listed in `module/arena.h`). Rounds, ladder,
+  messages and healing are per tournament (`ARENA_ROUNDS`, `ARENA_HEALS`). The Boss
+  Rush (six boss rounds, no healing) exists to test that logic; its balance is data and
+  is deferred with the Gauntlet's. The user chose to skip the balance pass until the
+  logic is tested.

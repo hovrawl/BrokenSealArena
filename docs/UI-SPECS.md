@@ -190,8 +190,12 @@ Open questions: What happens past four tournaments (a second page, or a second
                choice screen)? Not needed until there are five.
 ```
 
-Not buildable until a second tournament exists (roadmap Phase 2), so this spec is
-only a placeholder to keep the choice consistent.
+**Built (patch 10).** Two tournaments now exist, so the row has two icons, "Monster
+Gauntlet" (the Battle icon) and "Boss Rush" (the Summon icon, a dark silhouette),
+labelled by two consecutive messages. Choosing one writes the tournament byte
+(`FLAG_ARENA_TOURNAMENT`). The give-up and round lines say the tournament's round
+count ("of 12", "of 6"), and the Boss Rush's round line adds "No healing here." The
+row is limited to four tournaments (`UI.md`); what happens past four is still open.
 
 ## S6. Loading a series in progress
 

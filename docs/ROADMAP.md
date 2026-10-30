@@ -95,6 +95,23 @@ Goal: start the Gauntlet, win a few fights, go and shop, save, quit, load, walk
 back to the gate, and carry on from the same rung. Losing, finishing or giving up
 ends it. Its screens are the Phase 0 ones; this phase is the logic behind them.
 
+**Status (2026-10-30).** Phase 0 is done (S1 to S3 built and reviewed, patch 8).
+Phase 1 so far:
+- Done: PR #1 landed; **pause and resume** (patch 8); **series state in the save**
+  (patch 9): the round and the series flag survive a save and Continue, tested
+  with `resume.txt`; **every rung loads** (`rungs.txt`: all twelve teams, within
+  six sprite slots).
+- Done (patch 10): **the tournament flag** (`FLAG_ARENA_TOURNAMENT`, persistent byte
+  0x7f8, found by scanning every flag range for computed uses) and a **second
+  tournament, the Boss Rush** (six rounds, a different ladder) with **healing
+  switched off** (`ARENA_HEALS`): the win and the manager's exit do not heal, tested
+  with HP carried into the next fight. It also exercises a per-tournament round
+  count, per-tournament messages, and saving and resuming a non-default tournament.
+- Left: playing every rung and the balance pass (now data only: the Boss Rush's
+  round 1 is too hard to win by pressing A, the Gauntlet is unplayed past round 1),
+  and the stock text and party order. The table below keeps the original
+  descriptions.
+
 | Item | Size | Notes |
 |---|---|---|
 | Land PR #1 (the layered series) | S | Everything below builds on it. |

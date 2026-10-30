@@ -74,11 +74,34 @@
 - A field message (`FieldMessage_ShowAtActor`) with two `{argument_signed_number}`
   blanks showed the first number twice ("Round 1 of 1"). Cause not confirmed; put
   the second number in the text and assert the constant.
+- Scene temp flags (0x200 to 0x2ff) are written to the save raw, so a loaded game
+  can start with one set that the live game had set. A file saved mid-series with
+  `FLAG_MONSTER_BATTLE` cleared but `FLAG_BATTLE_ARENA_PLAYER_AGREED` set loaded
+  into "The link was disconnected." Save state consistently: leave both as they are.
+- The flag range decides what a save keeps: below 0x200 persistent; 0x200 to 0x2ff
+  scene temp and 0x300 to 0x3ff area temp (cleared on a scene or area change).
+  `FLAG_MONSTER_BATTLE` is 0x173 (persistent); `FLAG_MONSTER_BATTLE_WINS` (0x3f8)
+  and `FLAG_AREA_TEMP_E8` are area temp, so keep real state in persistent flags or
+  the saved struct (`linkTallies`).
 - `MsgLobbyWonNumberBattle` uses `{plural_suffix}`: zero reads "You won 0 battle."
 - `BattleArena_SaveMonsterBattleResults` writes into the current file with its own
   saving messages; after a New Game there is no current file. It is skipped.
 - C89: a declaration after a `return` (or any statement) is a parse error in this
   compiler; put the early return after the declarations.
+
+## Flags we claim
+
+- Claimed persistent flags are listed in `module/arena.h`: so far `FLAG_ARENA_TOURNAMENT`
+  (0x7f8, one byte). Before claiming another, check `ENEMY_DEFEATED_FLAG(classId)`
+  (0x600 plus an enemy: 0x600 to 0x6ff are taken), the shop stock (0x400 plus a row),
+  the Djinn, Psynergy tint and area-visited ranges below 0x200, and the named
+  clusters; `flags.h` lists names only, and computed ranges are in macros and in the
+  code (search for `FLAG_X +`). A byte flag must start at a multiple of 8.
+- Boss rows in the ladder are enemy ids less `ENEMY_ID_FIRST` (8): Menardi is id 126,
+  row 118. Large enemies take two of the six sprite slots.
+- A boss pair at a low target level is still hard: pressing A does not win round 1 of
+  the Boss Rush. Tests that need a win start as an easy team and switch the
+  tournament byte after the battle begins.
 
 ## Testing
 

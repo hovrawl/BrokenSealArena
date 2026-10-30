@@ -1,0 +1,72 @@
+From 6f36a1dad2fbcb28dcbfa4648e12aae46f692697 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 30 Oct 2026 16:22:27 +1100
+Subject: [PATCH] Arena: a series in progress is saved and resumed
+
+A file saved in the arena no longer hides a running series. FLAG_MONSTER_BATTLE
+is a persistent game flag and the win count (linkTallies[3]) is in the saved
+struct, so Continue puts the player back in the Gauntlet at the same round; the
+attendant then offers "Round n of 12. Do you want to give up?". The save still
+writes the arena's door as the place to restart, so a load does not replay the
+last battle's reward.
+
+This also removes "The link was disconnected." after saving mid-series: clearing
+the flag for the write, with FLAG_BATTLE_ARENA_PLAYER_AGREED still set, made the
+link poll report a lost link.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/window/screens/arena_save.c | 15 +++++----------
+ 1 file changed, 5 insertions(+), 10 deletions(-)
+
+diff --git a/games/tbs/src/window/screens/arena_save.c b/games/tbs/src/window/screens/arena_save.c
+index 8b6a2da2cd..999c704766 100644
+--- a/games/tbs/src/window/screens/arena_save.c
++++ b/games/tbs/src/window/screens/arena_save.c
+@@ -1,8 +1,10 @@
+ /// @file
+ /// Arena romhack: saving in the arena. A file saved there is written as if the
+-/// game stood at the arena's door with no series running, so a load does not
+-/// replay the last battle's reward (its entrance) or resume a series
+-/// (FLAG_MONSTER_BATTLE). The live values are put back after.
++/// game stood at the arena's door, so a load does not replay the last battle's
++/// reward (the entrance BATTLE_ARENA_AFTER_MONSTER_WIN pays it). A series that is
++/// running is saved as running: FLAG_MONSTER_BATTLE is a persistent game flag and
++/// the win count (linkTallies[3]) is in the saved struct, so a load resumes it at
++/// the same round. The live values are put back after.
+ // Part of screens.c.
+ 
+ #include "../screens_internal.h"
+@@ -12,21 +14,16 @@
+ struct ArenaSaveState {
+   s32 next;
+   s32 entrance;
+-  s32 series;
+   s32 inArena;
+ };
+ 
+ static void ArenaSave_Begin(struct ArenaSaveState *state) {
+   state->next = gMainRoutineWork.next;
+   state->entrance = gMainRoutineWork.entrance;
+-  state->series = 0;
+   state->inArena = GameFlag_GetFar(FLAG_IN_BATTLE_ARENA);
+   if (state->inArena) {
+-    state->series = GameFlag_GetFar(FLAG_MONSTER_BATTLE);
+     gMainRoutineWork.next = (s32)&SceneId_BattleArena;
+     gMainRoutineWork.entrance = BATTLE_ARENA_FROM_FILE_SCREEN;
+-    if (state->series)
+-      GameFlag_ClearFar(FLAG_MONSTER_BATTLE);
+   }
+ }
+ 
+@@ -34,7 +31,5 @@ static void ArenaSave_End(struct ArenaSaveState *state) {
+   if (state->inArena) {
+     gMainRoutineWork.next = state->next;
+     gMainRoutineWork.entrance = state->entrance;
+-    if (state->series)
+-      GameFlag_SetFar(FLAG_MONSTER_BATTLE);
+   }
+ }
+-- 
+2.53.0
+

@@ -227,12 +227,11 @@ Each is one layer, in order; each builds on its own.
   save holds the whole game state, so base stats, Psynergy, Djinn, items and
   coins persist.
 - `ArenaSave_Begin`/`ArenaSave_End` set `next`/`entrance` to the arena at
-  `BATTLE_ARENA_FROM_FILE_SCREEN` and clear `FLAG_MONSTER_BATTLE` for the write,
-  then put both back. Without it a load enters with the last battle's entrance
-  (`BATTLE_ARENA_AFTER_MONSTER_WIN`) and pays its reward again, or resumes the
-  series.
+  `BATTLE_ARENA_FROM_FILE_SCREEN` for the write, then put both back. Without it a
+  load enters with the last battle's entrance (`BATTLE_ARENA_AFTER_MONSTER_WIN`)
+  and pays its reward again. (This patch also cleared `FLAG_MONSTER_BATTLE` for
+  the write, so a load started a new series; patch 9 stopped that.)
 - Loading: the title's Continue.
-- Not saved: the Monster Gauntlet rung, so a loaded game starts a new series.
 - History: an earlier attempt put Save in the party manager's menu. A fifth icon
   made the prompt's window open without its text, and a second attempt gave it a
   person to talk to; both were dropped for the Pause menu.
@@ -271,10 +270,73 @@ Each is one layer, in order; each builds on its own.
   reports "The link was disconnected."; a field message with two number blanks
   shows the first number twice, so "of 12" is in the message text and the code
   asserts the constant.
-- Not done: the series is not in the save (a load starts a new one); roadmap
-  Phase 1.
 - Port notes: the attendant, trigger and flag names differ in The Lost Age; the
   spawn row and the circle position need checking there.
+
+### 9. A series in progress is saved and resumed
+- Patch: `0009-Arena-a-series-in-progress-is-saved-and-resumed.patch`
+- Files: `window/screens/arena_save.c` only (a smaller `ArenaSaveState`).
+- A series needs two things to survive a save, and both were already saved:
+  `FLAG_MONSTER_BATTLE` is 0x173, a persistent game flag (the scene and area temp
+  ranges start at 0x200 and are cleared on scene or area changes), and the win
+  count (`linkTallies[3]`, the round) is in the saved `MainRoutineWork`. Patch 7
+  cleared the flag for the write; this patch stops, so Continue resumes the
+  Gauntlet at the same round and the attendant asks "Round n of 12. Do you want to
+  give up?". The entrance is still overridden to the arena's door, so the last
+  battle's reward is not replayed.
+- It fixes a bug in patch 7: saving mid-series showed "The link was disconnected."
+  (the flag was cleared for the write while `FLAG_BATTLE_ARENA_PLAYER_AGREED`, a
+  scene temp flag that is saved raw, stayed set, which the link poll reads as a
+  lost link).
+- The tournament was not stored here (there was only one); patch 10 stores it.
+- Smoke: `resume.txt` saves mid-series, restarts the console (the new `reset`
+  driver command), chooses Continue, reads the tally and flag with `peek`, and
+  talks to the attendant.
+
+### 10. A second tournament: the Boss Rush, a tournament flag, no healing
+- Patch: `0010-Arena-a-second-tournament-the-Boss-Rush-with-a-tourn.patch`
+- Files: `include/module/arena.h` (the flag and the tournament macros),
+  `battle/battle/arena_ladder.c` (a second ladder, a tournament-aware
+  `ArenaLadder_Select`), `scene/arena_series.c`, `scene/arena_menu.c`,
+  `text/en.po` (five messages).
+- **The tournament flag.** `FLAG_ARENA_TOURNAMENT` is 0x7f8, a persistent byte flag
+  (byte 0xff of `gGameFlagBytes`, read with `GameFlag_GetByteFar` in the main image
+  and `FieldGameFlag_GetByte` in an overlay), so a save and Continue keep it. How it
+  was chosen: persistent flags are those below 0x200 and 0x400 upward (0x200 to
+  0x2ff are scene temps, 0x300 to 0x3ff area temps, cleared on a change). Every
+  computed range was excluded: the Djinn (from 0x100), the Psynergy tints (0x148),
+  the visited areas (0x180), the shop stock (0x400 plus a row, 35 rows),
+  `ENEMY_DEFEATED_FLAG(classId)` (0x600 plus an enemy, `battle_internal.h`), and the
+  clusters of story flags (0x800 to 0x9f0, 0xec0 to 0xfd7) with their offsets. The
+  band 0x7f8 to 0x7ff has no name and no computed use anywhere in `games/tbs/src`
+  or `include`. More bytes can be claimed downward from it; list them in `arena.h`.
+- **The tournament menu** has two icons and labels (`MsgArenaTournamentGauntlet`
+  and `MsgArenaTournamentBossRush`, consecutive). The Boss Rush uses the Summon icon
+  (a dark silhouette, which suits a boss). The choice is written to the flag when
+  Solo is chosen.
+- **Per-tournament data.** `ARENA_ROUNDS(t)` gives 12 or 6 rounds; the ladder is
+  `gArenaLadder` (12) or `gArenaBossRush` (6). The Boss Rush's rungs are bosses:
+  Orc Lord and Lizard King, Manticore and Chimera, Tempest Lizard and Cerebus,
+  Saturos and Menardi, Deadbeard and the Hydros Statue, then the Fusion Dragon
+  alone, at target levels 14, 22, 30, 36, 41 and 45 (data only; not balanced).
+  Rows are enemy ids less `ENEMY_ID_FIRST` (8).
+- **Messages per tournament.** Each tournament has three consecutive messages (give
+  up, next round, cleared), so `MsgArenaGiveUpPrompt + 3 * t + kind` finds them. The
+  round count is in the text ("of 12", "of 6"), asserted against the macros in
+  `arena_series.c`.
+- **Healing is a tournament setting.** `ARENA_HEALS(t)` is false for the Boss Rush.
+  `ArenaMenu_ShowWin` skips the heal after a win, and the manager's exit skips it
+  while a series is running (outside a series it heals as before, so the manager
+  cannot undo it mid-run). After a loss the party is restored as before. Without
+  healing, the way to recover is items and the field menu's Cure.
+- Smoke: `tournaments.txt`, `rungs_rush.txt`, `rush_round.txt` (HP carried into the
+  next fight), `heal_round.txt` (the Gauntlet's contrast), `rush_manager.txt` (the
+  manager's exit does not heal), `rush_clear.txt` and `resume_rush.txt`.
+- Not done: the Boss Rush is not balanced (round 1 cannot be won by pressing A);
+  per-tournament stats; the scripts that need a won round use a test trick (start as
+  the Gauntlet's easy first team, then set the byte to the Boss Rush).
+- Port notes: the flag byte, the tournament macros and the message layout port as
+  they are; re-pick the bosses from the Lost Age's enemy table.
 
 ## Dropped on the way
 

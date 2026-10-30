@@ -1,0 +1,375 @@
+From 60982a9da8e52fda759a534c8040bd142ac01541 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 30 Oct 2026 16:40:05 +1100
+Subject: [PATCH] Arena: a second tournament, the Boss Rush, with a tournament
+ flag and no healing
+
+A series is now one of two tournaments, chosen at the attendant's tournament menu
+(a second icon and label) and kept in a persistent byte flag, FLAG_ARENA_TOURNAMENT
+(0x7f8: unreferenced and not computed from anywhere), so a save remembers it.
+
+- The Boss Rush is six rounds of bosses (Orc Lord and Lizard King up to the Fusion
+  Dragon alone); the Gauntlet stays at twelve. The round count is per tournament
+  (ARENA_ROUNDS), the ladder is per tournament (arena_ladder.c), and the give-up
+  question, the round report and the cleared line each have a message for it.
+- Healing is a tournament setting (ARENA_HEALS). The Boss Rush does not heal the
+  party after a win or when the manager is left during a series; the Gauntlet
+  does. After a loss, or between series, the party is restored as before.
+
+Three consecutive messages for each tournament (give up, next round, cleared) are
+found as the first's id plus 3 times the tournament; the tournament labels are the
+consecutive pair MsgArenaTournamentGauntlet and MsgArenaTournamentBossRush.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/module/arena.h           | 34 +++++++++++--
+ games/tbs/src/battle/battle/arena_ladder.c | 57 ++++++++++++++++------
+ games/tbs/src/scene/arena_menu.c           | 31 ++++++++----
+ games/tbs/src/scene/arena_series.c         | 43 +++++++++++-----
+ games/tbs/text/en.po                       | 30 ++++++++++++
+ 5 files changed, 153 insertions(+), 42 deletions(-)
+
+diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
+index 1e299428d5..b03b978bdc 100644
+--- a/games/tbs/include/module/arena.h
++++ b/games/tbs/include/module/arena.h
+@@ -6,15 +6,39 @@
+ 
+ #include "types.h"
+ 
+-/// The rounds in the Monster Gauntlet: the rungs of gArenaLadder. Clearing the last
+-/// is a win and ends the series.
+-#define ARENA_LADDER_COUNT 12
++// Tournaments. The player chooses one at the attendant; it is kept in a
++// persistent byte flag, so a save remembers it. Flags 0x7f8 to 0x7ff are the byte
++// at index 0xff of the game flags: no name in flags.h refers to them and no code
++// computes a flag number there (the computed ranges are the Djinn, the Psynergy
++// tints, the shop stock at 0x400 plus a row, and ENEMY_DEFEATED_FLAG at 0x600 plus
++// an enemy). More bytes can be claimed downward from here, and listed here.
++#define FLAG_ARENA_TOURNAMENT 0x7f8
++
++#define ARENA_TOURNAMENT_GAUNTLET 0
++#define ARENA_TOURNAMENT_BOSS_RUSH 1
++#define ARENA_TOURNAMENT_COUNT 2
++
++/// The rounds of each tournament: the rungs of its ladder in arena_ladder.c.
++/// Clearing the last is a win and ends the series. The messages for a
++/// tournament say its round count (a field message with two number blanks shows
++/// the first twice), and arena_series.c asserts these.
++#define ARENA_GAUNTLET_ROUNDS 12
++#define ARENA_BOSS_RUSH_ROUNDS 6
++#define ARENA_ROUNDS(tournament) \
++  ((tournament) == ARENA_TOURNAMENT_BOSS_RUSH ? ARENA_BOSS_RUSH_ROUNDS \
++                                              : ARENA_GAUNTLET_ROUNDS)
++
++/// Whether the party is healed after each win and on leaving the manager while a
++/// series runs. A tournament can turn it off: the Boss Rush does.
++#define ARENA_HEALS(tournament) ((tournament) != ARENA_TOURNAMENT_BOSS_RUSH)
+ 
+ // Battle Arena overlay (scene/arena_menu.c)
+ 
+-/// The attendant's menu: 1 for a solo series, 2 for a linked battle, 0 to leave.
++/// The attendant's menu: 1 for a solo series (the tournament chosen is stored in
++/// FLAG_ARENA_TOURNAMENT), 2 for a linked battle, 0 to leave.
+ s32 ArenaMenu_AttendantMode(void);
+-/// The coins a battle won, said by `actorId`; the party is healed.
++/// The coins a battle won, said by `actorId`; the party is healed if the
++/// tournament heals.
+ void ArenaMenu_ShowWin(s32 actorId, s32 reward);
+ /// Talking to the party manager: stats, Djinn, Psynergy and the item shops.
+ s32 BattleArena_PartyManager(s32 actorId);
+diff --git a/games/tbs/src/battle/battle/arena_ladder.c b/games/tbs/src/battle/battle/arena_ladder.c
+index 2bde1d61ce..415055678f 100644
+--- a/games/tbs/src/battle/battle/arena_ladder.c
++++ b/games/tbs/src/battle/battle/arena_ladder.c
+@@ -1,26 +1,30 @@
+ /// @file
+-/// Arena romhack: the team ladder. In a monster series, the enemies come from
+-/// gArenaLadder, a rung for each win, instead of from level-matched formations.
++/// Arena romhack: the team ladders. In a monster series, the enemies come from
++/// the chosen tournament's ladder, a rung for each win, instead of from
++/// level-matched formations. The tournament is the persistent byte
++/// FLAG_ARENA_TOURNAMENT (module/arena.h).
+ // Part of battle.c.
+ 
+ #include "../battle_internal.h"
+ #include "arena_config.h"
+ #include "module/arena.h"
+ 
+-/// Arena romhack: one rung of the team ladder. In a monster series, win number
+-/// n (0-based) fights rung n; its enemies are levelled to targetLevel.
++/// Arena romhack: one rung of a team ladder. In a monster series, win number n
++/// (0-based) fights rung n; its enemies are levelled to targetLevel.
+ struct ArenaTeam {
+   u8 targetLevel;
+   struct Formation formation;
+ };
+ 
+-
+ // clang-format off
+-// Arena romhack: the team ladder. Members are rows of enemy_table.c; a small
+-// enemy takes one of the battle's six sprite slots and any other two, so each
+-// rung's counts stay within six. Counts are fixed (minimum equals maximum).
++// Arena romhack: the team ladders. Members are rows of enemy_table.c (an enemy
++// id less ENEMY_ID_FIRST); a small enemy takes one of the battle's six sprite
++// slots and any other two, so each rung's counts stay within six. Counts are
++// fixed (minimum equals maximum).
+ #define ARENA_TEAM(level, ...) {(level), {.layout = 2, __VA_ARGS__}}
+-static const struct ArenaTeam gArenaLadder[ARENA_LADDER_COUNT] = {
++
++/// The Monster Gauntlet: ARENA_GAUNTLET_ROUNDS rungs of mixed teams.
++static const struct ArenaTeam gArenaLadder[ARENA_GAUNTLET_ROUNDS] = {
+     // Skeleton, Bats and a Slime
+     ARENA_TEAM(10, .memberIds = {24, 5, 11}, .minimumCounts = {1, 2, 1}, .maximumCounts = {1, 2, 1}),
+     // Rat Fighter, Drone Bees and a Mole
+@@ -46,16 +50,35 @@ static const struct ArenaTeam gArenaLadder[ARENA_LADDER_COUNT] = {
+     // Menardi, Saturos and Cerebus
+     ARENA_TEAM(45, .memberIds = {118, 116, 97}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
+ };
++
++/// The Boss Rush: ARENA_BOSS_RUSH_ROUNDS rungs of bosses, no healing between.
++static const struct ArenaTeam gArenaBossRush[ARENA_BOSS_RUSH_ROUNDS] = {
++    // Orc Lord and Lizard King
++    ARENA_TEAM(14, .memberIds = {77, 121}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}),
++    // Manticore and Chimera
++    ARENA_TEAM(22, .memberIds = {81, 102}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}),
++    // Tempest Lizard and Cerebus
++    ARENA_TEAM(30, .memberIds = {138, 97}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}),
++    // Saturos (Mercury Lighthouse) and Menardi
++    ARENA_TEAM(36, .memberIds = {115, 118}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}),
++    // Deadbeard and the Hydros Statue
++    ARENA_TEAM(41, .memberIds = {141, 123}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}),
++    // The Fusion Dragon
++    ARENA_TEAM(45, .memberIds = {140}, .minimumCounts = {1}, .maximumCounts = {1}),
++};
+ // clang-format on
+ 
+ #if ARENA_LADDER
+ /// Arena romhack: the team a monster series fights next. Win number n of the
+ /// series (the Battle Arena's LINK_TALLY_MONSTER_STREAK, linkTallies[3]) fights
+-/// rung n of gArenaLadder; past the last rung it fights the last again, a level
+-/// stronger for each win. outMargin is the levels each enemy gains to reach the
+-/// rung's level from the average of its members.
++/// rung n of the chosen tournament's ladder; a series ends before it runs past
++/// the last rung, but if one did it would fight the last again, a level stronger
++/// for each win. outMargin is the levels each enemy gains to reach the rung's
++/// level from the average of its members.
+ static const struct Formation *ArenaLadder_Select(s32 *outMargin) {
+   s32 streak = gMainRoutineWork.linkTallies[3];
++  s32 tournament = GameFlag_GetByteFar(FLAG_ARENA_TOURNAMENT);
++  s32 rounds;
+   s32 rung = streak;
+   s32 target;
+   s32 levelTotal = 0;
+@@ -63,9 +86,13 @@ static const struct Formation *ArenaLadder_Select(s32 *outMargin) {
+   s32 i;
+   const struct ArenaTeam *team;
+ 
+-  if (rung >= ARENA_LADDER_COUNT)
+-    rung = ARENA_LADDER_COUNT - 1;
+-  team = &gArenaLadder[rung];
++  if (tournament >= ARENA_TOURNAMENT_COUNT)
++    tournament = ARENA_TOURNAMENT_GAUNTLET;
++  rounds = ARENA_ROUNDS(tournament);
++  if (rung >= rounds)
++    rung = rounds - 1;
++  team = tournament == ARENA_TOURNAMENT_BOSS_RUSH ? &gArenaBossRush[rung]
++                                                  : &gArenaLadder[rung];
+   for (i = 0; i < 5; i++) {
+     struct EnemyDefinition *enemy;
+ 
+diff --git a/games/tbs/src/scene/arena_menu.c b/games/tbs/src/scene/arena_menu.c
+index 99372baaa9..1306131451 100644
+--- a/games/tbs/src/scene/arena_menu.c
++++ b/games/tbs/src/scene/arena_menu.c
+@@ -64,7 +64,9 @@
+ // The list screens draw as tiles and blank their window with
+ // Window_ClearInteriorTiles before each redraw.
+ const u8 gArenaMenu_AttendantIcons[] = {COMMAND_ICON_FIGHT, COMMAND_ICON_CABLE};
+-const u8 gArenaMenu_TournamentIcons[] = {COMMAND_ICON_BATTLE};
++/// One icon for each tournament, in the order of ARENA_TOURNAMENT_*.
++const u8 gArenaMenu_TournamentIcons[] = {COMMAND_ICON_BATTLE,
++                                         COMMAND_ICON_SUMMON};
+ const u8 gArenaMenu_ManagerIcons[] = {COMMAND_ICON_STATUS, COMMAND_ICON_DJINN,
+                                       COMMAND_ICON_PSYNERGY, COMMAND_ICON_ITEM};
+ const u8 gArenaMenu_ShopIcons[] = {COMMAND_ICON_ATTACK, COMMAND_ICON_DEFEND,
+@@ -76,8 +78,10 @@ const u8 gArenaMenu_ShopIcons[] = {COMMAND_ICON_ATTACK, COMMAND_ICON_DEFEND,
+ 
+ /// The attendant's menu: Solo or Multiplayer and, for Solo, the tournament.
+ /// Returns 1 for a solo series, 2 for a linked battle and 0 to leave. The
+-/// Monster Gauntlet is the only tournament so far; the ladder it fights is
+-/// gArenaLadder.
++/// tournament chosen is stored in FLAG_ARENA_TOURNAMENT, which the ladder, the
++/// round count and the healing read; B in the tournament menu goes back to Solo
++/// or Multiplayer. The labels are the consecutive messages
++/// MsgArenaTournamentGauntlet and MsgArenaTournamentBossRush.
+ s32 ArenaMenu_AttendantMode(void) {
+   s32 choice;
+ 
+@@ -89,26 +93,31 @@ s32 ArenaMenu_AttendantMode(void) {
+     if (choice == 1)
+       return 2;
+     choice = ArenaMenu_IconChoose(MsgArenaTournamentPrompt,
+-                                  gArenaMenu_TournamentIcons, MsgArenaGauntlet,
+-                                  1);
+-    if (choice == 0)
++                                  gArenaMenu_TournamentIcons,
++                                  MsgArenaTournamentGauntlet,
++                                  ARENA_TOURNAMENT_COUNT);
++    if (choice >= 0) {
++      FieldGameFlag_SetByte(FLAG_ARENA_TOURNAMENT, choice);
+       return 1;
++    }
+   }
+ }
+ 
+ /// The attendant reports the coins a battle just won, and the party is healed
+-/// for the next one.
++/// for the next one, unless the tournament does not heal (ARENA_HEALS).
+ void ArenaMenu_ShowWin(s32 actorId, s32 reward) {
+   MessageArgument_ClearAll();
+   MessageArgument_Push(reward, MESSAGE_ARGUMENT_NUMBER);
+   Event_SetMessageId(MsgArenaVictory);
+   FieldMessage_ShowAtActor(actorId, 0);
+-  Party_RestoreHpPp(1);
++  if (ARENA_HEALS(FieldGameFlag_GetByte(FLAG_ARENA_TOURNAMENT)))
++    Party_RestoreHpPp(1);
+ }
+ 
+ /// Talking to ACTOR_LINKED_WINS_TELLER, now the party manager: characters,
+ /// Djinn, Psynergy and the item shops. B leaves; the party is healed on the
+-/// way out, since stats and gear may have changed.
++/// way out, since stats and gear may have changed, except in a series of a
++/// tournament that does not heal (or the heal would undo it).
+ s32 BattleArena_PartyManager(s32 actorId) {
+   s32 choice;
+   s32 member;
+@@ -136,7 +145,9 @@ s32 BattleArena_PartyManager(s32 actorId) {
+       continue;
+     ArenaShop_Run(choice == 0 ? 2 : (choice == 1 ? 1 : 0), member);
+   }
+-  Party_RestoreHpPp(1);
++  if (!GameFlag_Get(FLAG_MONSTER_BATTLE) ||
++      ARENA_HEALS(FieldGameFlag_GetByte(FLAG_ARENA_TOURNAMENT)))
++    Party_RestoreHpPp(1);
+   Event_End();
+   return 0;
+ }
+diff --git a/games/tbs/src/scene/arena_series.c b/games/tbs/src/scene/arena_series.c
+index 210f6f6170..69e34ddbb2 100644
+--- a/games/tbs/src/scene/arena_series.c
++++ b/games/tbs/src/scene/arena_series.c
+@@ -1,16 +1,34 @@
+ /// @file
+-/// Arena romhack: a monster series you can leave and come back to. It is a
+-/// Gauntlet of ARENA_LADDER_COUNT rounds. After a win the series stays running
+-/// and the player steps back into the circle when ready; talking to the attendant
+-/// while it runs offers to give up; clearing the last round ends it as a win; a
+-/// loss ends it (stock). Giving up and clearing are not losses.
++/// Arena romhack: a monster series you can leave and come back to. A series is
++/// one tournament (FLAG_ARENA_TOURNAMENT) of ARENA_ROUNDS(tournament) rounds.
++/// After a win the series stays running and the player steps back into the
++/// circle when ready; talking to the attendant while it runs offers to give up;
++/// clearing the last round ends it as a win; a loss ends it (stock). Giving up and
++/// clearing are not losses.
+ // Part of battle_arena.c: it uses that file's statics.
+ 
+ #include "static_assert.h"
+ 
+-// MsgArenaGiveUpPrompt and MsgArenaNextRound say "of 12": a field message reads
+-// every number blank from the first number pushed, so the count is in the text.
+-STATIC_ASSERT(ARENA_LADDER_COUNT == 12);
++// The messages say their tournament's round count ("of 12", "of 6"): a field
++// message reads every number blank from the first number pushed, so the count is
++// in the text. Each tournament has three consecutive messages, in the order the
++// ARENA_MSG kinds below name, and tournament t's are 3 * t after the first's.
++STATIC_ASSERT(ARENA_GAUNTLET_ROUNDS == 12);
++STATIC_ASSERT(ARENA_BOSS_RUSH_ROUNDS == 6);
++#define ARENA_MSG_GIVE_UP 0
++#define ARENA_MSG_NEXT_ROUND 1
++#define ARENA_MSG_CLEARED 2
++#define ARENA_MSG(kind, tournament)                                            \
++  (MsgArenaGiveUpPrompt + 3 * (tournament) + (kind))
++
++/// The tournament of the running series, from its persistent byte; anything out
++/// of range (a file from before tournaments) is the Gauntlet.
++static s32 ArenaSeries_Tournament(void) {
++  s32 tournament = FieldGameFlag_GetByte(FLAG_ARENA_TOURNAMENT);
++
++  return tournament < ARENA_TOURNAMENT_COUNT ? tournament
++                                             : ARENA_TOURNAMENT_GAUNTLET;
++}
+ 
+ /// The series is over. As the stock "No" after a win ends it: the flag and the
+ /// win count are cleared, the attendant reports the run and the best streak is
+@@ -45,7 +63,7 @@ static void ArenaSeries_GiveUp(void) {
+   MessageArgument_Push(
+       gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK] + 1,
+       MESSAGE_ARGUMENT_NUMBER);
+-  Event_SetMessageId(MsgArenaGiveUpPrompt);
++  Event_SetMessageId(ARENA_MSG(ARENA_MSG_GIVE_UP, ArenaSeries_Tournament()));
+   FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+   if (Event_AskYesNoWithActorAnimation(0, 0) == YES) {
+     ArenaSeries_End();
+@@ -60,16 +78,17 @@ static void ArenaSeries_GiveUp(void) {
+ /// say the tournament is cleared and end it as a win.
+ static void ArenaSeries_AfterWin(void) {
+   s32 won = gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK];
++  s32 tournament = ArenaSeries_Tournament();
+ 
+   Actor_SetAngleToward(ACTOR_ATTENDANT, gMainRoutineWork.leaderActorId, 0);
+-  if (won >= ARENA_LADDER_COUNT) {
+-    Event_SetMessageId(MsgArenaGauntletCleared);
++  if (won >= ARENA_ROUNDS(tournament)) {
++    Event_SetMessageId(ARENA_MSG(ARENA_MSG_CLEARED, tournament));
+     FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+     ArenaSeries_End();
+     return;
+   }
+   MessageArgument_ClearAll();
+   MessageArgument_Push(won, MESSAGE_ARGUMENT_NUMBER);
+-  Event_SetMessageId(MsgArenaNextRound);
++  Event_SetMessageId(ARENA_MSG(ARENA_MSG_NEXT_ROUND, tournament));
+   FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+ }
+diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
+index 30da40eee4..8ae0d3a2ee 100644
+--- a/games/tbs/text/en.po
++++ b/games/tbs/text/en.po
+@@ -65202,3 +65202,33 @@ msgstr ""
+ "You cleared the\n"
+ "Monster Gauntlet!\n"
+ "Congratulations!{end_wait}"
++
++msgctxt "MsgArenaGiveUpPromptBossRush"
++msgid "10770"
++msgstr ""
++"Round {argument_signed_number} of 6.\n"
++"Do you want to\n"
++"give up?{end_now}"
++
++msgctxt "MsgArenaNextRoundBossRush"
++msgid "10771"
++msgstr ""
++"Round {argument_signed_number} of 6 won!\n"
++"No healing here.\n"
++"Step into the circle\n"
++"when you are ready.{end_wait}"
++
++msgctxt "MsgArenaBossRushCleared"
++msgid "10772"
++msgstr ""
++"You cleared the\n"
++"Boss Rush!\n"
++"Congratulations!{end_wait}"
++
++msgctxt "MsgArenaTournamentGauntlet"
++msgid "10773"
++msgstr "Monster Gauntlet"
++
++msgctxt "MsgArenaTournamentBossRush"
++msgid "10774"
++msgstr "Boss Rush"
+-- 
+2.53.0
+
