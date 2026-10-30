@@ -26,3 +26,15 @@
   its `shop/*.c` parts) add a part file; the hooks inside upstream functions
   stay as short edits that call into our code. See `docs/WORKFLOW.md` for the
   trial run that checks a new upstream.
+  Result of moving everything (branch `spike-newfile`, full smoke suite looked
+  at): our edits to upstream files fell from 1,320 lines in 19 files to 301 in
+  17, 186 of them `text/en.po` messages. Our files: `arena_config.h` (the four
+  switches, in one place), `module/arena.h` (what our files export to each
+  other), `scene/arena_menu.c`, `scene/arena_boot.c`, `shop/shop/arena_shop.c`,
+  `battle/battle/arena_ladder.c`, `window/screens/arena_icon_menu.c`,
+  `window/screens/arena_save.c`. What stays an edit: the hooks (a call or two
+  in `battle_arena.c`, `file_screen.c`, `formation.c`, `save.c`,
+  `settings_menu.c`, `run.c`), the import and far-call table rows, one row each
+  in `objects.tsv`, the bank start in `main.ld`, and `en.po`.
+  Not yet done: the series on `arena` is still the old chronological one; the
+  layered re-slice onto `arena-clean` is next.
