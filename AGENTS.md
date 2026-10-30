@@ -10,7 +10,8 @@ characters in the one hack.
 
 Read first: this file, then `docs/WORKFLOW.md` (how the repo works),
 `docs/CHANGES.md` (what every patch does and why), `docs/ROADMAP.md` (what comes
-next and the decisions waiting), `docs/GOTCHAS.md` (traps
+next and the decisions waiting), `docs/UI.md` (the rules for any screen, window or
+menu: read before building one), `docs/GOTCHAS.md` (traps
 already hit), `docs/TESTING.md` (headless smoke tests) and `docs/memory/`.
 
 ## The one rule

@@ -45,3 +45,10 @@
   stats and change classes, a balance variable to test later. Levels are not
   designed yet. **Multiplayer 1v1 is the end goal**; how to get there (emulator
   linking, remote play) is an open research spike, see `docs/ROADMAP.md`.
+- **Attendant, loss and 1v1** (user, 2026-10-30): the attendant shows the current
+  menu when no Gauntlet is running and a Yes/No "give up?" when one is. A loss
+  ends the whole series, no retry; the player goes to the counter. 1v1 is **4v4**
+  (the stock link exchange is three a side, so the protocol must grow to four).
+- **Interfaces are finalised before Gauntlet design**, from written reusable rules
+  in `docs/UI.md`: reuse existing screens and their parts first, text is always a
+  message, fill in the spec template and review it before code.

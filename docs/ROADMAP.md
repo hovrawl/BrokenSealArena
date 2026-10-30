@@ -33,8 +33,15 @@ These came from the user and are not open:
   explicit "give up" ends a series.
 - **The first Gauntlet must not need max levels or maxed classes.** A sensibly
   built party should be able to clear it.
-- **Multiplayer (1v1, team against team) is the end goal.** How to get there is
-  Phase 4.
+- **The attendant has two menus.** Not in a Gauntlet: the current menu (Solo or
+  Multiplayer, then the tournament). In a Gauntlet: a new menu that asks whether
+  to give up, Yes or No.
+- **A loss ends the whole series.** No retry is offered; the player goes back to
+  the counter.
+- **Interfaces are finalised before any Gauntlet design**, and built from written,
+  reusable rules (`docs/UI.md`) so we do not go back and forth on look and feel.
+- **Multiplayer (1v1, team against team) is the end goal, and it is 4v4.** How to
+  get there is Phase 4.
 
 ## Where we are
 
@@ -56,15 +63,41 @@ Known gaps against the decisions above:
   one tournament; English only; the stock arena still talks about link cables and
   resets the party order on load.
 
+## Phase 0: finalise the interfaces
+
+Goal: every screen the player sees in the arena is designed, built and reviewed
+before we tune a single fight. Gauntlet design then rests on screens that will
+not change under it.
+
+The rules are in `docs/UI.md`: design intents (native look, reuse first, words
+are messages), a build process, hard rules from what went wrong before (font,
+wrapping, clearing, icon limits), standard layouts to copy, a catalogue of the
+finished screens, a review checklist and a spec template.
+
+| Item | Size | Notes |
+|---|---|---|
+| Agree `docs/UI.md` | S | Review the intents and rules; fix anything that does not match how you want the game to feel. This is the document that saves back-and-forth. |
+| Spec the remaining interfaces | S | One filled-in spec (UI.md section 7) for each row of UI.md section 8: give up (Yes/No), after a win, after a loss, tournament choice, progress display. Review the specs, not code. |
+| Build them | M | Mostly reuse: the stock yes/no, the attendant speaking a message, the icon row. New messages go at the end of `en.po`. |
+| Smoke-sheet every state | S | A script per interface that reaches every state, with a stock screen in the sheet to compare against. |
+| Review in the emulator | S | Your pass, on pictures that have already been through the checklist. |
+
+Open for this phase: whether Start closes arena screens as it does the stock
+menus; where progress (tournament and rung) is shown; whether giving up counts
+as a loss in the tallies.
+
+Exit: the catalogue in `docs/UI.md` covers every arena screen, each reviewed.
+
 ## Phase 1: a series you can leave and come back to
 
 Goal: start the Gauntlet, win a few fights, go and shop, save, quit, load, walk
-back to the gate, and carry on from the same rung. Losing or finishing ends it.
+back to the gate, and carry on from the same rung. Losing, finishing or giving up
+ends it. Its screens are the Phase 0 ones; this phase is the logic behind them.
 
 | Item | Size | Notes |
 |---|---|---|
 | Land PR #1 (the layered series) | S | Everything below builds on it. |
-| Pause and resume | M | Change the post-win flow in `BattleArena_RunRoundResult` and the attendant: after a win, report the coins and leave the series running (no forced yes/no, no auto-start); `BattleArena_EnterBattle` (the gate, step trigger 10) already starts a monster battle at once while the series flag is set, so stepping back into the circle resumes it. Give the attendant a way to give up a series on purpose. The manager and its free heal are available in between. Smoke script: win, walk to the manager, buy, return, fight again. |
+| Pause and resume | M | Change the post-win flow in `BattleArena_RunRoundResult` and the attendant: after a win, report the coins and leave the series running (no forced yes/no, no auto-start); `BattleArena_EnterBattle` (the gate, step trigger 10) already starts a monster battle at once while the series flag is set, so stepping back into the circle resumes it. While a series runs the attendant shows the give-up Yes/No instead of the Solo/Multiplayer menu. A loss ends the series and returns the player to the counter, with no retry. The manager and its free heal are available in between. Smoke script: win, walk to the manager, buy, return, fight again. |
 | Series state in the save | M | Store `{tournament, rung}` where it survives a save, and stop `ArenaSave_Begin` clearing the series (it now hides it so a load does not replay a reward). Unknown to settle first: which of the series flags and `linkTallies` the stock save already keeps (the best-streak tally is saved by `BattleArena_SaveMonsterBattleResults`, which suggests tallies have their own path), and that a load must not replay `BATTLE_ARENA_AFTER_MONSTER_WIN`'s reward. Prefer a game flag byte (as `FLAG_MONSTER_BATTLE_WINS` is) for the rung and one for the tournament. Smoke: save mid-series, reload, check the rung with `peek`. |
 | A tournament flag | S | The same tournament byte, read by `ArenaLadder_Select`, so more than one ladder can exist. Needed for Phase 2's second tournament, and it is the "which tournament" in the save. |
 | Check every rung loads | S | Poke the rung in a smoke script and look at each rung's first frame: sprite slots within six, nobody missing, names right. Rungs 4 to 12 have never been seen. |
@@ -126,10 +159,12 @@ about 0x154 bytes a unit) before the battle. Our attendant's Multiplayer choice
 already goes into that stock branch. So the game side of 1v1 largely exists; the
 work is making it run, and fit our hack. Things that follow from the code:
 
-- **Three a side.** A linked battle takes the first three party members
-  (`FLAG_LINK_BATTLE_ARRANGED`, `LOBBY_UNIT_RECORD_COUNT` is 3). Our party has four.
-  Either the hack's 1v1 is three-versus-three, or the exchange grows to four (a
-  protocol change, which needs both sides to run the hack).
+- **The stock exchange is three a side; ours must be four.** A linked battle takes
+  the first three party members (`FLAG_LINK_BATTLE_ARRANGED`,
+  `LOBBY_UNIT_RECORD_COUNT` is 3). Our party has four and the goal is 4v4, so the
+  exchange has to grow to four units: a change to the link protocol (the send and
+  receive loops, the record count, how the battle seats a fourth enemy). Both
+  players must run the hack, and a hacked game will not link with a stock one.
 - **Both players need the same build.** The records carry the units as built, so
   stats from our shop should travel with them, but ids and layouts must match.
   That means one released version for both players.
@@ -196,21 +231,21 @@ own files (so the port is "re-hook a handful of files"). When `games/tla` builds
 
 ## Still open
 
-1. **Give up on purpose.** With no forced yes/no, how does a player abandon a
-   series? Suggest a "give up" option on the attendant's menu while one is running.
-   Does giving up count as a loss for the tallies?
-2. **What happens on a loss?** Today it ends the series. Keep that, or send the
-   player back a rung, or let them retry the rung? A harsher ending makes pausing
-   more important; a softer one makes balance easier.
-3. **Three or four a side in 1v1?** Decide after the Phase 4 spike, since four
-   means changing the link protocol.
-4. **Which Phase 2 item first?** I would take the second tournament; the
+1. **Does giving up count as a loss for the tallies?** (Phase 0.)
+2. **Does Start close arena screens, as it does the stock menus?** Ours do not
+   handle it today. (Phase 0.)
+3. **Where is progress shown?** Tournament and rung, for example in the
+   attendant's speech or the manager's prompt. (Phase 0.)
+4. **Is a four-unit link exchange feasible?** The Phase 4 spike answers it, since
+   the goal is 4v4.
+5. **Which Phase 2 item first?** I would take the second tournament; the
    characters item should be investigated before it is promised.
 
 ## Order, in short
 
-PR #1, then Phase 1 (pause and resume first, because the save design depends on
-it; then series state in the save and the tournament flag; then rungs seen and
+PR #1, then Phase 0 (agree `docs/UI.md`, spec and build the remaining
+interfaces), then Phase 1 (pause and resume first, because the save design depends
+on it; then series state in the save and the tournament flag; then rungs seen and
 played and the balance pass). Run the Phase 4 spike alongside, since it is
 research and its answer should not wait until the end. Then the Phase 3 gate,
 Phase 2 and Phase 5 in whichever order you want a playable thing first. Phase 6

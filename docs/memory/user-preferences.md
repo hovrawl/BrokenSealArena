@@ -12,3 +12,7 @@
   logged in on their machine.
 - Balance is a separate pass later.
 - Works from Windows; builds run in WSL Ubuntu.
+- Wants interface work to start from written rules and a reviewed spec, not
+  trial and error: from-scratch screens first looked wrong (font, no wrapping)
+  and only got good by copying existing screens. Reuse parts, review the spec
+  first (`docs/UI.md`).
