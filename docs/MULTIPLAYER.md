@@ -191,6 +191,36 @@ the line. Fixed in `battle/battle/arena_link.c`: with four link opponents they s
 the party's four stand, mirrored (x -80, z 48, 16, -16, -48). After the fix all four are
 visible on both consoles (`link_view_*.txt`).
 
+**Full linked 4v4 to a result (`link_full_*.txt`).** Both consoles mashed A through a whole
+battle: Stun Voltage, Garet stunned, party members falling, and a winner. One console ended
+with Mia at 220 and Ivan at 1 HP and the arena's wins board at 001; the other ended with Isaac,
+Garet and Ivan down and Mia defeated, then the loser's flow ("Battle results were saved." and
+Garet: "We need to work on our teamwork. Let's try harder next time!"). Both consoles agreed
+on the outcome. **Caveat:** "Battle results were saved." is the stock link flow writing a record
+into the current save file (`BattleArena_SaveBattleResults` calls `Save_ProcessSelectedFile`);
+after a New Game there may be no current file. Not investigated; it is skipped for the monster
+series already (patch 8), the link flow still does it.
+
+**Watch item from the user: EnemyIvan looks off at target selection** (screenshot: Ivan stands
+apart from the other three, higher up the frame, in a back view). Investigated with bursts of
+frames 7 apart while choosing a target, zoomed crops, and a party-order swap:
+
+- With the opponents at z 48, 16, -16, -48 (mirroring the party), the fourth place was
+  **clipped at the right edge** (a hard vertical cut where the arena wall is) and EnemyIvan
+  vanished from some frames. Fixed by pulling the line in and left: z 45, 21, -3, -27 now,
+  after trying 36, 12, -12, -36; nothing is clipped.
+- **Still open:** with the normal order (Isaac, Garet, Mia, Ivan), EnemyIvan in the fourth place
+  **alternates between two views** while the cursor sits on Garet: a back view (green cloak,
+  arm out) standing apart to the right, and a front view (red jacket, staff) next to Mia. The
+  other three never change. **With the order swapped (Ivan third, Mia fourth) Ivan is stable
+  and front-facing in every frame**, so it follows Ivan being the fourth, not the layout.
+  Cause not found. Candidates: his enemy-side battle sprite (stock link battles never had him
+  fourth), or the target highlight's pulse acting on a fourth unit (the pulse is on the
+  selected Garet only), or the per-frame sprite priority update treating the fourth enemy place
+  specially. Next step: read `BattleObject_UpdateSpritePriorities` and the highlight code for
+  anything indexed by enemy place, and compare against a monster formation with four enemies.
+- It is not an OAM overflow: 11 of 128 sprite entries were drawing at target selection.
+
 **Control, to prove the offset is needed:** the same four-a-side build with only the table
 put back in unit 3 shows **three** opposing characters, and the intro reads "EnemyMia
 appeared! (blank) appeared!": the table overwrote the fourth unit's record, so its name is
