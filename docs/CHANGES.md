@@ -298,6 +298,24 @@ to look at when porting.
 - Not done: the CPU series progress and the ladder position are not saved
   (a saved game starts a new series).
 
+### 14. The save clerk
+- Patch: `0014-Arena-saving-moves-to-the-man-by-the-front-door.patch`
+- Files: `scene/battle_arena.c`, `text/en.po`.
+- Patch 13 put Save in the manager's menu as a fifth icon. With five icons the
+  prompt's message window opened but showed no text (likely the icons and the
+  message text compete for the same VRAM cache slots; four icons were fine).
+  The manager is back to four, and `MsgArenaSave` is removed (later `MsgArena*`
+  ids renumbered back down).
+- `BattleArena_SaveClerk` replaces the talk trigger of `ACTOR_DEBUG_HELPER`, the
+  man at (256, 384), the south end of the room (the debug parameter menu there
+  is no longer reachable). He asks `MsgArenaSavePrompt` with the Save icon
+  (`MsgArenaSaveYes`) and the No icon (`MsgArenaSaveNo`), and runs
+  `ArenaMenu_SaveGame` on Save.
+- Lesson for later menus: keep an icon row to four, or check that the prompt
+  still draws.
+- The title screen's Battle option is absent in this build's menu; New Game
+  starts the arena and Continue loads a save, which is the intended flow.
+
 ## Planned
 
 - Save and load the upgraded party.
