@@ -166,6 +166,14 @@ rung first (one hand-built team that uses Djinn and a summon) and judge that.
 
 ## Phase 4: 1v1, team against team
 
+**Spike done (2026-10-31): see `docs/MULTIPLAYER.md`.** Two copies of the hack link
+in libmgba and play a real linked battle (3v3, the stock limit), so local linking is
+a yes; 4v4 has one real obstacle (the opponent's Djinn table lives in the fourth
+enemy unit); internet play is a separate project. Decisions from the user: 4v4, only
+the story characters, offline party records first (send your record, the AI plays
+it), real time later in increments. The text below is the plan as it stood before the
+spike and is kept for the questions it asked.
+
 You said you have no idea how to get there, so here is what is already true and
 what is not known.
 

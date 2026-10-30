@@ -1,0 +1,35 @@
+# Both consoles: New Game, walk to the attendant, choose Multiplayer (the second
+# icon), and watch the link come up. gLinkStatus (0x03001F64) is 3 when both
+# consoles are heard; FLAG_BATTLE_ARENA_LINK_UP (area temp 03: byte 0x020000A0,
+# bit 3 = 8) is set while the link is up.
+include to_lobby.txt
+press U 40
+press L 44
+press U 60
+press L 10
+press U 10
+wait 30
+peek 0x03001F64 2
+tap A
+wait 150
+shot /tmp/shots/p1_a.png
+tap R
+wait 20
+shot /tmp/shots/p1_b.png
+tap A
+wait 200
+shot /tmp/shots/p1_c.png
+peek 0x03001F64 2
+peek 0x020000A0 1
+wait 300
+shot /tmp/shots/p1_d.png
+peek 0x03001F64 2
+peek 0x020000A0 1
+tap A
+wait 200
+shot /tmp/shots/p1_e.png
+tap A
+wait 200
+shot /tmp/shots/p1_f.png
+peek 0x03001F64 2
+peek 0x020000A0 1

@@ -72,3 +72,10 @@
   Rush (six boss rounds, no healing) exists to test that logic; its balance is data and
   is deferred with the Gauntlet's. The user chose to skip the balance pass until the
   logic is tested.
+- **Multiplayer** (user, 2026-10-31): Broken Seal 1v1 is **4v4**, bespoke story
+  characters only. The Lost Age has eight characters with party switching; whether to
+  fix the first row of four is undecided. First build **offline records**: send your
+  party's record and let the game play it as an AI opponent (pseudo-online); real-time
+  play is a separate step, in increments. The spike (`docs/MULTIPLAYER.md`) showed two
+  hack instances link and fight locally, and that 4v4 needs the opponent's Djinn table
+  moved out of enemy unit 3.

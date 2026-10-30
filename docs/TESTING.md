@@ -97,6 +97,11 @@ Tests (each ends in shots; `build\smoke\shots\sheet.png` shows them all):
   Boss Rush round 1 cannot be won by pressing A (bosses), so the scripts that need
   a win start the battle as the Gauntlet's easy first team (poke the tournament byte
   to 0), then poke it back to 1 once the battle is under way.
+- `link.c` + `link.sh`: a **two-console** driver (two ROM instances on libmgba's
+  lockstep link; `link.sh SCRIPT0 SCRIPT1`, shots named `p0_*` and `p1_*`).
+  `link_att_*.txt` brings the link up at the attendant; `link_battle_*.txt` runs the
+  whole stock Multiplayer flow to a linked battle. See `docs/MULTIPLAYER.md`. It must
+  be built with `-DENABLE_SCRIPTING` (`link.sh` does).
 - `pause.txt`, `save.txt`: the Pause menu and Save your quest.
 - `boot.txt`, `walk.txt`: calibration runs.
 ## Tips
