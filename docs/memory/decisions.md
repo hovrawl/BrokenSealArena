@@ -60,3 +60,7 @@
   restored to full and the standard spawn is used. Roadmap later: post-battle
   events (per win, tournament win, bespoke loss), a proper tournament win, and
   fight data (log every action, derive damage by character, type and element).
+- **Spare save bytes are a future option, not a task** (user, 2026-10-30): story-only
+  persistent flags and, after the Lost Age decomp shows what its transfer reads, the
+  struct's unnamed bytes could hold per-gauntlet stats later. Repurpose, never shrink.
+  Fight logs are kept in memory per round, not saved. See `docs/ROADMAP.md`, "Later".
