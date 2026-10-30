@@ -338,6 +338,24 @@ Each is one layer, in order; each builds on its own.
 - Port notes: the flag byte, the tournament macros and the message layout port as
   they are; re-pick the bosses from the Lost Age's enemy table.
 
+### 11. Isaac and Garet start with the Short Sword
+- Patch: `0011-Arena-Isaac-and-Garet-start-with-the-Short-Sword-so-.patch`
+- Files: `scene/arena_boot.c`, `scene/import/file_screen.s` (imports `Inventory_Equip`).
+- A new game gives Isaac and Garet a Machete (`character_table.c`). While it is
+  equipped the battle draws it as part of their own **prologue** sprites
+  (`SPRITE_ISAAC_MACHETE`, `SPRITE_GARET_MACHETE`, no weapon overlay;
+  `battle/placement.c`). The game swaps it for an equipped Short Sword when the
+  prologue ends (`Party_EndChildhood`), which gives the normal sprites with the
+  weapon drawn over them. The arena's New Game skips the prologue, so they stayed on
+  the first sprites. `ArenaBoot_NewGame` now does that one swap for the two of them
+  before it calculates their stats (Attack rises by 2: Isaac 146, Garet 129).
+- Deliberately not done: the rest of `Party_EndChildhood` (300 coins, Move and
+  Retreat for Isaac, Move for Garet, Mind Read for Ivan, a few story flags), so the
+  Psynergy shop's stock and the coin economy are unchanged. `FLAG_CHILDHOOD` was
+  already clear in the arena (checked with `peek`), so classes were never the cause.
+- Port notes: the Lost Age has its own starting equipment and sprite special cases;
+  look for the same kind of "drawn as part of the sprite" check.
+
 ## Dropped on the way
 
 - The first training menu was a full-screen canvas-text window with its own list
