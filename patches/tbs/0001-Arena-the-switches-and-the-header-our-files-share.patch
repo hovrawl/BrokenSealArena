@@ -1,0 +1,98 @@
+From 9fb01428646cb5ac609baf4f73d046b40e7647da Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 30 Oct 2026 14:51:23 +1100
+Subject: [PATCH] Arena: the switches and the header our files share
+
+arena_config.h holds the four switches (ARENA_BOOT, ARENA_LADDER,
+ARENA_TRAINING, ARENA_PAUSE_MENU); define one as 0 to take that part of the
+hack out. module/arena.h declares what our own files export to each other, so
+upstream's headers stay as they are. No behaviour changes yet.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/arena_config.h | 27 +++++++++++++++++++++++
+ games/tbs/include/module/arena.h | 38 ++++++++++++++++++++++++++++++++
+ 2 files changed, 65 insertions(+)
+ create mode 100644 games/tbs/include/arena_config.h
+ create mode 100644 games/tbs/include/module/arena.h
+
+diff --git a/games/tbs/include/arena_config.h b/games/tbs/include/arena_config.h
+new file mode 100644
+index 0000000000..408172951b
+--- /dev/null
++++ b/games/tbs/include/arena_config.h
+@@ -0,0 +1,27 @@
++#ifndef ALCHEMY_ARENA_CONFIG_H
++#define ALCHEMY_ARENA_CONFIG_H
++
++/// Arena romhack: the switches. Define one as 0 (-DARENA_BOOT=0) to take that
++/// part of the hack out and get upstream's behaviour back.
++
++/// New Game boots straight into the Battle Arena (scene/file_screen.c).
++#ifndef ARENA_BOOT
++#define ARENA_BOOT 1
++#endif
++
++/// A monster series fights the team ladder (battle/battle/arena_ladder.c).
++#ifndef ARENA_LADDER
++#define ARENA_LADDER 1
++#endif
++
++/// The attendant's and the party manager's menus (scene/battle_arena.c).
++#ifndef ARENA_TRAINING
++#define ARENA_TRAINING 1
++#endif
++
++/// The Pause menu, Save included, works in the arena.
++#ifndef ARENA_PAUSE_MENU
++#define ARENA_PAUSE_MENU 1
++#endif
++
++#endif
+diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
+new file mode 100644
+index 0000000000..0d760f3fbc
+--- /dev/null
++++ b/games/tbs/include/module/arena.h
+@@ -0,0 +1,38 @@
++#ifndef ALCHEMY_MODULE_ARENA_H
++#define ALCHEMY_MODULE_ARENA_H
++
++/// Arena romhack: what our own files export to each other. Upstream's headers
++/// are left as they are.
++
++#include "types.h"
++
++// Battle Arena overlay (scene/arena_menu.c)
++
++/// The attendant's menu: 1 for a solo series, 2 for a linked battle, 0 to leave.
++s32 ArenaMenu_AttendantMode(void);
++/// The coins a battle won, said by `actorId`; the party is healed.
++void ArenaMenu_ShowWin(s32 actorId, s32 reward);
++/// Talking to the party manager: stats, Djinn, Psynergy and the item shops.
++s32 BattleArena_PartyManager(s32 actorId);
++
++// File screen overlay (scene/arena_boot.c)
++
++/// New Game: the ready-made party, then the Battle Arena.
++void ArenaBoot_NewGame(void);
++
++// Main image, reached from the overlay through far calls
++
++/// A message window across the top and a row of command icons across the
++/// bottom, labelled by consecutive messages from labelBase. The position chosen,
++/// or -1 for B (window/screens/arena_icon_menu.c).
++s32 ArenaMenu_IconChoose(s32 prompt, const u8 *icons, s32 labelBase,
++                         s32 count);
++/// Chooses a party member in the shop strip, showing the member's items (0),
++/// Djinn (1), Psynergy (2) or status (3); the unit id, or -1 for B
++/// (shop/shop/arena_shop.c).
++s32 ItemPicker_ChooseMember(s32 mode);
++/// The stat (2), Djinn (1) or Psynergy (0) counter for one character
++/// (shop/shop/arena_shop.c).
++s32 ArenaShop_Run(s32 kind, s32 unitId);
++
++#endif
+-- 
+2.53.0
+

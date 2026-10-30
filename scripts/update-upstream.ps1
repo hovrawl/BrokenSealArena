@@ -1,4 +1,5 @@
 # Move this repo to newer upstream alchemy, carrying the patches along.
+#   .\scripts\try-upstream.ps1              # first: trial-rebase, build, smoke on a scratch branch
 #   .\scripts\update-upstream.ps1           # look: what is new upstream, what could clash
 #   .\scripts\update-upstream.ps1 -Apply    # rebase the working copy's patches onto it
 # Look first. -Apply rebases the `arena` branch in ~/alchemy onto upstream's main,
@@ -11,6 +12,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+& "$PSScriptRoot\check-submodule.ps1"
 $branch = if ($Game -eq 'tbs') { 'arena' } else { "arena-$Game" }
 $pinned = ((git -C $root ls-files -s alchemy) -split '\s+')[1]
 

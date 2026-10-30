@@ -1,6 +1,8 @@
 # Project state (update when it changes)
 
-As of the 13-patch series on upstream `0033cb64ef`:
+As of the 7-patch layered series on upstream `0033cb64ef` (re-sliced from the
+original 13 chronological patches, which are the branch `arena-chrono`; our code
+now lives in our own files, see `docs/CHANGES.md`):
 
 **Built and smoke-tested:** New Game boots into the arena (level 30 Isaac, Garet,
 Mia, Ivan, 1500 coins); the attendant's Solo/Multiplayer and tournament menus

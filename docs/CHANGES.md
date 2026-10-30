@@ -3,12 +3,13 @@
 This project is a patch series on top of
 [PascalPixel/alchemy](https://github.com/PascalPixel/alchemy), pinned as the
 `alchemy` submodule. Nothing from upstream is copied here: the whole romhack is
-the `.patch` files in `patches/tbs/`, one per commit, plus the notes below. That
-keeps the diff against upstream small and lets us rebase onto a newer upstream, or
-onto The Lost Age (`games/tla`), later. `docs/WORKFLOW.md` explains the model.
+the `.patch` files in `patches/tbs/`, one per feature layer, plus the notes
+below. That keeps the diff against upstream small and lets us rebase onto a
+newer upstream, or onto The Lost Age (`games/tla`), later. `docs/WORKFLOW.md`
+explains the model.
 
 Target: **The Broken Seal, English (`tbs-en`)**. Edition-specific work (other
-languages) is not done; the changes below are guarded so they can be turned off.
+languages) is not done; each change below has a switch that turns it off.
 
 ## Workflow
 
@@ -18,293 +19,235 @@ languages) is not done; the changes below are guarded so they can be turned off.
 | Build | `powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1` (ROM to `build\tbs-en.gba`) |
 | Edit | work in `~/alchemy` (WSL), branch `arena`, and commit there |
 | Save the work | `scripts\export-patches.ps1`, then commit this repo |
-| Move to newer upstream | `scripts\update-upstream.ps1` (look), then `-Apply`; see `docs/WORKFLOW.md` |
+| Try a newer upstream | `scripts\try-upstream.ps1` (trial rebase, build, smoke), then `scripts\update-upstream.ps1 -Apply`; see `docs/WORKFLOW.md` |
 
 Upstream's `make compare-*` checks no longer pass. They compare against the
 original ROM bytes, and the romhack changes them on purpose.
 
-## Changes
+## How the hack is arranged
 
-Each entry names the patch, the files, the switch that disables it, and what
-to look at when porting.
+**Our code lives in our own files; upstream's files get hooks.** The patches add
+these files and edit upstream's only where they must (about 115 lines of hooks
+and table rows, plus the `en.po` messages):
 
-### 1. New Game boots into the Battle Arena
-- Patch: `0001-Arena-New-Game-boots-straight-into-the-Battle-Arena.patch`
-- Files: `games/tbs/src/scene/file_screen.c`,
-  `games/tbs/src/scene/import/file_screen.s`
-- Switch: `ARENA_BOOT` (top of `file_screen.c`; `0` restores the prologue).
-- What: in the file screen's New Game branch, after
-  `MainRoutineWork_InitializeDefaults`, add Garet, Mia and Ivan to the party,
-  level all four to 30, set `FLAG_IN_BATTLE_ARENA`, and send the game to
-  `SceneId_BattleArena` (the same destination the stock Battle option uses).
-  No save file is read or written.
-- Overlay imports: overlays only reach functions listed in
-  `scene/import/<scene>.s`; this adds `Unit_LevelUpTo` and `Unit_Calculate`.
-- Port notes: the file screen and the arena scene are separate overlays; a
-  `tla` port needs the equivalent scene names.
+| File | What |
+|---|---|
+| `include/arena_config.h` | the switches `ARENA_BOOT`, `ARENA_LADDER`, `ARENA_TRAINING`, `ARENA_PAUSE_MENU` (define one as 0 to take that part out) |
+| `include/module/arena.h` | what our files export to each other |
+| `src/scene/arena_boot.c` | New Game into the arena (file screen overlay, object `370`) |
+| `src/battle/battle/arena_ladder.c` | the team ladder (a part of `battle.c`) |
+| `src/window/screens/arena_icon_menu.c` | the shop-style icon menu (a part of `screens.c`) |
+| `src/shop/shop/arena_shop.c` | the member picker and the stat, Djinn and Psynergy counters (a part of `shop.c`) |
+| `src/scene/arena_menu.c` | the attendant's and the manager's menus (arena overlay, object `3cb`) |
+| `src/window/screens/arena_save.c` | saving in the arena (a part of `screens.c`) |
 
-### 2. Team ladder replaces level-matched monster battles
-- Patch: `0002-Arena-team-ladder-replaces-level-matched-monster-bat.patch`
-- Files: `games/tbs/include/battle/formations.h`,
-  `games/tbs/src/battle/formations.c`,
-  `games/tbs/src/battle/battle/formation.c`
-- Switch: `ARENA_LADDER` (top of the ladder code in `formation.c`).
+Some upstream objects are unity builds ("Part of shop.c"): new code for them goes
+in a new part file included from the parent, not in a new object. Hooks that stay
+in upstream files: `file_screen.c`, `formation.c`, `battle_arena.c`, `save.c`,
+`settings_menu.c`, `run.c`, one include each in `battle.c`, `shop.c`, `screens.c`,
+the far-call rows (`WINDOW.S`, `SHOP.S`), the import rows (`imports.inc`, the
+overlays' `import/*.s`), `objects.tsv` rows and a bank start in `main.ld`.
+
+## The patches
+
+Each is one layer, in order; each builds on its own.
+
+### 1. The switches and the header our files share
+- Patch: `0001-Arena-the-switches-and-the-header-our-files-share.patch`
+- Files: `include/arena_config.h`, `include/module/arena.h` (new).
+- No behaviour. Every hook includes `arena_config.h`, so the switches are in one
+  place. `arena.h` is where our files declare what they share, so upstream's
+  headers stay as they are.
+
+### 2. The messages for the arena's menus
+- Patch: `0002-Arena-the-messages-for-the-arena-s-menus.patch`
+- Files: `text/en.po` (the `MsgArena*` messages, appended).
+- Why messages: text drawn from C strings uses a different, monospaced font and
+  does not wrap. Messages draw in the game's own font. Numbers and names go
+  through messages too: `MsgArenaNumber` (`{argument_signed_number}`) and
+  `MsgArenaName` (`{argument_actor_name:1}`), with `MessageArgument_Push` before
+  the draw. The win report is the attendant saying `MsgArenaVictory`. Icon-menu
+  labels are *consecutive* messages (`IconMenu_Center` takes a base).
+- **Editions:** only `en.po` has them. The other five `.po` files are untouched,
+  so those editions do not build (the code names messages they lack).
+- Message keys must be contiguous from 0 (`validateCatalog` in
+  `tools/ags-text/catalog.c`); new messages go at the end and `MsgEnd` moves up
+  with them. `X-Alchemy-Symbol-Count` is the glyph alphabet, not a message count.
+- There is no cursor or up-arrow glyph in any message, so the names say "Up".
+
+### 3. New Game boots into the Battle Arena
+- Patch: `0003-Arena-New-Game-boots-straight-into-the-Battle-Arena.patch`
+- Files: `scene/file_screen.c` (a hook), `scene/arena_boot.c`,
+  `scene/import/file_screen.s` (imports `Unit_LevelUpTo`, `Unit_Calculate`),
+  `objects.tsv`.
+- Switch: `ARENA_BOOT`.
+- What: in the New Game branch, after `MainRoutineWork_InitializeDefaults`,
+  `ArenaBoot_NewGame` adds Garet, Mia and Ivan, levels all four to 30, gives
+  1500 coins, sets `FLAG_IN_BATTLE_ARENA` and sends the game to
+  `SceneId_BattleArena` (the stock Battle option's destination). No save file is
+  read or written, and there is no Battle option in this flow.
+- It also sets `restartScene` and `restartEntrance` to the arena, so Continue on a
+  file saved by another build of the ROM (every rebuild is one) lands in the
+  arena instead of at a Sanctum.
+- Overlay imports: overlays reach only functions listed in
+  `scene/import/<scene>.s`.
+- Port notes: the file screen and the arena are separate overlays; a `tla` port
+  needs the equivalent scene names.
+
+### 4. Team ladder replaces level-matched monster battles
+- Patch: `0004-Arena-a-team-ladder-replaces-level-matched-monster-b.patch`
+- Files: `battle/battle/arena_ladder.c`, `battle/battle/formation.c` (hooks),
+  `battle/battle.c` (one include).
+- Switch: `ARENA_LADDER`.
 - What: `gArenaLadder[12]` lists fixed mixed teams (rows of
   `game/enemy_table.c`) with a target level each. Under `FLAG_MONSTER_BATTLE`,
-  `BattleFormation_BuildEnemyList` takes the team for the series' current win
-  count (`gMainRoutineWork.linkTallies[3]`, the arena's monster streak) instead
-  of calling `BattleFormation_SelectLevelMatchedCandidate`. Enemies are scaled
-  by the existing `BattleEnemy_AdjustLevel` through `levelAdjustment`.
+  `BattleFormation_BuildEnemyList` takes the team for the series' win count
+  (`gMainRoutineWork.linkTallies[3]`, the arena's monster streak) instead of
+  calling `BattleFormation_SelectLevelMatchedCandidate`. Past the last rung it
+  fights the last again, a level stronger for each win. Enemies are levelled by
+  the existing `BattleEnemy_AdjustLevel` through `levelAdjustment`.
 - Limits: a small enemy uses one of six sprite slots and any other two
   (`BattleSprite_IsSmall`); keep every rung within six. Rungs 1 to 3 are
-  play-tested; the rest are not.
-- Port notes: formation and enemy rows differ in The Lost Age; re-pick the
-  teams from its `enemy_table.c`.
+  play-tested; the rest are not, and round 3 spikes with a boss.
+- Port notes: formation and enemy rows differ in The Lost Age; re-pick the teams
+  from its `enemy_table.c`.
 
-### 3. Training menu (stats and Psynergy)
-- Patch: `0003-Arena-training-menu-for-stats-and-Psynergy.patch`
-- Files: `games/tbs/src/scene/battle_arena.c`,
-  `games/tbs/src/scene/import/battle_arena.s`,
-  `games/tbs/src/system/overlay/imports.inc`,
-  `games/tbs/src/scene/file_screen.c` (starting coins)
-- Switch: `ARENA_TRAINING` (top of `battle_arena.c`).
-- What: `Training_Run` opens a full-screen window (the debug menus' pattern:
-  `Window_Create`, `Text_Draw*`, keys from `gKeysRepeat`) with a character
-  list, a stat screen and a Psynergy shop. Stats add to the unit's `base*`
-  fields and call `Unit_Calculate`; Psynergy goes through
-  `Unit_LearnPsynergy`. Prices: HP = base, PP = 2 x base, Attack 3 x,
-  Defense and Agility 4 x, Luck (base + 1) x 100; Psynergy 150 + 50 per PP.
-  `gTraining_PsynergyShop` is the shop list (ability ids; names come from
-  `MsgAbilityName`).
-- Hooks: after a monster win (`BattleArena_RunRoundResult`, which also pays
-  the coins: 200 plus 100 per earlier win in the series) and at the start of
-  the attendant's talk (`BattleArena_ChooseBattleMode`). It heals the party
-  (`Party_RestoreHpPp(1)`) on exit.
-- Overlay imports: `Unit_LearnPsynergy` had no row in `imports.inc`, so one
-  was added (its far stub already existed in `gamepak/far_call/GAME.S`).
-- Not done: the upgrades live in RAM only. They persist only if the stock save
-  is used; this build has no save step yet. Text is English only, written as
-  global `const u8` arrays (scene overlays use no string literals elsewhere).
-- Port notes: ability ids and enemy/unit layouts match across the two games
-  only partly; check `ability_table.c` in The Lost Age.
+### 5. The shop-style icon menu and the party manager's screens
+- Patch: `0005-Arena-the-shop-style-icon-menu-and-the-party-manager.patch`
+- Files: `window/screens/arena_icon_menu.c`, `shop/shop/arena_shop.c`,
+  `gamepak/far_call/WINDOW.S` and `SHOP.S` (one or two exports each),
+  `shop/shop.c` and `window/screens.c` (one include each), `main.ld`.
+- Why in the main image: these use private state (the shop's work block, the
+  icon menu) and have no far-call stubs, so an overlay cannot drive them. They
+  sit beside that state and are exported.
+- `ArenaMenu_IconChoose(prompt, icons, labelBase, count)`: the prompt opens as a
+  message window the way `Shop_ShowKeeperMessage` does
+  (`Message_OpenWindow(prompt, 5, 0, 0x22)`), then `IconMenu_Open`/`AddIcon`/
+  `Center` (tile row 17) and the stock `IconMenu_Run`. The label is `labelBase`
+  plus the position. **Keep icon rows to four**: five or more left the prompt's
+  window without its text (VRAM cache pressure). `COMMAND_ICON_EQUIP` does not
+  draw in the arena; `COMMAND_ICON_ATTACK` does.
+- `ItemPicker_ChooseMember(mode)`: the shops' strip of walking figures, then what
+  to show beside it. Modes: 0 items (as the shops' Sell), 1 Djinn, 2 Psynergy,
+  3 status. Djinn and Psynergy and status share a 30 by 10 tile panel across the
+  top (224 by 64 pixels inside, first pixel at screen 8, 8; 11 tiles tall); no
+  coins window in those modes.
+  - Djinn: an animated figure and the name, three columns of 16-pixel rows (12
+    shown). The figure is an actor `Sprite` (ids 90 to 93, one per element,
+    animation 2 for a set Djinni), not per Djinni; it needs
+    `Render_ApplyProjectedPlacement` every frame, at scale `0xb000`, placed by
+    its feet (x the cell's icon centre, y the bottom of the cell). A sprite that
+    cannot be created leaves the element's icon tile (`0x5001` plus element).
+  - Psynergy: a 16-pixel ability icon
+    (`WindowSprite_CreateFromResource(ICON_KIND_ABILITY, ...)`, sentinel 252 as
+    the shops do) and the name, two columns of four rows (8 shown).
+  - Status: a copy of the Status screen's top rows, not a call, because
+    `ItemMenu_DrawMemberStatus` reads the field menu's work and the shop's work
+    holds the same bytes as something else. Conditions are not shown, only
+    "Normal".
+  - Tile text snaps to an 8-pixel row: a 16-pixel row puts the name at y + 8 and
+    the icon at y + 4, as the Status screen does.
+- `ArenaShop_Run(kind, unitId)`: counters built like `Shop_SelectBuy`: the stock
+  row (seven a page, page arrows, a price tag from `Shop_CreatePriceSprite`), the
+  hand cursor (`MenuCursor_Place`), the name/price window (as
+  `Shop_DrawItemPrice`), the coins window (`Shop_DrawMoney`) and the description
+  (`Shop_DrawMessage`), with `MsgWhatWouldYouLike`. Left/Right move one with wrap,
+  Up/Down a page, A buys, B leaves. Kinds: 0 Psynergy, 1 Djinn, 2 stats.
+  - Psynergy: ability icons, the chosen one swelling as in the shops; the
+    description is `MsgAbilityDescription` plus the ability id; price 150 plus 50
+    for each PP of cost.
+  - Djinn: the element's animated figure; the description is the Djinni's
+    ability (`ABILITY_DJINNI_FIRST` plus its number); 500 coins each.
+  - Stats: HP (+20), PP (+10), Attack, Defense and Agility (+5), Luck (+1). Each
+    entry uses the icon of the item that raises that stat for good, `<stat> Up`
+    for its name and "Raises X by n. Now m." for its description (the two numbers
+    pushed with `MessageArgument_PushFar` just before the draw). Prices scale with
+    the character's base stat (`ArenaStat_Cost`). At a stat's cap the price window
+    says MAX and a purchase does nothing. Stats add to the unit's `base*` fields
+    and call `Unit_Calculate`; Psynergy goes through `Unit_LearnPsynergy`.
+- **Bank size:** the shop code is in bank `rom_main_06`, which had 114 bytes to
+  spare and overflowed by about 2 KB (`cannot move location counter backwards` at
+  `main.ld`). Bank 07's start moved from `0x080b5000` to `0x080b6000` for
+  `tbs-en` (it had 5 KB free). Check the slack in `out/tbs-en/tbs-en.map` before
+  adding code to a bank.
+- `gMenuWork` is shared: the shop's `ShopWork` and the field menu's work occupy
+  the same block, so shop code must not call menu-bank functions that read the
+  other layout.
+- Not done: custom icon art (the game's command icons are fixed graphics with
+  fixed names, so some do not suit their label).
+- Port notes: ability and Djinn ids, the sprite ids for the figures and the
+  bank layout all need checking in The Lost Age.
 
-### 4. Attendant and party manager menus
-- Patch: `0004-Arena-attendant-and-party-manager-menus.patch`
-- Files: `games/tbs/src/scene/battle_arena.c`,
-  `games/tbs/src/scene/import/battle_arena.s`,
-  `games/tbs/src/system/overlay/imports.inc` (a row for
-  `Window_ClearInteriorTiles`; its far stub already existed)
-- Switch: `ARENA_TRAINING` (also guards patch 3).
-- `ArenaMenu_Choose(prompt, options, count)`: a prompt window across the top
-  and up to six options across the bottom (three to a column, A chooses, B
-  cancels). There is no shop-style icon row: the game's command icons are
-  fixed graphics with fixed names, so this one draws plain text.
-- Attendant (`BattleArena_ChooseBattleMode`): `ArenaMenu_AttendantMode` asks
-  Solo or Multiplayer, then for Solo the tournament. Solo takes the stock
-  "start a monster series" branch, Multiplayer the stock "wait for a link"
-  branch; the stock yes/no question is skipped (`answer` is set from the menu).
-  Not asked when a series is already running. Tournaments: the Monster
-  Gauntlet (`gArenaLadder`) is the only one. A second would need a way for
-  battle code (`ArenaLadder_Select`) to know which one is chosen, for example
-  a game flag byte.
+### 6. The attendant's and the party manager's menus
+- Patch: `0006-Arena-the-attendant-s-and-the-party-manager-s-menus.patch`
+- Files: `scene/arena_menu.c` (new object `3cb`), `scene/battle_arena.c` (hooks),
+  `scene/import/battle_arena.s`, `system/overlay/imports.inc`, `objects.tsv`.
+- Switch: `ARENA_TRAINING`.
+- Attendant (`BattleArena_ChooseBattleMode` hook): `ArenaMenu_AttendantMode` asks
+  Solo or Multiplayer, then for Solo the tournament. Solo takes the stock "start a
+  monster series" branch, Multiplayer the stock "wait for a link" branch; the
+  stock yes/no question is skipped (`answer` is set from the menu). It is not
+  asked when a series is already running. The Monster Gauntlet (`gArenaLadder`)
+  is the only tournament; a second needs a way for the battle code
+  (`ArenaLadder_Select`) to know which one was chosen, for example a game flag
+  byte.
 - Party manager (`BattleArena_PartyManager`): replaces the talk trigger of
-  `ACTOR_LINKED_WINS_TELLER`, the man to the right of the counter (the
-  linked-win reporting is no longer reachable). Characters (stats), Djinn
-  (all 28, 500 coins, given and set at once through `Djinn_Give` and
-  `Djinn_Set`), Psynergy (patch 3's shop), and Items, which opens the real
-  `Shop_Run` on Xian's weapon, armor and item stock rows (16 to 18).
-- After a win, `ArenaMenu_ShowWin` shows the coins won and heals the party; the
-  training menu no longer opens by itself.
-- The screens call `Window_ClearInteriorTiles` before every redraw. Without it
-  the previous draw showed through wherever the new text was shorter.
-- Build note: `make` through `wsl ... ; echo rc=$?` reported 0 on a failed
-  build; check the log for `***`, or that the ROM's timestamp changed.
+  `ACTOR_LINKED_WINS_TELLER`, the man to the right of the counter (the linked-win
+  reporting is no longer reachable). Characters (the status panel and the stat
+  counter), Djinn, Psynergy, and Items, which opens the real `Shop_Run` on Xian's
+  weapon, armor and item stock rows (16 to 18). The party is healed on the way
+  out, since stats and gear may have changed.
+- Wins: after a monster win (`BattleArena_RunRoundResult`) the attendant says
+  `MsgArenaVictory` with the coins won, 200 plus 100 for each earlier win in the
+  series, and the party is healed (`Party_RestoreHpPp(1)`).
+- Overlay imports: functions the new code calls need a row in `imports.inc`
+  (their far stubs mostly existed: `Unit_LearnPsynergy`, `Window_ClearInteriorTiles`,
+  `Sprite_Create`, ...) and in `import/battle_arena.s`. Scene overlays have no
+  string literals or static data of their own: use global `const` arrays.
+- The list screens call `Window_ClearInteriorTiles` before every redraw; without
+  it the previous draw showed through wherever new text was shorter. Canvas text
+  (`Text_DrawString`, `Text_DrawNumber`) ignores it and uses a different font;
+  use the tile calls.
+- Actor ids such as `ACTOR_ATTENDANT` are defined inside `battle_arena.c`, so
+  `arena_menu.c` takes them as parameters.
+- Port notes: scene, actor and trigger names differ in The Lost Age.
 
-### 5. Shop-style icon menus and the character strip
-- Patch: `0005-Arena-shop-style-icon-menus-and-character-strip.patch`
-- Files: `games/tbs/src/window/screens/icon_menu.c` (new
-  `ArenaMenu_IconChoose`), `games/tbs/src/shop/shop/item_picker.c` (new
-  `ItemPicker_ChooseMember`), `gamepak/far_call/WINDOW.S` and `SHOP.S` (one
-  export each, appended to the bank tables), `system/overlay/imports.inc`,
-  `scene/import/battle_arena.s`, `include/module/window/screens.h`,
-  `include/module/shop/shop.h`, `scene/battle_arena.c`.
-- Why in the main image: the icon menu and the shop's party strip use private
-  state and have no far-call stubs, so an overlay cannot drive them. The new
-  functions live beside that state and are exported.
-- `ArenaMenu_IconChoose(prompt, icons, labels, count)`: a prompt window across
-  the top, and `IconMenu_Open`/`AddIcon`/`Center` for the icon row at tile row
-  17, as `Menu_SelectShopCommand` does. Each icon's name is a fixed message
-  (`MsgCommandName + icon`), so the label is drawn from the caller's text. Icons
-  used: Fight and Cable (Solo, Multiplayer), Battle (the gauntlet), Status,
-  Djinn, Psynergy and Item (the manager), Equip, Defend and Item (the shops).
-  They are existing art, so some do not suit their label.
-- `ItemPicker_ChooseMember()`: `ItemPicker_Run` without the item choice, plus
-  the coins window from `Shop_ChooseMember`. Returns the unit id or -1.
-- The list screens now use the tile text calls (`Text_Draw*InWindow`,
-  `Text_DrawMessageAsTiles`) at 16-pixel rows. The canvas calls
-  (`Text_DrawString`, `Text_DrawNumber`) ignore `Window_ClearInteriorTiles`,
-  which left old cursors and numbers showing.
-- Not done: custom icon art. That, or labels, would need new resources (the
-  game's text is `text/*.po`, six files, one set of numbered messages).
-
-### 6. Menu text as game messages
-- Patch: `0006-Arena-menu-text-as-game-messages-icon-highlight-foll.patch`
-- Files: `games/tbs/text/en.po` (30 messages appended, `MsgArena*`, ids
-  10723 to 10752), `scene/battle_arena.c`, `window/screens/icon_menu.c`,
-  `include/module/window/screens.h`.
-- Why: text drawn from C strings uses a different, monospaced font and does not
-  wrap. Messages draw in the game's own font. The first patch-5 menu also kept
-  its own selection counter, so the icon highlight did not follow the label.
-- `ArenaMenu_IconChoose(prompt, icons, labelBase, count)` now opens the prompt
-  as a message window the way `Shop_ShowKeeperMessage` does
-  (`Message_OpenWindow(prompt, 5, 0, 0x22)`), then runs the stock
-  `IconMenu_Run`, with `labelBase` as `IconMenu_Center`'s label messages (label =
-  `labelBase` + position; hence consecutive messages).
-- Numbers and names go through messages too: `MsgArenaNumber`
-  (`{argument_signed_number}`) and `MsgArenaName` (`{argument_actor_name:1}`),
-  with `MessageArgument_Push` before the draw. They draw left-aligned.
-- The win report is the attendant speaking `MsgArenaVictory`.
-- **Editions:** only `en.po` has the new messages. The other five `.po` files
-  are untouched, so those editions do not build with these changes (the code
-  names messages they lack). Message keys must be contiguous from 0
-  (`validateCatalog` in `tools/ags-text/catalog.c`); `X-Alchemy-Symbol-Count`
-  is the glyph alphabet, not a message count, and is left alone. New messages go
-  at the end; `MsgEnd` moves up with them.
-- The list screens' cursor is still a tile `>` (no cursor glyph exists in any
-  message), and the party strip has no custom text.
-
-### 7. Djinn and Psynergy panels, paged purchase grids
-- Patch: `0007-Arena-Djinn-and-Psynergy-panels-and-paged-icon-purcha.patch`
-- Files: `shop/shop/item_picker.c`, `include/module/shop/shop.h`,
-  `scene/battle_arena.c`, `scene/import/battle_arena.s`,
-  `system/overlay/imports.inc`, `text/en.po` (`MsgArenaNone`, `MsgArenaPage`).
-- `ItemPicker_ChooseMember(mode)`: 0 shows the member's items as before, 1 their
-  Djinn, 2 their Psynergy, in a 30 by 10 tile panel across the top (the coins
-  window moves to row 10 for those two). Djinn: element icon tile plus name, three
-  columns of eight-pixel rows (24 at most). Psynergy: 16-pixel icon plus name,
-  two columns of four rows (8 at most). The rest are not shown.
-- A Djinni's "sprite" is its element's icon tile (window tile `0x5001` plus the
-  element), which is what the game's Djinn lists use. Creature sprites are
-  battle and field actors and are not available in a window.
-- Psynergy icons: `WindowSprite_CreateFromResource(ICON_KIND_ABILITY, id, ...)`,
-  as the Psynergy menu does; its far stub existed, so the import row was added.
-  The icon's `sentinel` is set to 252 as the shops do for item icons.
-- `Training_RunGrid` (battle_arena.c) replaces the two list screens: icon and
-  name cells, two columns by six rows (12 a page), a `>` marker, price or
-  Known/Owned under the grid and "Page n/m". Left/Right move by one, Up/Down
-  by a row, L/R by a page. `WindowSprite_PrepareForRedraw` clears the window
-  and its sprites each redraw.
-- The Characters menu still uses the item strip and the stat list.
-
-### 8. Animated Djinni figures
-- Patch: `0008-Arena-animated-Djinni-figures-in-the-Djinn-picker-and.patch`
-- Files: `shop/shop/item_picker.c`, `scene/battle_arena.c`,
-  `scene/import/battle_arena.s`, `system/overlay/imports.inc`.
-- The creature in the Djinn menu is an actor `Sprite` (ids 90 to 93, one per
-  element, `gDjinnFigures_SpriteIds`), animation 2 for a set Djinni. It is not
-  per Djinni: a Mercury Djinni of any name is the same figure.
-- Each visible Djinni gets `Sprite_Create(VENUS_DJINNI + element)`,
-  `Sprite_StartAnimation(.., 2)`, and a `Render_ApplyProjectedPlacement` call
-  every frame (the sprite is not drawn otherwise), as
-  `DjinnFigures_UpdateAllPositions` does, at scale `0xb000` (about 0.69). A
-  sprite that cannot be created leaves the icon tile in its place.
-- Positions assume the window's first pixel is at screen (8, 8) and that the
-  figure stands at its feet: x = cell icon centre, y = bottom of the cell.
-- The picker panel's Djinn rows are now 16 pixels (12 shown), to fit a figure.
-  The purchase grid makes its 12 figures when the page changes.
-- Imports added (stubs existed in `FIELD.S`): `Sprite_Create`,
-  `Sprite_Destroy`, `Render_ApplyProjectedPlacement`.
-
-### 9. Psynergy and Djinn counters like the Buy counter
-- Patch: `0009-Arena-Psynergy-and-Djinn-counters-built-like-the-shops.patch`
-- Files: `shop/shop/item_picker.c` (`ArenaShop_Run` and helpers),
-  `gamepak/far_call/SHOP.S`, `system/overlay/imports.inc`,
-  `include/module/shop/shop.h`, `scene/battle_arena.c`,
-  `scene/import/battle_arena.s`, `games/tbs/main.ld`.
-- `ArenaShop_Run(kind, unitId)` follows `Shop_SelectBuy`: the stock row
-  (`stockItemIds`, seven a page, page arrows, a price tag from
-  `Shop_CreatePriceSprite` under each entry), the hand cursor
-  (`MenuCursor_Place`), the name/price window (as `Shop_DrawItemPrice`), the
-  coins window (`Shop_DrawMoney`) and the description in the bottom window
-  (`Shop_DrawMessage`). The prompt is `MsgWhatWouldYouLike`. Left/Right move by
-  one with wrap, Up/Down by a page, A buys, B leaves.
-- Descriptions: `MsgAbilityDescription` plus the ability id; a Djinni's is its
-  ability (`ABILITY_DJINNI_FIRST` plus its number). Psynergy prices come from
-  the PP cost (150 + 50 each); Djinn cost 500.
-- Psynergy entries are ability icons, the chosen one swelling as in the shops;
-  Djinn entries are the element's animated figure (see patch 8), the one under
-  the hand drawn at full size.
-- The overlay's list-grid screens and their shop data are removed. The Stats
-  screen stays. The manager now calls `ArenaShop_Run` after the character strip.
-- The shop item sub-menu uses the Attack icon for Weapons; the Equip icon did
-  not draw in the arena.
-- **Bank size:** the shop code is in bank `rom_main_06`, which had 114 bytes
-  to spare and overflowed by about 2 KB (`cannot move location counter
-  backwards` at `main.ld:72`). Bank 07's start moved from `0x080b5000` to
-  `0x080b6000` for `tbs-en` (it had 5 KB free). Check slack with the map
-  file when adding code to a bank.
-
-### 10. Status panel and the stat counter
-- Patch: `0010-Arena-status-panel-for-Characters-stat-upgrades-as-a-.patch`
-- Files: `shop/shop/item_picker.c`, `scene/battle_arena.c`, `text/en.po`
-  (`MsgArenaStatUp*`, `MsgArenaStatInfo*`, ids 10755 to 10766).
-- Picker mode 3 (`ARENA_PICKER_STATUS`): `ArenaPicker_DrawStatus` repeats the
-  Status screen's top rows (`ItemMenu_DrawMemberStatus` and the portrait from
-  `StatusScreen_ShowMemberStatus`): portrait, class and "Normal" under it,
-  name, level, experience, HP, PP, Attack, Defense, Agility and Luck. It is a
-  copy, not a call, because `ItemMenu_DrawMemberStatus` reads the field menu's
-  work and the shop's work holds the same bytes as something else. No coins
-  window and no item grid in this mode; the Djinn rows are left out. Status
-  conditions are not shown, only "Normal".
-- `ArenaShop_Run` kind 2 sells the six stats: HP (+20), PP (+10), Attack,
-  Defense and Agility (+5), Luck (+1). Each entry uses the icon of the item
-  that raises that stat for good, `<stat> Up` for its name, a price tag, and a
-  description "Raises X by n. Now m." (the two numbers are pushed with
-  `MessageArgument_PushFar` just before the description is drawn). At a stat's
-  cap the price window says MAX and a purchase does nothing. The overlay's list
-  screens and their stat helpers are removed.
-- No up-arrow glyph exists in the message font, so the names say "Up".
-- The Characters picker is mode 3, Djinn 1, Psynergy 2; the counters are
-  Psynergy 0, Djinn 1, Stats 2.
-- Patch 12 centres the names on the Psynergy icons and Djinn figures in the
-  picker panels. Tile text snaps to an 8-pixel row (a name at y + 4 drew at y),
-  so a 16-pixel row puts the name at y + 8 and the icon at y + 4, as the Status
-  screen does (`StatusScreen` preview lists: icon at +4, text at +8). The
-  panel window is 11 tiles tall.
-- Patch 11 (`0011-...`) removes the coins window from every panel mode (status,
-  Djinn, Psynergy); only the old items mode, no longer used, still has it.
-
-### 13. Saving through the Pause menu
-- Patch: `0013-Arena-saving-through-the-Pause-menu.patch`
-- Switch: `ARENA_PAUSE_MENU` (defined at the top of each file below; set to 0 to
-  restore the original arena, where the Pause menu is unavailable).
-- Files: `field/field_sequence/run.c`, `window/window/settings_menu.c`,
-  `window/screens/save.c`, `scene/file_screen.c`.
-- The Start (Pause) menu already has Save your quest, Sleep and Change
-  settings. Two things shut it in the arena: the field answers
-  `MsgFieldPauseUnavailable` when `FLAG_IN_BATTLE_ARENA` is set (`run.c`), and
-  `PauseMenu_Open`/`PauseMenu_Choose` show only Change settings under that flag
-  (`settings_menu.c`). Both are bypassed.
-- Save is the game's own `Save_ToChosenFile` (file list, overwrite question).
-  A save holds the whole game state, so base stats, Psynergy, Djinn, items and
+### 7. Saving through the Pause menu
+- Patch: `0007-Arena-saving-through-the-Pause-menu.patch`
+- Switch: `ARENA_PAUSE_MENU`.
+- Files: `field/field_sequence/run.c`, `window/window/settings_menu.c` (hooks),
+  `window/screens/arena_save.c`, `window/screens/save.c` (hooks),
+  `window/screens.c` (one include).
+- The Start (Pause) menu already has Save your quest, Sleep and Change settings.
+  Two things shut it in the arena: the field answers `MsgFieldPauseUnavailable`
+  when `FLAG_IN_BATTLE_ARENA` is set (`run.c`), and `PauseMenu_Open`/`Choose` show
+  only Change settings under that flag (`settings_menu.c`). Both are bypassed.
+- Save is the game's own `Save_ToChosenFile` (file list, overwrite question). A
+  save holds the whole game state, so base stats, Psynergy, Djinn, items and
   coins persist.
-- In the arena `Save_ToChosenFile` sets `next`/`entrance` to the arena at
-  `BATTLE_ARENA_FROM_FILE_SCREEN` and clears `FLAG_MONSTER_BATTLE` for the
-  write, then puts both back. Without it a load enters with the last
-  battle's entrance (`BATTLE_ARENA_AFTER_MONSTER_WIN`) and pays its reward
-  again, or resumes the series.
-- Loading: the title's Continue. New Game sets `restartScene` and
-  `restartEntrance` to the arena, so Continue on a file from another build of
-  the ROM (every rebuild is one) lands in the arena instead of at a Sanctum.
-  There is no Battle option in this build's flow; New Game starts the arena.
+- `ArenaSave_Begin`/`ArenaSave_End` set `next`/`entrance` to the arena at
+  `BATTLE_ARENA_FROM_FILE_SCREEN` and clear `FLAG_MONSTER_BATTLE` for the write,
+  then put both back. Without it a load enters with the last battle's entrance
+  (`BATTLE_ARENA_AFTER_MONSTER_WIN`) and pays its reward again, or resumes the
+  series.
+- Loading: the title's Continue.
 - Not saved: the Monster Gauntlet rung, so a loaded game starts a new series.
-- History: an earlier attempt put Save in the party manager's menu. A fifth
-  icon made the prompt's message window open without its text (icons and
-  message text appear to compete for the same VRAM cache slots; four icons were
-  fine), and a second attempt gave it a person to talk to; both were dropped
-  for the Pause menu. Keep icon rows to four.
+- History: an earlier attempt put Save in the party manager's menu. A fifth icon
+  made the prompt's window open without its text, and a second attempt gave it a
+  person to talk to; both were dropped for the Pause menu.
+
+## Dropped on the way
+
+- The first training menu was a full-screen canvas-text window with its own list
+  screens, then paged icon grids. They were replaced by the shop-style counters
+  in layer 5 once it was clear the shops are the model. The original thirteen
+  chronological patches are kept on the branch `arena-chrono` in `~/alchemy`.
+
 ## Planned
 
-- Save and load the upgraded party.
+- Save the Gauntlet rung; more tournaments.
+- A balance pass (round 3 spikes with a boss; rungs 4 to 12 are untested).
 - Stock arena text still mentions link cables.
 - Stock arena resets the party to Isaac, Garet, Ivan and Mia on a save load.
+- Characters beyond the four (needs CHILD sprites), other editions, and the Lost
+  Age port.

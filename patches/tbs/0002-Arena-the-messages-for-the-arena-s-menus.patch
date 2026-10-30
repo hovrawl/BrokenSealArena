@@ -1,0 +1,212 @@
+From d5a83fa3802fe446c643f2acf16b16b6600d037b Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 30 Oct 2026 14:51:23 +1100
+Subject: [PATCH] Arena: the messages for the arena's menus
+
+Adds the MsgArena* messages to text/en.po (prompts, labels, stat and shop
+lines, the victory line), so the menus draw in the game's own font. English
+only; the other editions do not build. New messages go at the end, because keys
+must be contiguous from 0. Nothing uses them yet.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/text/en.po | 186 +++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 186 insertions(+)
+
+diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
+index c526e31e13..bc3563a919 100644
+--- a/games/tbs/text/en.po
++++ b/games/tbs/text/en.po
+@@ -64995,3 +64995,189 @@ msgstr ""
+ msgctxt "message"
+ msgid "10722"
+ msgstr ""
++
++msgctxt "MsgArenaAttendantPrompt"
++msgid "10723"
++msgstr ""
++"What would you like\n"
++"to do?{end_now}"
++
++msgctxt "MsgArenaTournamentPrompt"
++msgid "10724"
++msgstr ""
++"Which tournament\n"
++"will you enter?{end_now}"
++
++msgctxt "MsgArenaManagerPrompt"
++msgid "10725"
++msgstr ""
++"I manage your party.\n"
++"What do you need?{end_now}"
++
++msgctxt "MsgArenaShopPrompt"
++msgid "10726"
++msgstr ""
++"Which shop would\n"
++"you like?{end_now}"
++
++msgctxt "MsgArenaVictory"
++msgid "10727"
++msgstr ""
++"Victory! You won\n"
++"{argument_signed_number} coins.{end_wait}"
++
++msgctxt "MsgArenaSolo"
++msgid "10728"
++msgstr "Solo"
++
++msgctxt "MsgArenaMultiplayer"
++msgid "10729"
++msgstr "Multiplayer"
++
++msgctxt "MsgArenaGauntlet"
++msgid "10730"
++msgstr "Monster Gauntlet"
++
++msgctxt "MsgArenaCharacters"
++msgid "10731"
++msgstr "Characters"
++
++msgctxt "MsgArenaDjinn"
++msgid "10732"
++msgstr "Djinn"
++
++msgctxt "MsgArenaPsynergy"
++msgid "10733"
++msgstr "Psynergy"
++
++msgctxt "MsgArenaItems"
++msgid "10734"
++msgstr "Items"
++
++msgctxt "MsgArenaWeapons"
++msgid "10735"
++msgstr "Weapons"
++
++msgctxt "MsgArenaArmor"
++msgid "10736"
++msgstr "Armor"
++
++msgctxt "MsgArenaSupplies"
++msgid "10737"
++msgstr "Supplies"
++
++msgctxt "MsgArenaNumber"
++msgid "10738"
++msgstr "{argument_signed_number}"
++
++msgctxt "MsgArenaName"
++msgid "10739"
++msgstr "{argument_actor_name:1}"
++
++msgctxt "MsgArenaCoins"
++msgid "10740"
++msgstr "Coins"
++
++msgctxt "MsgArenaKnown"
++msgid "10741"
++msgstr "Known"
++
++msgctxt "MsgArenaOwned"
++msgid "10742"
++msgstr "Owned"
++
++msgctxt "MsgArenaMax"
++msgid "10743"
++msgstr "MAX"
++
++msgctxt "MsgArenaNoCoins"
++msgid "10744"
++msgstr "Not enough coins"
++
++msgctxt "MsgArenaNoPsynergyRoom"
++msgid "10745"
++msgstr "No room for more Psynergy"
++
++msgctxt "MsgArenaNoDjinnRoom"
++msgid "10746"
++msgstr "No room for more Djinn"
++
++msgctxt "MsgArenaStatHp"
++msgid "10747"
++msgstr "HP"
++
++msgctxt "MsgArenaStatPp"
++msgid "10748"
++msgstr "PP"
++
++msgctxt "MsgArenaStatAttack"
++msgid "10749"
++msgstr "Attack"
++
++msgctxt "MsgArenaStatDefense"
++msgid "10750"
++msgstr "Defense"
++
++msgctxt "MsgArenaStatAgility"
++msgid "10751"
++msgstr "Agility"
++
++msgctxt "MsgArenaStatLuck"
++msgid "10752"
++msgstr "Luck"
++
++msgctxt "MsgArenaNone"
++msgid "10753"
++msgstr "None"
++
++msgctxt "MsgArenaPage"
++msgid "10754"
++msgstr "Page {argument_signed_number}/{argument_signed_number}"
++
++msgctxt "MsgArenaStatUpHp"
++msgid "10755"
++msgstr "HP Up"
++
++msgctxt "MsgArenaStatUpPp"
++msgid "10756"
++msgstr "PP Up"
++
++msgctxt "MsgArenaStatUpAttack"
++msgid "10757"
++msgstr "Attack Up"
++
++msgctxt "MsgArenaStatUpDefense"
++msgid "10758"
++msgstr "Defense Up"
++
++msgctxt "MsgArenaStatUpAgility"
++msgid "10759"
++msgstr "Agility Up"
++
++msgctxt "MsgArenaStatUpLuck"
++msgid "10760"
++msgstr "Luck Up"
++
++msgctxt "MsgArenaStatInfoHp"
++msgid "10761"
++msgstr "Raises HP by {argument_signed_number}. Now {argument_signed_number}."
++
++msgctxt "MsgArenaStatInfoPp"
++msgid "10762"
++msgstr "Raises PP by {argument_signed_number}. Now {argument_signed_number}."
++
++msgctxt "MsgArenaStatInfoAttack"
++msgid "10763"
++msgstr "Raises Attack by {argument_signed_number}. Now {argument_signed_number}."
++
++msgctxt "MsgArenaStatInfoDefense"
++msgid "10764"
++msgstr "Raises Defense by {argument_signed_number}. Now {argument_signed_number}."
++
++msgctxt "MsgArenaStatInfoAgility"
++msgid "10765"
++msgstr "Raises Agility by {argument_signed_number}. Now {argument_signed_number}."
++
++msgctxt "MsgArenaStatInfoLuck"
++msgid "10766"
++msgstr "Raises Luck by {argument_signed_number}. Now {argument_signed_number}."
+-- 
+2.53.0
+

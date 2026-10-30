@@ -15,3 +15,26 @@
 - **No Battle option on the title**: New Game starts the arena, Continue loads.
 - **Headless testing on libmgba** because the installed mGBA 0.10.5 has no
   `--script` flag or CLI debugger.
+- **Our code in our own files, upstream files only get hooks.** Spiked on branch
+  `spike-newfile` of `~/alchemy` (two moves, both built and smoke-tested):
+  `scene/arena_menu.c` (a new object in the 3cb overlay: one row in
+  `objects.tsv`, a header, and ids passed in as parameters) and
+  `shop/arena_shop.c` (a part file; `shop.c` includes it with one line, and
+  `item_picker.c` is byte-identical to upstream again). Upstream's footprint in
+  `battle_arena.c` fell from 134 lines to 46. Rule of thumb: a new object where
+  the code is self-contained; where the module is a unity build (`shop.c` and
+  its `shop/*.c` parts) add a part file; the hooks inside upstream functions
+  stay as short edits that call into our code. See `docs/WORKFLOW.md` for the
+  trial run that checks a new upstream.
+  Result of moving everything (branch `spike-newfile`, full smoke suite looked
+  at): our edits to upstream files fell from 1,320 lines in 19 files to 301 in
+  17, 186 of them `text/en.po` messages. Our files: `arena_config.h` (the four
+  switches, in one place), `module/arena.h` (what our files export to each
+  other), `scene/arena_menu.c`, `scene/arena_boot.c`, `shop/shop/arena_shop.c`,
+  `battle/battle/arena_ladder.c`, `window/screens/arena_icon_menu.c`,
+  `window/screens/arena_save.c`. What stays an edit: the hooks (a call or two
+  in `battle_arena.c`, `file_screen.c`, `formation.c`, `save.c`,
+  `settings_menu.c`, `run.c`), the import and far-call table rows, one row each
+  in `objects.tsv`, the bank start in `main.ld`, and `en.po`.
+  Not yet done: the series on `arena` is still the old chronological one; the
+  layered re-slice onto `arena-clean` is next.

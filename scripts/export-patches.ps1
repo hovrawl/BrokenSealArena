@@ -7,6 +7,7 @@
 param([string]$Game = 'tbs')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+& "$PSScriptRoot\check-submodule.ps1"
 $base = ((git -C $root ls-files -s alchemy) -split '\s+')[1]
 if (-not $base) { throw "The alchemy submodule is not recorded in this repo" }
 $branch = if ($Game -eq 'tbs') { 'arena' } else { "arena-$Game" }

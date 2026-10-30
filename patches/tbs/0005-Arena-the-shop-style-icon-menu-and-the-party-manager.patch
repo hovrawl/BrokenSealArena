@@ -1,0 +1,894 @@
+From f7261c88c3793897f46305dfe4481daa54c78e6c Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 30 Oct 2026 14:51:38 +1100
+Subject: [PATCH] Arena: the shop-style icon menu and the party manager's
+ screens
+
+Main-image code the arena overlay reaches through far calls:
+- window/screens/arena_icon_menu.c (a part of screens.c): ArenaMenu_IconChoose,
+  a prompt window across the top and a row of command icons across the bottom,
+  as the shops draw them; exported in WINDOW.S.
+- shop/shop/arena_shop.c (a part of shop.c): ItemPicker_ChooseMember, the
+  shops' strip of walking figures with the member's items, Djinn, Psynergy or
+  status beside it, and ArenaShop_Run, the stat, Djinn and Psynergy counters
+  built like the shops' Buy counter; exported in SHOP.S.
+They live in the main image because they use private state that overlays cannot
+reach. The shop bank's neighbour moves up 0x1000 in main.ld to make room.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/main.ld                             |   2 +-
+ games/tbs/src/gamepak/far_call/SHOP.S         |   2 +
+ games/tbs/src/gamepak/far_call/WINDOW.S       |   1 +
+ games/tbs/src/shop/shop.c                     |   1 +
+ games/tbs/src/shop/shop/arena_shop.c          | 759 ++++++++++++++++++
+ games/tbs/src/window/screens.c                |   1 +
+ .../tbs/src/window/screens/arena_icon_menu.c  |  39 +
+ 7 files changed, 804 insertions(+), 1 deletion(-)
+ create mode 100644 games/tbs/src/shop/shop/arena_shop.c
+ create mode 100644 games/tbs/src/window/screens/arena_icon_menu.c
+
+diff --git a/games/tbs/main.ld b/games/tbs/main.ld
+index b7925ffa87..cd43f9f3c5 100644
+--- a/games/tbs/main.ld
++++ b/games/tbs/main.ld
+@@ -72,7 +72,7 @@ SECTIONS
+         . = ABSOLUTE(DEFINED(TBS_EDITION_JA)                            ? 0x080ac000 :
+                      DEFINED(TBS_EDITION_DE)                            ? 0x080b7600 :
+                      DEFINED(TBS_EDITION_ES) || DEFINED(TBS_EDITION_FR) ? 0x080b9000 :
+-                                                                          0x080b5000);
++                                                                          0x080b6000);
+         INCLUDE "rom_main_07.ld"
+         . = ABSOLUTE(DEFINED(TBS_EDITION_JA)                            ? 0x080c0000 :
+                      DEFINED(TBS_EDITION_DE)                            ? 0x080cae00 :
+diff --git a/games/tbs/src/gamepak/far_call/SHOP.S b/games/tbs/src/gamepak/far_call/SHOP.S
+index a442666570..c4cebe5aef 100644
+--- a/games/tbs/src/gamepak/far_call/SHOP.S
++++ b/games/tbs/src/gamepak/far_call/SHOP.S
+@@ -16,3 +16,5 @@ FarCall_ShopTable:
+ 	export ItemPicker_RunFar, ItemPicker_Run
+ 	export Sound_WaitForJingleFar, Sound_WaitForJingle
+ 	export Inn_PlaySleepFar, Inn_PlaySleep
++	export ItemPicker_ChooseMemberFar, ItemPicker_ChooseMember
++	export ArenaShop_RunFar, ArenaShop_Run
+diff --git a/games/tbs/src/gamepak/far_call/WINDOW.S b/games/tbs/src/gamepak/far_call/WINDOW.S
+index 4b5dd8285f..e21cc2e7f8 100644
+--- a/games/tbs/src/gamepak/far_call/WINDOW.S
++++ b/games/tbs/src/gamepak/far_call/WINDOW.S
+@@ -136,3 +136,4 @@ FarCall_WindowTable:
+ 	export Link_DrawPageArrowsFar, Link_DrawPageArrows
+ 	export Party_ShowJoinedMessageFar, Party_ShowJoinedMessage
+ 	export Party_ShowPairJoinedMessageFar, Party_ShowPairJoinedMessage
++	export ArenaMenu_IconChooseFar, ArenaMenu_IconChoose
+diff --git a/games/tbs/src/shop/shop.c b/games/tbs/src/shop/shop.c
+index 58add16f6e..6c5cc6441c 100644
+--- a/games/tbs/src/shop/shop.c
++++ b/games/tbs/src/shop/shop.c
+@@ -31,3 +31,4 @@
+ #include "shop/sanctum.c"
+ #include "shop/inn.c"
+ #include "shop/item_picker.c"
++#include "shop/arena_shop.c"
+diff --git a/games/tbs/src/shop/shop/arena_shop.c b/games/tbs/src/shop/shop/arena_shop.c
+new file mode 100644
+index 0000000000..e7d4d8fc09
+--- /dev/null
++++ b/games/tbs/src/shop/shop/arena_shop.c
+@@ -0,0 +1,759 @@
++/// @file
++/// Arena romhack: the party manager's screens. The member picker with its
++/// Djinn, Psynergy and status panels (ItemPicker_ChooseMember) and the stat,
++/// Djinn and Psynergy counters (ArenaShop_Run), built like the shops.
++// Part of shop.c.
++
++#include "../shop_internal.h"
++#include "djinn_ids.h"
++#include "ability_ids.h"
++#include "item_ids.h"
++#include "module/arena.h"
++
++/// Arena romhack: what the member picker shows beside the party strip.
++enum ArenaPickerMode {
++  ARENA_PICKER_ITEMS = 0,    ///< the member's items, as the shops' Sell shows
++  ARENA_PICKER_DJINN = 1,    ///< the member's Djinn, a figure and a name
++  ARENA_PICKER_PSYNERGY = 2, ///< the member's Psynergy, an icon and a name
++  ARENA_PICKER_STATUS = 3,   ///< the member's status, as the Status screen
++};
++
++/// The Djinn and Psynergy panels are a 30 by 10 tile window across the top of
++/// the screen, 224 by 64 pixels inside (the first pixel is at screen 8, 8).
++/// Both run in rows of sixteen pixels: Djinn in three columns, Psynergy in two.
++/// What does not fit is not shown.
++#define ARENA_PANEL_DJINN_COLUMNS 3
++#define ARENA_PANEL_DJINN_ROWS 4
++#define ARENA_PANEL_DJINN_COLUMN_WIDTH 72
++#define ARENA_PANEL_DJINN_MAX                                                  \
++  (ARENA_PANEL_DJINN_COLUMNS * ARENA_PANEL_DJINN_ROWS)
++#define ARENA_PANEL_PSYNERGY_COLUMNS 2
++#define ARENA_PANEL_PSYNERGY_ROWS 4
++#define ARENA_PANEL_PSYNERGY_COLUMN_WIDTH 112
++/// The first of the four element icons among the window tiles; the Djinn
++/// menu's list uses the same (DJINN_ELEMENT_TILE). The fallback for a Djinni
++/// whose figure cannot be made.
++#define ARENA_ELEMENT_TILE 0x5001
++/// The game has seven Djinn of each element.
++#define ARENA_DJINN_PER_ELEMENT 7
++/// How big a Djinni figure is drawn, 16.16: the Djinn menu shows them at full
++/// size (0x10000).
++#define ARENA_FIGURE_SCALE 0xb000
++
++/// Places a Djinni figure so it stands at screen (x, y), the way the Djinn menu
++/// places its figures (DjinnFigures_UpdateAllPositions), at `scale`. Called
++/// every frame a figure shows.
++static void ArenaFigure_Place(struct Sprite *figure, s32 x, s32 y, s32 scale) {
++  struct SpriteScale spriteScale;
++  struct SpritePlacement placement;
++  u32 vertical = 0x01e20000u;
++
++  figure->image.priority = 0;
++  spriteScale.x = scale;
++  spriteScale.y = scale;
++  placement.x = x << 16;
++  placement.height = vertical;
++  placement.y = (y << 16) + vertical;
++  placement.groundHeight = 0;
++  Actor_ApplyProjectedPlacementFar(figure, &placement, &spriteScale,
++                                   FACING_SOUTH);
++}
++
++/// Draws the member's Djinn as a small animated figure of the Djinni's element
++/// and a name each. The figures go in `figures`, with where each stands in
++/// `positions`; returns how many.
++static s32 ArenaPicker_DrawDjinn(struct Window *window, s32 unitId,
++                                 struct Sprite **figures, s16 *positions) {
++  struct Unit *unit = Unit_GetFar(unitId);
++  s32 shown = 0;
++  s32 element;
++  s32 index;
++
++  WindowSprite_PrepareForRedrawFar(window);
++  for (element = 0; element < ELEMENT_COUNT; element++) {
++    for (index = 0; index < ARENA_DJINN_PER_ELEMENT; index++) {
++      s32 x;
++      s32 y;
++      struct Sprite *figure;
++
++      if (!(unit->djinnHeld[element] & (1 << index)))
++        continue;
++      if (shown >= ARENA_PANEL_DJINN_MAX)
++        return shown;
++      x = (shown % ARENA_PANEL_DJINN_COLUMNS) * ARENA_PANEL_DJINN_COLUMN_WIDTH;
++      y = (shown / ARENA_PANEL_DJINN_COLUMNS) * 16;
++      figure = Sprite_CreateFar(VENUS_DJINNI + element);
++      if (figure != 0) {
++        Sprite_StartAnimationFar(figure, 2);
++        figures[shown] = figure;
++        positions[shown * 2] = 8 + x + 8;
++        positions[shown * 2 + 1] = 8 + y + 19;
++      } else {
++        Window_SetTilemapEntryFar(window, ARENA_ELEMENT_TILE + element, x / 8,
++                                  (y + 8) / 8, 0);
++      }
++      Text_DrawMessageAsTilesFar(MsgDjinnName + element * DJINN_PER_ELEMENT +
++                                     index,
++                                 window, x + 20, y + 8);
++      shown++;
++    }
++  }
++  if (shown == 0)
++    Text_DrawMessageAsTilesFar(MsgArenaNone, window, 8, 0);
++  return shown;
++}
++
++/// Draws the member's Psynergy as an icon and a name each.
++static void ArenaPicker_DrawPsynergy(struct Window *window, s32 unitId) {
++  struct Unit *unit = Unit_GetFar(unitId);
++  s32 shown = 0;
++  s32 i;
++
++  WindowSprite_PrepareForRedrawFar(window);
++  for (i = 0; i < 32; i++) {
++    s32 id = unit->psynergy[i].encodedAction & PSYNERGY_ABILITY_MASK;
++    struct WindowSprite *icon;
++    s32 x;
++    s32 y;
++
++    if (id == 0)
++      continue;
++    if (shown >= ARENA_PANEL_PSYNERGY_COLUMNS * ARENA_PANEL_PSYNERGY_ROWS)
++      return;
++    x = (shown % ARENA_PANEL_PSYNERGY_COLUMNS) *
++        ARENA_PANEL_PSYNERGY_COLUMN_WIDTH;
++    y = (shown / ARENA_PANEL_PSYNERGY_COLUMNS) * 16;
++    // The name is on a tile row, so it goes on the lower half of the row's 16
++    // pixels and the icon four pixels down, which centres them on each other.
++    icon = WindowSprite_CreateFromResourceFar(ICON_KIND_ABILITY, id, window,
++                                              x + 4, y + 4);
++    if (icon != 0)
++      icon->sentinel = 252;
++    Text_DrawMessageAsTilesFar(MsgAbilityName + id, window, x + 24, y + 8);
++    shown++;
++  }
++  if (shown == 0)
++    Text_DrawMessageAsTilesFar(MsgArenaNone, window, 8, 0);
++}
++
++/// Draws a member's status as the top rows of the Status screen do
++/// (ItemMenu_DrawMemberStatus): the portrait, with the class and "Normal"
++/// under it, then name and level, experience, HP and PP, and the four stats.
++/// Not that function itself, which reads the field menu's work; the shop's work
++/// holds the same bytes as something else. The Djinn rows are left out.
++static void ArenaPicker_DrawStatus(struct Window *window, s32 unitId) {
++  struct Unit *unit = Unit_GetFar(unitId);
++  struct WindowSprite *portrait;
++
++  WindowSprite_PrepareForRedrawFar(window);
++  portrait = Portrait_CreateFar(unitId, 0, 0, window, 0, 0);
++  if (portrait != 0)
++    portrait->sentinel = 0xF0;
++  Text_DrawStringAtOffsetFar(unit->name, window, 40, 0);
++  Text_DrawMessageAsTilesFar(unit->classId + MsgClassName, window, 0, 32);
++  Text_DrawMessageAsTilesFar(MsgNormalLabel, window, 0, 40);
++  Text_DrawStringAtOffsetFar(gMenu_LvString, window, 104, 0);
++  Text_DrawNumberInWindowFar(unit->level, 2, window, 128, 0);
++  Text_DrawStringAtOffsetFar(gMenu_HpString, window, 40, 16);
++  Text_DrawNumberInWindowFar(unit->hp, 4, window, 72, 16);
++  Text_DrawStringInWindowFar(gMenu_SlashString, window, 104, 16);
++  Text_DrawNumberInWindowFar(unit->hpMax, 4, window, 112, 16);
++  Text_DrawStringAtOffsetFar(gMenu_PpString, window, 40, 24);
++  Text_DrawNumberInWindowFar(unit->pp, 4, window, 72, 24);
++  Text_DrawStringInWindowFar(gMenu_SlashString, window, 104, 24);
++  Text_DrawNumberInWindowFar(unit->ppMax, 4, window, 112, 24);
++  Text_DrawMessageAsTilesFar(MsgExpLabel, window, 40, 8);
++  Text_DrawNumberInWindowFar(unit->experience, 7, window, 88, 8);
++  // The labels "Attack", "Defense", "Agility" and "Luck", 23 to 20 messages
++  // before "Exp".
++  Text_DrawMessageAsTilesFar(MsgExpLabel - 23, window, 152, 0);
++  Text_DrawMessageAsTilesFar(MsgExpLabel - 22, window, 152, 8);
++  Text_DrawMessageAsTilesFar(MsgExpLabel - 21, window, 152, 16);
++  Text_DrawMessageAsTilesFar(MsgExpLabel - 20, window, 152, 24);
++  Text_DrawNumberInWindowFar(unit->atk, 3, window, 200, 0);
++  Text_DrawNumberInWindowFar(unit->def, 3, window, 200, 8);
++  Text_DrawNumberInWindowFar(unit->agi, 3, window, 200, 16);
++  Text_DrawNumberInWindowFar(unit->luck, 3, window, 200, 24);
++}
++
++/// Arena romhack: chooses a party member in the shops' strip of walking
++/// figures, with the coins window beside it, as the shops' Sell does, but
++/// without choosing an item. `mode` (enum ArenaPickerMode) picks what is shown
++/// of the member: items, Djinn or Psynergy. Returns the unit id of the member
++/// chosen with A, or -1 for B. Holds the shop's work block while it runs.
++/// Called from the Battle Arena overlay through SHOP.S.
++s32 ItemPicker_ChooseMember(s32 mode) {
++  struct ShopWork *shop;
++  struct WindowSprite *cursorAnchor;
++  struct Window *partyWindow;
++  struct Sprite *figures[ARENA_PANEL_DJINN_MAX];
++  s16 positions[ARENA_PANEL_DJINN_MAX * 2];
++  s32 figureCount = 0;
++  s32 memberIndex = 0;
++  s32 redraw = 1;
++  s32 unitId = 0;
++  s32 result = 0;
++  s32 i;
++
++  for (i = 0; i < ARENA_PANEL_DJINN_MAX; i++)
++    figures[i] = 0;
++  Shop_InitializeWork();
++  shop = gMenuWork;
++  if (mode == ARENA_PICKER_ITEMS) {
++    shop->moneyWindow =
++        Window_CreateFar(0, 9, SHOP_MONEY_WINDOW_WIDTH, 4, WINDOW_FLAG_INSTANT);
++    shop->itemWindow = Window_CreateFar(16, 12, 14, 8, WINDOW_FLAG_INSTANT);
++  } else {
++    shop->itemWindow = Window_CreateFar(0, 0, 30, 11, WINDOW_FLAG_INSTANT);
++    // The panels have no coins window; the counters show the coins.
++    shop->moneyWindow = 0;
++  }
++  Shop_DrawMoney();
++  partyWindow = Window_CreateFar(0, 14, 13, 3, WINDOW_FLAG_INSTANT);
++  cursorAnchor = WindowSprite_CreateFar(shop->cursorIcon, OUTPUT_SIZE_16X16,
++                                        partyWindow, 0, result);
++  cursorAnchor->motion = WINDOW_SPRITE_MOTION_WOBBLE;
++  cursorAnchor->kind = result;
++  MenuCursor_SetPositionImmediate(&shop->cursor, -32, 112);
++  shop->cursor.anchor = cursorAnchor;
++  shop->mode = 12;
++  PsynergyMenu_InitializeEntryActorsFar(partyWindow, 2, 0, 8, result);
++
++  while (1) {
++    if (redraw != 0) {
++      redraw = 0;
++      memberIndex =
++          (memberIndex + shop->partyMemberCount) % shop->partyMemberCount;
++      unitId = shop->partyMemberIds[memberIndex];
++      MenuCursor_Place(partyWindow, memberIndex * 24 - 12, 0);
++      shop->mode = 3;
++      Shop_DrawParty(partyWindow, memberIndex, 0);
++      for (i = 0; i < ARENA_PANEL_DJINN_MAX; i++) {
++        if (figures[i] != 0)
++          Sprite_DestroyFar(figures[i]);
++        figures[i] = 0;
++      }
++      figureCount = 0;
++      if (mode == ARENA_PICKER_DJINN)
++        figureCount = ArenaPicker_DrawDjinn(shop->itemWindow, unitId, figures,
++                                            positions);
++      else if (mode == ARENA_PICKER_PSYNERGY)
++        ArenaPicker_DrawPsynergy(shop->itemWindow, unitId);
++      else if (mode == ARENA_PICKER_STATUS)
++        ArenaPicker_DrawStatus(shop->itemWindow, unitId);
++      else
++        Shop_DrawMemberItems(shop->itemWindow, unitId);
++    }
++
++    wait(1);
++    for (i = 0; i < figureCount; i++) {
++      if (figures[i] != 0)
++        ArenaFigure_Place(figures[i], positions[i * 2], positions[i * 2 + 1],
++                          ARENA_FIGURE_SCALE);
++    }
++    if ((gKeysPressed & KEY_A) != 0) {
++      Sound_PlayFar(SE_MENU_CONFIRM);
++      result = unitId;
++      break;
++    }
++
++    if ((gKeysPressed & KEY_B) != 0) {
++      Sound_PlayFar(SE_MENU_CANCEL);
++      result = -1;
++      break;
++    }
++
++    if ((gKeysRepeat & KEY_LEFT) != 0) {
++      Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++      memberIndex--;
++      redraw = 1;
++    }
++    if ((gKeysRepeat & KEY_RIGHT) != 0) {
++      Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++      memberIndex++;
++      redraw = 1;
++    }
++  }
++
++  for (i = 0; i < figureCount; i++) {
++    if (figures[i] != 0)
++      Sprite_DestroyFar(figures[i]);
++  }
++  Menu_ReleaseEntryActorsFar();
++  Window_CloseFar(partyWindow, 2);
++  Window_CloseFar(shop->itemWindow, 2);
++  Window_CloseFar(shop->moneyWindow, 2);
++  wait(1);
++  Shop_ReleaseWork();
++  return result;
++}
++
++/// Arena romhack: the Psynergy and Djinn counters, built as the shops' Buy
++/// counter is (Shop_SelectBuy): the stock in one row of icons with a price tag
++/// under each, seven to a page, with the hand cursor over one; the name and
++/// price in a window at the left, the coins at the right and the item's
++/// description along the bottom.
++enum ArenaShopKind {
++  ARENA_SHOP_PSYNERGY = 0,
++  ARENA_SHOP_DJINN = 1,
++  ARENA_SHOP_STATS = 2,
++};
++
++#define ARENA_SHOP_DJINN_COUNT 28
++#define ARENA_SHOP_DJINN_PRICE 500
++#define ARENA_SHOP_PSYNERGY_COUNT 32
++
++/// The stats the stat counter sells, in stock order, which is the order of the
++/// MsgArenaStatUp* and MsgArenaStatInfo* messages.
++enum ArenaStat {
++  ARENA_STAT_HP,
++  ARENA_STAT_PP,
++  ARENA_STAT_ATTACK,
++  ARENA_STAT_DEFENSE,
++  ARENA_STAT_AGILITY,
++  ARENA_STAT_LUCK,
++  ARENA_STAT_COUNT
++};
++
++/// Each stat's icon is the item that raises it for good.
++static const u8 sArenaStatItems[ARENA_STAT_COUNT] = {
++    ITEM_APPLE, ITEM_MINT, ITEM_POWER_BREAD, ITEM_COOKIE, ITEM_HARD_NUT,
++    ITEM_LUCKY_PEPPER};
++
++/// The base value of a stat of a unit.
++static s32 ArenaStat_Value(struct Unit *unit, s32 stat) {
++  switch (stat) {
++  case ARENA_STAT_HP:
++    return unit->baseHp;
++  case ARENA_STAT_PP:
++    return unit->basePp;
++  case ARENA_STAT_ATTACK:
++    return unit->baseAttack;
++  case ARENA_STAT_DEFENSE:
++    return unit->baseDefense;
++  case ARENA_STAT_AGILITY:
++    return unit->baseAgility;
++  default:
++    return unit->baseLuck;
++  }
++}
++
++/// How much one purchase adds to a stat.
++static s32 ArenaStat_Step(s32 stat) {
++  switch (stat) {
++  case ARENA_STAT_HP:
++    return 20;
++  case ARENA_STAT_PP:
++    return 10;
++  case ARENA_STAT_LUCK:
++    return 1;
++  default:
++    return 5;
++  }
++}
++
++/// The most a stat's base value may reach.
++static s32 ArenaStat_Cap(s32 stat) {
++  switch (stat) {
++  case ARENA_STAT_HP:
++  case ARENA_STAT_PP:
++    return UNIT_CHARACTER_HP_MAX;
++  case ARENA_STAT_LUCK:
++    return UNIT_LUCK_MAX;
++  default:
++    return UNIT_STAT_MAX;
++  }
++}
++
++/// A stat's price, which rises with its value.
++static s32 ArenaStat_Cost(struct Unit *unit, s32 stat) {
++  s32 value = ArenaStat_Value(unit, stat);
++
++  switch (stat) {
++  case ARENA_STAT_HP:
++    return value;
++  case ARENA_STAT_PP:
++    return value * 2;
++  case ARENA_STAT_ATTACK:
++    return value * 3;
++  case ARENA_STAT_LUCK:
++    return (value + 1) * 100;
++  default:
++    return value * 4;
++  }
++}
++
++static void ArenaStat_Add(struct Unit *unit, s32 stat, s32 amount) {
++  switch (stat) {
++  case ARENA_STAT_HP:
++    unit->baseHp += amount;
++    break;
++  case ARENA_STAT_PP:
++    unit->basePp += amount;
++    break;
++  case ARENA_STAT_ATTACK:
++    unit->baseAttack += amount;
++    break;
++  case ARENA_STAT_DEFENSE:
++    unit->baseDefense += amount;
++    break;
++  case ARENA_STAT_AGILITY:
++    unit->baseAgility += amount;
++    break;
++  default:
++    unit->baseLuck += amount;
++    break;
++  }
++}
++
++/// A Psynergy for sale: its ability id and PP cost, which sets the price.
++struct ArenaShopPsynergy {
++  u16 id;
++  u16 ppCost;
++};
++
++static const struct ArenaShopPsynergy sArenaShopPsynergy[] = {
++    // Venus
++    {3, 4}, {4, 7}, {8, 22}, {12, 4}, {15, 6}, {90, 3}, {91, 7}, {101, 15},
++    // Mercury
++    {24, 5}, {26, 15}, {27, 5}, {33, 5}, {35, 20}, {93, 4}, {94, 8}, {96, 9},
++    {128, 6},
++    // Mars
++    {45, 4}, {49, 12}, {50, 23}, {52, 14}, {106, 3}, {107, 5}, {182, 5},
++    // Jupiter
++    {66, 4}, {68, 14}, {71, 21}, {76, 9}, {79, 14}, {120, 5}, {125, 3},
++    {189, 19},
++};
++
++/// A stock entry is a Psynergy's index in sArenaShopPsynergy, or a Djinni's
++/// number: its element times seven plus its place among that element's.
++static s32 ArenaShop_Price(s32 kind, s32 unitId, s32 entry) {
++  if (kind == ARENA_SHOP_STATS)
++    return ArenaStat_Cost(Unit_GetFar(unitId), entry);
++  if (kind == ARENA_SHOP_DJINN)
++    return ARENA_SHOP_DJINN_PRICE;
++  return 150 + sArenaShopPsynergy[entry].ppCost * 50;
++}
++
++static s32 ArenaShop_NameMessage(s32 kind, s32 entry) {
++  if (kind == ARENA_SHOP_STATS)
++    return MsgArenaStatUpHp + entry;
++  if (kind == ARENA_SHOP_DJINN)
++    return MsgDjinnName + (entry / ARENA_DJINN_PER_ELEMENT) * DJINN_PER_ELEMENT +
++           entry % ARENA_DJINN_PER_ELEMENT;
++  return MsgAbilityName + sArenaShopPsynergy[entry].id;
++}
++
++/// The message that explains an entry. A stat's says how much a purchase adds
++/// and what the stat is now, so its two numbers are pushed here, for the draw
++/// that follows.
++static s32 ArenaShop_DescriptionMessage(s32 kind, s32 unitId, s32 entry) {
++  if (kind == ARENA_SHOP_STATS) {
++    MessageArgument_ClearAllFar();
++    MessageArgument_PushFar(ArenaStat_Step(entry), MESSAGE_ARGUMENT_NUMBER);
++    MessageArgument_PushFar(ArenaStat_Value(Unit_GetFar(unitId), entry),
++                            MESSAGE_ARGUMENT_NUMBER);
++    return MsgArenaStatInfoHp + entry;
++  }
++  if (kind == ARENA_SHOP_DJINN)
++    return MsgAbilityDescription + ABILITY_DJINNI_FIRST +
++           (entry / ARENA_DJINN_PER_ELEMENT) * DJINN_PER_ELEMENT +
++           entry % ARENA_DJINN_PER_ELEMENT;
++  return MsgAbilityDescription + sArenaShopPsynergy[entry].id;
++}
++
++/// Whether the character has the Psynergy, or anyone in the party has the
++/// Djinni.
++static s32 ArenaShop_Owned(s32 kind, s32 unitId, s32 entry) {
++  struct ShopWork *shop = gMenuWork;
++  s32 i;
++
++  // A stat is "owned" at its cap, when a purchase would add nothing.
++  if (kind == ARENA_SHOP_STATS)
++    return ArenaStat_Value(Unit_GetFar(unitId), entry) + ArenaStat_Step(entry) >
++           ArenaStat_Cap(entry);
++  if (kind == ARENA_SHOP_DJINN) {
++    for (i = 0; i < shop->partyMemberCount; i++) {
++      if (Unit_GetFar(shop->partyMemberIds[i])
++              ->djinnHeld[entry / ARENA_DJINN_PER_ELEMENT] &
++          (1 << (entry % ARENA_DJINN_PER_ELEMENT)))
++        return 1;
++    }
++    return 0;
++  }
++  for (i = 0; i < 32; i++) {
++    if ((Unit_GetFar(unitId)->psynergy[i].encodedAction &
++         PSYNERGY_ABILITY_MASK) == sArenaShopPsynergy[entry].id)
++      return 1;
++  }
++  return 0;
++}
++
++/// Buys a stock entry for the character. Returns 0 (also when it is owned
++/// already, which buys nothing), or the message that says why not.
++static s32 ArenaShop_Buy(s32 kind, s32 unitId, s32 entry) {
++  s32 price = ArenaShop_Price(kind, unitId, entry);
++
++  if (ArenaShop_Owned(kind, unitId, entry))
++    return 0;
++  if (price > gMainRoutineWork.coins)
++    return MsgArenaNoCoins;
++  if (kind == ARENA_SHOP_STATS) {
++    ArenaStat_Add(Unit_GetFar(unitId), entry, ArenaStat_Step(entry));
++  } else if (kind == ARENA_SHOP_DJINN) {
++    s32 element = entry / ARENA_DJINN_PER_ELEMENT;
++    s32 index = entry % ARENA_DJINN_PER_ELEMENT;
++
++    if (Djinn_GiveFar(unitId, element, index) < 0)
++      return MsgArenaNoDjinnRoom;
++    Djinn_SetFar(unitId, element, index);
++  } else if (Unit_LearnPsynergyFar(unitId, sArenaShopPsynergy[entry].id) < 0) {
++    return MsgArenaNoPsynergyRoom;
++  }
++  gMainRoutineWork.coins -= price;
++  Unit_CalculateFar(unitId);
++  return 0;
++}
++
++/// Draws the name and below it the price, or what the entry is when owned, in
++/// the price window, as Shop_DrawItemPrice does.
++static void ArenaShop_DrawPrice(struct Window *window, s32 kind, s32 unitId,
++                                s32 entry) {
++  WindowSprite_RedrawSavedRectFar(window);
++  Text_DrawMessageAsTilesFar(ArenaShop_NameMessage(kind, entry), window, 0, 0);
++  if (ArenaShop_Owned(kind, unitId, entry)) {
++    Text_DrawMessageAsTilesFar(kind == ARENA_SHOP_DJINN
++                                   ? MsgArenaOwned
++                                   : kind == ARENA_SHOP_STATS ? MsgArenaMax
++                                                              : MsgArenaKnown,
++                               window, SHOP_ITEM_NOTE_X, 8);
++  } else {
++    Text_DrawMessageAsTilesFar(MsgPrice, window, SHOP_ITEM_NOTE_X, 8);
++    Text_DrawNumberInWindowFar(ArenaShop_Price(kind, unitId, entry), 5, window,
++                               SHOP_PRICE_NUMBER_X, 8);
++    Text_DrawMessageAsTilesFar(MsgPrice - 3, window, SHOP_PRICE_LABEL_X, 8);
++  }
++}
++
++/// Draws the page of the stock row `selected` is on, as Shop_DrawStock does: a
++/// page arrow where there is more, then each entry's icon with its price tag.
++/// A Djinni's icon is its figure in `figures`, placed every frame by the
++/// caller, with the element's icon tile standing in for one that could not be
++/// made.
++static void ArenaShop_DrawStock(struct Window *window, s32 kind, s32 unitId,
++                                s32 selected, struct Sprite **figures) {
++  struct ShopWork *shop = gMenuWork;
++  s32 count = shop->stockCount;
++  s32 first = selected - selected % SHOP_STOCK_PAGE_ITEMS;
++  s32 slot;
++  struct WindowSprite *icon;
++
++  WindowSprite_PrepareForRedrawFar(window);
++  if (first != 0) {
++    icon = WindowSprite_CreateFar(shop->previousPageIcon, OUTPUT_SIZE_16X16,
++                                  window, 216, -16);
++    icon->kind = 0;
++    icon->motion = WINDOW_SPRITE_MOTION_HOP_UP;
++    icon->animationStep = 0;
++  }
++  if (first + SHOP_STOCK_PAGE_ITEMS < count) {
++    icon = WindowSprite_CreateFar(shop->nextPageIcon, OUTPUT_SIZE_16X16, window,
++                                  216, 24);
++    icon->kind = 0;
++    icon->motion = WINDOW_SPRITE_MOTION_HOP_DOWN_NEXT_PAGE;
++    icon->animationStep = 0;
++  }
++  for (slot = 0; slot < SHOP_STOCK_PAGE_ITEMS && first + slot < count; slot++) {
++    s32 entry = shop->stockItemIds[first + slot];
++
++    // Depth slots: the icons 252, the chosen one 253, the prices 251
++    if (kind == ARENA_SHOP_DJINN) {
++      if (figures[slot] == 0)
++        Window_SetTilemapEntryFar(window,
++                                  ARENA_ELEMENT_TILE +
++                                      entry / ARENA_DJINN_PER_ELEMENT,
++                                  slot * 4, 0, 0);
++    } else {
++      if (kind == ARENA_SHOP_STATS)
++        icon = WindowSprite_CreateLoadedFar(sArenaStatItems[entry], 1, window,
++                                            slot * 32, 0);
++      else
++        icon = WindowSprite_CreateFromResourceFar(
++            ICON_KIND_ABILITY, sArenaShopPsynergy[entry].id, window, slot * 32,
++            0);
++      if (icon != 0) {
++        icon->sentinel = 252;
++        if (first + slot == selected) {
++          icon->motion = WINDOW_SPRITE_MOTION_SWELL;
++          icon->animationStep = 10;
++          icon->sentinel = 253;
++        }
++      }
++    }
++    icon = Shop_CreatePriceSprite(ArenaShop_Price(kind, unitId, entry), window,
++                                  slot * 32 + 16, 0);
++    if (icon != 0)
++      icon->sentinel = 251;
++  }
++}
++
++/// Runs a counter for one character: `kind` is ARENA_SHOP_PSYNERGY or
++/// ARENA_SHOP_DJINN and `unitId` who is buying. The D-pad moves (Left and
++/// Right by one, Up and Down by a page), A buys, B leaves. Called from the
++/// Battle Arena overlay through SHOP.S. Returns 0.
++s32 ArenaShop_Run(s32 kind, s32 unitId) {
++  struct ShopWork *shop;
++  struct Window *anchorWindow;
++  struct Window *priceWindow;
++  struct Window *stockWindow;
++  struct Window *messageWindow;
++  struct WindowSprite *anchor;
++  struct Sprite *figures[SHOP_STOCK_PAGE_ITEMS];
++  s32 count;
++  s32 selected = 0;
++  s32 redraw = 1;
++  s32 notice = 0;
++  s32 figuresPage = -1;
++  s32 i;
++
++  for (i = 0; i < SHOP_STOCK_PAGE_ITEMS; i++)
++    figures[i] = 0;
++  Shop_InitializeWork();
++  shop = gMenuWork;
++  count = kind == ARENA_SHOP_DJINN
++              ? ARENA_SHOP_DJINN_COUNT
++              : kind == ARENA_SHOP_STATS ? ARENA_STAT_COUNT
++                                         : ARENA_SHOP_PSYNERGY_COUNT;
++  for (i = 0; i < count; i++)
++    shop->stockItemIds[i] = i;
++  shop->stockCount = count;
++  // The hand lives in a window off the left edge, as when a shop has no
++  // portrait (Shop_Run).
++  anchorWindow = Window_CreateFar(-5, 0, 5, 5, WINDOW_FLAG_INSTANT);
++  anchor = WindowSprite_CreateFar(shop->cursorIcon, OUTPUT_SIZE_16X16,
++                                  anchorWindow, 0, 0);
++  anchor->motion = WINDOW_SPRITE_MOTION_STILL;
++  anchor->kind = 0;
++  MenuCursor_SetPositionImmediate(&shop->cursor, -32, 112);
++  shop->cursor.anchor = anchor;
++  // The prompt, as a shopkeeper's line is shown (Shop_ShowKeeperMessage).
++  Message_CloseFinishedWindowsFar();
++  Message_OpenWindowFar(MsgWhatWouldYouLike, 5, 0, 0x22);
++  while (Message_AllTypedFar() == 0)
++    wait(1);
++  wait(1);
++  shop->itemWindow = 0;
++  shop->moneyWindow = Window_CreateFar(
++      30 - SHOP_MONEY_WIDTH, 7, SHOP_MONEY_WIDTH, 4, WINDOW_FLAG_INSTANT);
++  Shop_DrawMoney();
++  priceWindow =
++      Window_CreateFar(0, 8, SHOP_PRICE_WIDTH, 4, WINDOW_FLAG_INSTANT);
++  stockWindow = Window_CreateFar(0, 12, 30, 4, WINDOW_FLAG_INSTANT);
++  shop->cursor.anchor->motion = WINDOW_SPRITE_MOTION_HOP_DOWN_LEFT;
++  shop->mode = 12;
++  messageWindow = Window_CreateFar(0, 17, 30, 3, WINDOW_FLAG_INSTANT);
++
++  while (1) {
++    if (redraw != 0) {
++      redraw = 0;
++      if (kind == ARENA_SHOP_DJINN && figuresPage != selected / SHOP_STOCK_PAGE_ITEMS) {
++        s32 first;
++
++        figuresPage = selected / SHOP_STOCK_PAGE_ITEMS;
++        first = figuresPage * SHOP_STOCK_PAGE_ITEMS;
++        for (i = 0; i < SHOP_STOCK_PAGE_ITEMS; i++) {
++          if (figures[i] != 0)
++            Sprite_DestroyFar(figures[i]);
++          figures[i] = 0;
++          if (first + i < count) {
++            figures[i] = Sprite_CreateFar(
++                VENUS_DJINNI + (first + i) / ARENA_DJINN_PER_ELEMENT);
++            if (figures[i] != 0)
++              Sprite_StartAnimationFar(figures[i], 2);
++          }
++        }
++      }
++      MenuCursor_Place(stockWindow, selected % SHOP_STOCK_PAGE_ITEMS * 32 - 8,
++                       8);
++      shop->mode = 4;
++      ArenaShop_DrawStock(stockWindow, kind, unitId, selected, figures);
++      Shop_DrawMessage(
++          messageWindow,
++          notice != 0 ? notice
++                      : ArenaShop_DescriptionMessage(kind, unitId, selected));
++      ArenaShop_DrawPrice(priceWindow, kind, unitId, selected);
++    }
++    // A figure stands over its icon's place in the row: the row's window
++    // starts at screen (8, 104), each entry 32 pixels on, and the one under the
++    // hand is shown larger.
++    for (i = 0; i < SHOP_STOCK_PAGE_ITEMS; i++) {
++      if (figures[i] != 0)
++        ArenaFigure_Place(figures[i], 16 + i * 32, 119,
++                          figuresPage * SHOP_STOCK_PAGE_ITEMS + i == selected
++                              ? 0x10000
++                              : ARENA_FIGURE_SCALE);
++    }
++    if ((gKeysPressed & KEY_A) != 0) {
++      Sound_PlayFar(SE_MENU_CONFIRM);
++      notice = ArenaShop_Buy(kind, unitId, selected);
++      if (notice != 0)
++        Sound_PlayFar(SE_MENU_CANCEL);
++      Shop_DrawMoney();
++      redraw = 1;
++    }
++    if ((gKeysPressed & KEY_B) != 0) {
++      Sound_PlayFar(SE_MENU_CANCEL);
++      break;
++    }
++    if ((gKeysRepeat & KEY_LEFT) != 0) {
++      i = selected;
++      selected = (selected - 1 + count) % count;
++      if (i != selected) {
++        Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++        notice = 0;
++        redraw = 1;
++      }
++    }
++    if ((gKeysRepeat & KEY_RIGHT) != 0) {
++      i = selected;
++      selected = (selected + 1) % count;
++      if (i != selected) {
++        Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++        notice = 0;
++        redraw = 1;
++      }
++    }
++    if ((gKeysRepeat & KEY_UP) != 0 && selected - SHOP_STOCK_PAGE_ITEMS >= 0) {
++      selected -= SHOP_STOCK_PAGE_ITEMS;
++      notice = 0;
++      redraw = 1;
++    }
++    if ((gKeysRepeat & KEY_DOWN) != 0) {
++      if (selected + SHOP_STOCK_PAGE_ITEMS <
++          (count + (SHOP_STOCK_PAGE_ITEMS - 1)) / SHOP_STOCK_PAGE_ITEMS *
++              SHOP_STOCK_PAGE_ITEMS) {
++        selected += SHOP_STOCK_PAGE_ITEMS;
++        notice = 0;
++        redraw = 1;
++      }
++      if (selected > count - 1)
++        selected = count - 1;
++    }
++    wait(1);
++  }
++
++  for (i = 0; i < SHOP_STOCK_PAGE_ITEMS; i++) {
++    if (figures[i] != 0)
++      Sprite_DestroyFar(figures[i]);
++  }
++  Window_CloseFar(messageWindow, 2);
++  Window_CloseFar(stockWindow, 2);
++  Window_CloseFar(priceWindow, 2);
++  Window_CloseFar(shop->moneyWindow, 2);
++  Message_CloseFinishedWindowsFar();
++  Window_CloseFar(anchorWindow, 2);
++  wait(1);
++  Shop_ReleaseWork();
++  return 0;
++}
++
+diff --git a/games/tbs/src/window/screens.c b/games/tbs/src/window/screens.c
+index 34c3445f35..9f754289ac 100644
+--- a/games/tbs/src/window/screens.c
++++ b/games/tbs/src/window/screens.c
+@@ -46,4 +46,5 @@
+ #include "screens/link_timer.c"
+ #include "screens/battle_party_commands.c"
+ #include "screens/icon_menu.c"
++#include "screens/arena_icon_menu.c"
+ #include "screens/debug.c"
+diff --git a/games/tbs/src/window/screens/arena_icon_menu.c b/games/tbs/src/window/screens/arena_icon_menu.c
+new file mode 100644
+index 0000000000..f5fc9b673e
+--- /dev/null
++++ b/games/tbs/src/window/screens/arena_icon_menu.c
+@@ -0,0 +1,39 @@
++/// @file
++/// Arena romhack: the arena menus' icon row, as the shops draw it.
++// Part of screens.c.
++
++#include "../screens_internal.h"
++#include "module/arena.h"
++
++/// The width, in tiles, of the label window beside the arena menus' icons.
++#define ARENA_MENU_LABEL_WIDTH 13
++
++/// Arena romhack: a message window across the top of the screen and a row of
++/// command icons across the bottom, as the shops draw them. `prompt` is the
++/// message shown, `icons` the command icon numbers (COMMAND_ICON_*, at most
++/// six) and `labelBase` the first of that many consecutive messages naming
++/// them, as IconMenu_Center takes them. Returns the position chosen, or -1 for
++/// B. Called from the Battle Arena overlay through WINDOW.S.
++s32 ArenaMenu_IconChoose(s32 prompt, const u8 *icons, s32 labelBase,
++                         s32 count) {
++  s32 result;
++  s32 i;
++
++  // Wait for the keys that opened it to be let go.
++  while (gKeysHeld != 0)
++    wait(1);
++  // The prompt, as a shopkeeper's line is shown (Shop_ShowKeeperMessage).
++  Message_CloseFinishedWindows();
++  Message_OpenWindow(prompt, 5, 0, 0x22);
++  while (Message_AllTyped() == 0)
++    wait(1);
++  wait(1);
++  IconMenu_Open();
++  for (i = 0; i < count; i++)
++    IconMenu_AddIcon(icons[i]);
++  IconMenu_Center(17, ARENA_MENU_LABEL_WIDTH, labelBase);
++  result = IconMenu_Run(0);
++  IconMenu_Close();
++  Message_CloseFinishedWindows();
++  return result;
++}
+-- 
+2.53.0
+

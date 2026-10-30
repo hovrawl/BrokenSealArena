@@ -1,0 +1,372 @@
+From 1dd514d08cf5b03e02c5d39337a19e5bea9c05d6 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 30 Oct 2026 14:51:40 +1100
+Subject: [PATCH] Arena: the attendant's and the party manager's menus
+
+scene/arena_menu.c is a new object in the Battle Arena overlay. The attendant
+asks Solo or Multiplayer and then the tournament (the Monster Gauntlet is the
+only one); the man to the counter's right, once the linked-win teller, is now
+the party manager: Characters, Djinn, Psynergy and the item shops, opening the
+real Shop_Run on Xian's stock. A win pays 200 coins plus 100 for each earlier
+win in the series and heals the party. battle_arena.c keeps only the hooks.
+The overlay's import lists gain the functions the new code calls. Switch:
+ARENA_TRAINING.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/objects.tsv                     |   1 +
+ games/tbs/src/scene/arena_menu.c          | 142 ++++++++++++++++++++++
+ games/tbs/src/scene/battle_arena.c        |  40 ++++++
+ games/tbs/src/scene/import/battle_arena.s |  19 +++
+ games/tbs/src/system/overlay/imports.inc  |   9 ++
+ 5 files changed, 211 insertions(+)
+ create mode 100644 games/tbs/src/scene/arena_menu.c
+
+diff --git a/games/tbs/objects.tsv b/games/tbs/objects.tsv
+index ac61056b73..fda6256374 100644
+--- a/games/tbs/objects.tsv
++++ b/games/tbs/objects.tsv
+@@ -995,6 +995,7 @@ main	rom_tail_02	games/tbs/src/system/overlay/overlays
+ 3ca	bss	games/tbs/src/scene/lemurian_ship	.bss
+ 3cb	text	games/tbs/src/scene/entry/battle_arena
+ 3cb	text	games/tbs/src/scene/battle_arena
++3cb	text	games/tbs/src/scene/arena_menu
+ 3cb	text	games/tbs/src/scene/import/battle_arena
+ 3cb	text	libgcc.a:_call_via_rX
+ 3cb	bss	games/tbs/src/scene/battle_arena	.bss
+diff --git a/games/tbs/src/scene/arena_menu.c b/games/tbs/src/scene/arena_menu.c
+new file mode 100644
+index 0000000000..99372baaa9
+--- /dev/null
++++ b/games/tbs/src/scene/arena_menu.c
+@@ -0,0 +1,142 @@
++/// @file
++/// Arena romhack: the attendant and party manager menus (ARENA_TRAINING).
++
++#include "arena_config.h"
++#include "module/arena.h"
++#include "module/import.h"
++#include "djinn_ids.h"
++#include "module/shop/shop.h"
++#include "render_input.h"
++#include "sprite.h"
++#include "module/scene/battle_arena.h"
++#include "module/field/field_sequence.h"
++#include "module/field/event_commands.h"
++#include "module/battle/battle.h"
++#include "module/field/field.h"
++#include "module/game/game.h"
++#include "module/window/window.h"
++#include "module/window/screens.h"
++#include "module/system/system.h"
++#include "battle.h"
++#include "input.h"
++#include "debug.h"
++#include "field.h"
++#include "game.h"
++#include "graphics.h"
++#include "menu.h"
++#include "types.h"
++#include "edition.h"
++#include "far_call.h"
++#include "sound.h"
++#include "system.h"
++#include "edition.h"
++#include "types.h"
++#include "event.h"
++#include "event_inline.h"
++#include "io_reg.h"
++#include "serial.h"
++#include "iwram_call.h"
++#include "character.h"
++#include "heap_release.h"
++#include "tbs_edition.h"
++#include "text/msg_ids.h"
++#include "task.h"
++#include "scene_ids.h"
++#include "main_routine_work.h"
++#include "battle_side.h"
++#include "irq_lock.h"
++#include "sound_driver_symbols.h"
++#include "scene_tables.h"
++#include "frame.h"
++#include "flags.h"
++#include "heap_slots.h"
++#include "sounds.h"
++#include "heap.h"
++
++// Arena romhack: the arena's own menus. The attendant asks Solo or Multiplayer
++// and, for Solo, which tournament. The party manager (the man at the counter's
++// right) trains characters, sells Djinn and Psynergy, and opens the item shops.
++// Choices are a message window across the top and a row of command icons across
++// the bottom (ArenaMenu_IconChoose), as in the shops; a character is chosen in
++// the shops' strip of walking figures (ItemPicker_ChooseMember). All the text
++// is messages added to text/en.po (MsgArena*), so it draws in the game's own
++// font. The icon labels are consecutive messages, as IconMenu_Center wants.
++// The list screens draw as tiles and blank their window with
++// Window_ClearInteriorTiles before each redraw.
++const u8 gArenaMenu_AttendantIcons[] = {COMMAND_ICON_FIGHT, COMMAND_ICON_CABLE};
++const u8 gArenaMenu_TournamentIcons[] = {COMMAND_ICON_BATTLE};
++const u8 gArenaMenu_ManagerIcons[] = {COMMAND_ICON_STATUS, COMMAND_ICON_DJINN,
++                                      COMMAND_ICON_PSYNERGY, COMMAND_ICON_ITEM};
++const u8 gArenaMenu_ShopIcons[] = {COMMAND_ICON_ATTACK, COMMAND_ICON_DEFEND,
++                                   COMMAND_ICON_ITEM};
++
++/// The item shops the manager opens: Xian's weapon, armor and item shops, the
++/// last rows of the shop stock table.
++#define TRAINING_SHOP_FIRST_ROW 16
++
++/// The attendant's menu: Solo or Multiplayer and, for Solo, the tournament.
++/// Returns 1 for a solo series, 2 for a linked battle and 0 to leave. The
++/// Monster Gauntlet is the only tournament so far; the ladder it fights is
++/// gArenaLadder.
++s32 ArenaMenu_AttendantMode(void) {
++  s32 choice;
++
++  for (;;) {
++    choice = ArenaMenu_IconChoose(MsgArenaAttendantPrompt,
++                                  gArenaMenu_AttendantIcons, MsgArenaSolo, 2);
++    if (choice < 0)
++      return 0;
++    if (choice == 1)
++      return 2;
++    choice = ArenaMenu_IconChoose(MsgArenaTournamentPrompt,
++                                  gArenaMenu_TournamentIcons, MsgArenaGauntlet,
++                                  1);
++    if (choice == 0)
++      return 1;
++  }
++}
++
++/// The attendant reports the coins a battle just won, and the party is healed
++/// for the next one.
++void ArenaMenu_ShowWin(s32 actorId, s32 reward) {
++  MessageArgument_ClearAll();
++  MessageArgument_Push(reward, MESSAGE_ARGUMENT_NUMBER);
++  Event_SetMessageId(MsgArenaVictory);
++  FieldMessage_ShowAtActor(actorId, 0);
++  Party_RestoreHpPp(1);
++}
++
++/// Talking to ACTOR_LINKED_WINS_TELLER, now the party manager: characters,
++/// Djinn, Psynergy and the item shops. B leaves; the party is healed on the
++/// way out, since stats and gear may have changed.
++s32 BattleArena_PartyManager(s32 actorId) {
++  s32 choice;
++  s32 member;
++
++  Event_Start();
++  Actor_SetAngleToward(actorId, gMainRoutineWork.leaderActorId, 0);
++  for (;;) {
++    choice = ArenaMenu_IconChoose(MsgArenaManagerPrompt,
++                                  gArenaMenu_ManagerIcons, MsgArenaCharacters,
++                                  4);
++    if (choice < 0)
++      break;
++    if (choice == 3) {
++      choice = ArenaMenu_IconChoose(MsgArenaShopPrompt, gArenaMenu_ShopIcons,
++                                    MsgArenaWeapons, 3);
++      if (choice >= 0)
++        Shop_Run(TRAINING_SHOP_FIRST_ROW + choice, actorId);
++      continue;
++    }
++    // The strip shows the character's status (3), Djinn (1) or Psynergy (2)
++    // to match; Characters opens the stat counter (2), the others the Djinn (1)
++    // and Psynergy (0) counters.
++    member = ItemPicker_ChooseMember(choice == 0 ? 3 : choice);
++    if (member < 0)
++      continue;
++    ArenaShop_Run(choice == 0 ? 2 : (choice == 1 ? 1 : 0), member);
++  }
++  Party_RestoreHpPp(1);
++  Event_End();
++  return 0;
++}
+diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
+index c5acee0b29..2b47d4b4f9 100644
+--- a/games/tbs/src/scene/battle_arena.c
++++ b/games/tbs/src/scene/battle_arena.c
+@@ -2,8 +2,11 @@
+ /// The Battle Arena overlay: starting linked and monster battles, the exchange
+ /// of the two parties, the attendant and the records of wins.
+ 
++#include "arena_config.h"
++
+ #include "module/import.h"
+ #include "module/scene/battle_arena.h"
++#include "module/arena.h"
+ #include "module/field/field_sequence.h"
+ #include "module/field/event_commands.h"
+ #include "module/battle/battle.h"
+@@ -1061,6 +1064,7 @@ static s32 BattleArena_EnterBattle(void) {
+ #endif
+ }
+ 
++
+ /// Talking to ACTOR_ATTENDANT, who arranges a battle. With no partner, offers
+ /// a monster battle. With one, calls off a monster battle in waiting, then asks
+ /// the player to apply or to accept the partner's request; a yes is published
+@@ -1073,6 +1077,9 @@ static s32 BattleArena_ChooseBattleMode(void) {
+   s32 answer;
+   s32 messageBase;
+   s32 messageId;
++#if ARENA_TRAINING
++  s32 mode;
++#endif
+ 
+   // The attendant's lines from MsgLobbyPleaseSpeakWhen: +1 asks the player to
+   // apply, +2 to accept the partner's request, +3 and +7 send the player to
+@@ -1081,6 +1088,15 @@ static s32 BattleArena_ChooseBattleMode(void) {
+   messageBase = MsgLobbyPleaseSpeakWhen;
+   Event_Start();
+   Actor_SetAngleToward(ACTOR_ATTENDANT, gMainRoutineWork.leaderActorId, 0);
++#if ARENA_TRAINING
++  // Solo or Multiplayer, unless a series is already under way.
++  mode = 2;
++  if (!Event_GetFlag(FLAG_MONSTER_BATTLE)) {
++    mode = ArenaMenu_AttendantMode();
++    if (mode == 0)
++      goto leave;
++  }
++#endif
+   // Look for the partner's signature twice, a frame apart.
+   if (BattleArena_PeerSlotMatches(LOBBY_SLOT_SIGNATURE) == 0) {
+     wait(1);
+@@ -1089,9 +1105,14 @@ static s32 BattleArena_ChooseBattleMode(void) {
+     BattleArena_WriteSlotValue(LOBBY_SLOT_ALONE);
+     BattleArena_InitializeSerial();
+     if (!Event_GetFlag(FLAG_MONSTER_BATTLE)) {
++#if ARENA_TRAINING
++      // The menu has asked: Solo starts a series, Multiplayer waits for a link.
++      answer = (mode == 1) ? YES : NO;
++#else
+       Event_SetMessageId(messageBase + 5);
+       FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+       answer = Event_AskYesNoWithActorAnimation(0, 0);
++#endif
+       // Yes starts a monster series: FLAG_AREA_TEMP_E8's byte and
+       // LINK_TALLY_MONSTER_STREAK start at 0.
+       if (answer == YES) {
+@@ -1168,6 +1189,9 @@ static s32 BattleArena_ChooseBattleMode(void) {
+       }
+     }
+   }
++#if ARENA_TRAINING
++leave:
++#endif
+   Event_End();
+ #ifdef UBFIX
+   return 0;
+@@ -1574,6 +1598,9 @@ s32 BattleArena_RunRoundResult(void) {
+     s32 wins;
+     s32 messageOffset;
+     s32 v;
++#if ARENA_TRAINING
++    s32 reward;
++#endif
+ 
+     Event_Start();
+     Event_StartScreenTransition();
+@@ -1581,6 +1608,14 @@ s32 BattleArena_RunRoundResult(void) {
+     BattleArena_WriteSlotValue(LOBBY_SLOT_ALONE);
+     gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_WINS]++;
+     gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK]++;
++#if ARENA_TRAINING
++    // A win pays 200 coins, and 100 more for each win before it in the series.
++    reward = 200 + 100 * (gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK] - 1);
++    gMainRoutineWork.coins += reward;
++    if (gMainRoutineWork.coins > 999999)
++      gMainRoutineWork.coins = 999999;
++    ArenaMenu_ShowWin(ACTOR_ATTENDANT, reward);
++#endif
+     // The offer has two lines a level (FLAG_MONSTER_BATTLE_WINS, -1 when a
+     // series starts), the even line capped at 14. FLAG_AREA_TEMP_E8's byte
+     // counts the victories 0 to 2; the third raises the level and takes the
+@@ -1863,8 +1898,13 @@ struct Trigger gBattleArenaTriggers[] = {
+     {TRIGGER_TALK, JENNA, CONDITION_ALWAYS, EVENT(BattleArena_TalkByProgress)},
+     {TRIGGER_TALK, ACTOR_ATTENDANT, CONDITION_ALWAYS,
+      EVENT(BattleArena_ChooseBattleMode)},
++#if ARENA_TRAINING
++    {TRIGGER_TALK, ACTOR_LINKED_WINS_TELLER, CONDITION_ALWAYS,
++     EVENT(BattleArena_PartyManager)},
++#else
+     {TRIGGER_TALK, ACTOR_LINKED_WINS_TELLER, CONDITION_ALWAYS,
+      EVENT(BattleArena_ReportWinTallies)},
++#endif
+     {TRIGGER_TALK, ACTOR_HEALER, CONDITION_ALWAYS,
+      EVENT(BattleArena_OpenSanctum)},
+     {TRIGGER_TALK, ACTOR_GREETER, CONDITION_ALWAYS,
+diff --git a/games/tbs/src/scene/import/battle_arena.s b/games/tbs/src/scene/import/battle_arena.s
+index e739667a4f..862b1f18da 100644
+--- a/games/tbs/src/scene/import/battle_arena.s
++++ b/games/tbs/src/scene/import/battle_arena.s
+@@ -27,6 +27,25 @@
+ 	.set import.Message_AllTyped, 1
+ 	.set import.WindowSprite_PrepareForRedraw, 1
+ 	.set import.Text_DrawNumber, 1
++	.set import.Text_DrawString, 1
++	.set import.Text_DrawMessage, 1
++	.set import.Unit_Calculate, 1
++	.set import.Unit_LearnPsynergy, 1
++	.set import.Shop_Run, 1
++	.set import.Djinn_Give, 1
++	.set import.Djinn_Set, 1
++	.set import.Window_ClearInteriorTiles, 1
++	.set import.Text_DrawStringInWindow, 1
++	.set import.Text_DrawNumberInWindow, 1
++	.set import.Text_DrawMessageAsTiles, 1
++	.set import.ArenaMenu_IconChoose, 1
++	.set import.ItemPicker_ChooseMember, 1
++	.set import.ArenaShop_Run, 1
++	.set import.WindowSprite_CreateFromResource, 1
++	.set import.Sprite_Create, 1
++	.set import.Sprite_Destroy, 1
++	.set import.Render_ApplyProjectedPlacement, 1
++	.set import.Window_SetTilemapEntry, 1
+ 	.set import.MessageArgument_ClearAll, 1
+ 	.set import.MessageArgument_Push, 1
+ 	.set import.Save_ProcessSelectedFile, 1
+diff --git a/games/tbs/src/system/overlay/imports.inc b/games/tbs/src/system/overlay/imports.inc
+index 0e25f4361a..69fbf3cfd1 100644
+--- a/games/tbs/src/system/overlay/imports.inc
++++ b/games/tbs/src/system/overlay/imports.inc
+@@ -75,6 +75,9 @@
+ 	import Task_SetFlags, Task_SetFlagsFar
+ @ Field bank (far_call/FIELD.S)
+ 	import Sprite_StartAnimation, Sprite_StartAnimationFar
++	import Sprite_Create, Sprite_CreateFar
++	import Sprite_Destroy, Sprite_DestroyFar
++	import Render_ApplyProjectedPlacement, Actor_ApplyProjectedPlacementFar
+ 	import Sprite_AddAnimation, Sprite_AddAnimationFar
+ 	import SpriteAnimation_Clear, SpriteAnimation_ClearFar
+ 	import Actor_SelectAnimation, Actor_SelectAnimationFar
+@@ -164,6 +167,8 @@
+ 	import Menu_AnimateSelectionToEntry, Menu_AnimateSelectionToEntryFar
+ 	import Save_CountFilesExcludingSent, Save_CountFilesExcludingSentFar
+ 	import Link_DrawPageArrows, Link_DrawPageArrowsFar
++	import ArenaMenu_IconChoose, ArenaMenu_IconChooseFar
++	import WindowSprite_CreateFromResource, WindowSprite_CreateFromResourceFar
+ @ Game bank (far_call/GAME.S)
+ 	import Djinn_GetRecoveryTable, Djinn_GetRecoveryTableFar
+ 	import Unit_Get, Unit_GetFar
+@@ -195,6 +200,8 @@
+ 	import DjinnRecovery_AddStandby, DjinnRecovery_AddStandbyFar
+ 	import Djinn_Transfer, Djinn_TransferFar
+ 	import Unit_LevelUpTo, Unit_LevelUpToFar
++	import Unit_LearnPsynergy, Unit_LearnPsynergyFar
++	import Window_ClearInteriorTiles, Window_ClearInteriorTilesFar
+ 	import Party_AdjustCoins, Party_AdjustCoinsFar
+ 	import Item_AdjustCounter, Item_AdjustCounterFar
+ 	import Inventory_Count, Inventory_CountFar
+@@ -357,6 +364,8 @@
+ 	import ItemPicker_Run, ItemPicker_RunFar
+ 	import Sound_WaitForJingle, Sound_WaitForJingleFar
+ 	import Inn_PlaySleep, Inn_PlaySleepFar
++	import ItemPicker_ChooseMember, ItemPicker_ChooseMemberFar
++	import ArenaShop_Run, ArenaShop_RunFar
+ @ Battle bank (far_call/BATTLE.S)
+ 	import DjinnRecovery_CountDownTwenty, DjinnRecovery_CountDownTwentyFar
+ 	import DebugParameterSet_Load, DebugParameterSet_LoadFar
+-- 
+2.53.0
+

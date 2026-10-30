@@ -1,0 +1,174 @@
+From acb13e58f7d8f6eb5ef3f987c4ec34b7a70c8812 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 30 Oct 2026 14:51:48 +1100
+Subject: [PATCH] Arena: saving through the Pause menu
+
+The Pause menu was shut in the arena in two places (field_sequence/run.c and
+window/settings_menu.c); both now let it open, with Save your quest, behind
+ARENA_PAUSE_MENU. window/screens/arena_save.c (a part of screens.c) writes a
+file saved in the arena as if the game stood at the arena's door with no series
+running, so a load does not replay the last battle's reward or resume a series,
+and puts the live values back after. Continue loads it.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/field/field_sequence/run.c    |  5 ++-
+ games/tbs/src/window/screens.c              |  1 +
+ games/tbs/src/window/screens/arena_save.c   | 40 +++++++++++++++++++++
+ games/tbs/src/window/screens/save.c         | 10 ++++++
+ games/tbs/src/window/window/settings_menu.c |  8 +++--
+ 5 files changed, 61 insertions(+), 3 deletions(-)
+ create mode 100644 games/tbs/src/window/screens/arena_save.c
+
+diff --git a/games/tbs/src/field/field_sequence/run.c b/games/tbs/src/field/field_sequence/run.c
+index d5103faba0..01e0b397e3 100644
+--- a/games/tbs/src/field/field_sequence/run.c
++++ b/games/tbs/src/field/field_sequence/run.c
+@@ -3,6 +3,8 @@
+ /// entrance.
+ // Part of field_sequence.c.
+ 
++#include "arena_config.h"
++
+ #include "../field_sequence_internal.h"
+ 
+ /// The actor system's work (struct ActorSystemWork, gActorSystemWork in
+@@ -332,7 +334,8 @@ s32 FieldSequence_Run(s32 entrance) {
+             Field_EndBusyAndReveal();
+             AreaNameWindow_HideFar();
+             gMainRoutineWork.returnMusic = Sound_GetCurrentBgmFar();
+-            if (GameFlag_GetFar(FLAG_IN_BATTLE_ARENA) == 0) {
++            // Arena romhack: the Pause menu (Save your quest) works in the arena.
++            if (ARENA_PAUSE_MENU || GameFlag_GetFar(FLAG_IN_BATTLE_ARENA) == 0) {
+               // With fewer than 136 of the 512 sprite VRAM blocks (64 bytes
+               // each) free, sprite drawing stays suspended while the menu
+               // runs, and a frame passes so that the field's sprites give
+diff --git a/games/tbs/src/window/screens.c b/games/tbs/src/window/screens.c
+index 9f754289ac..7bde7dc0d5 100644
+--- a/games/tbs/src/window/screens.c
++++ b/games/tbs/src/window/screens.c
+@@ -31,6 +31,7 @@
+ // The parts, in ROM order (src/README.md, "Objects and parts").
+ #include "screens/window_sprites.c"
+ #include "screens/party_status.c"
++#include "screens/arena_save.c"
+ #include "screens/save.c"
+ #include "screens/name_entry.c"
+ #include "screens/joined.c"
+diff --git a/games/tbs/src/window/screens/arena_save.c b/games/tbs/src/window/screens/arena_save.c
+new file mode 100644
+index 0000000000..8b6a2da2cd
+--- /dev/null
++++ b/games/tbs/src/window/screens/arena_save.c
+@@ -0,0 +1,40 @@
++/// @file
++/// Arena romhack: saving in the arena. A file saved there is written as if the
++/// game stood at the arena's door with no series running, so a load does not
++/// replay the last battle's reward (its entrance) or resume a series
++/// (FLAG_MONSTER_BATTLE). The live values are put back after.
++// Part of screens.c.
++
++#include "../screens_internal.h"
++#include "scene_ids.h"
++#include "scene_exits.h"
++
++struct ArenaSaveState {
++  s32 next;
++  s32 entrance;
++  s32 series;
++  s32 inArena;
++};
++
++static void ArenaSave_Begin(struct ArenaSaveState *state) {
++  state->next = gMainRoutineWork.next;
++  state->entrance = gMainRoutineWork.entrance;
++  state->series = 0;
++  state->inArena = GameFlag_GetFar(FLAG_IN_BATTLE_ARENA);
++  if (state->inArena) {
++    state->series = GameFlag_GetFar(FLAG_MONSTER_BATTLE);
++    gMainRoutineWork.next = (s32)&SceneId_BattleArena;
++    gMainRoutineWork.entrance = BATTLE_ARENA_FROM_FILE_SCREEN;
++    if (state->series)
++      GameFlag_ClearFar(FLAG_MONSTER_BATTLE);
++  }
++}
++
++static void ArenaSave_End(struct ArenaSaveState *state) {
++  if (state->inArena) {
++    gMainRoutineWork.next = state->next;
++    gMainRoutineWork.entrance = state->entrance;
++    if (state->series)
++      GameFlag_SetFar(FLAG_MONSTER_BATTLE);
++  }
++}
+diff --git a/games/tbs/src/window/screens/save.c b/games/tbs/src/window/screens/save.c
+index 5f1b70fba3..88a2e431ec 100644
+--- a/games/tbs/src/window/screens/save.c
++++ b/games/tbs/src/window/screens/save.c
+@@ -2,6 +2,8 @@
+ /// Save files and the file list.
+ // Part of screens.c.
+ 
++#include "arena_config.h"
++
+ #include "../screens_internal.h"
+ 
+ // The three save files. Each is two 4 KB parts of backup memory: part
+@@ -1190,6 +1192,11 @@ s32 Save_ToChosenFile(void) {
+   s32 file;
+   s32 error;
+   struct SaveWork *work;
++#if ARENA_PAUSE_MENU
++  struct ArenaSaveState arenaSave;
++
++  ArenaSave_Begin(&arenaSave);
++#endif
+ 
+   result = 0;
+   error = Save_InitializeWork();
+@@ -1241,6 +1248,9 @@ s32 Save_ToChosenFile(void) {
+   }
+ done:
+   Save_ReleaseWork();
++#if ARENA_PAUSE_MENU
++  ArenaSave_End(&arenaSave);
++#endif
+   return result;
+ }
+ 
+diff --git a/games/tbs/src/window/window/settings_menu.c b/games/tbs/src/window/window/settings_menu.c
+index 9317052650..8693728be3 100644
+--- a/games/tbs/src/window/window/settings_menu.c
++++ b/games/tbs/src/window/window/settings_menu.c
+@@ -2,6 +2,8 @@
+ /// Window colours, the settings menu and the Pause menu.
+ // Part of window.c.
+ 
++#include "arena_config.h"
++
+ #include "../window_internal.h"
+ 
+ /// Nothing calls them.
+@@ -701,7 +703,8 @@ struct Window *PauseMenu_Open(void) {
+ 
+   rows = PAUSE_MENU_ROWS;
+   work = gOptionMenuWork;
+-  settingsOnly = GameFlag_GetFar(FLAG_IN_BATTLE_ARENA);
++  // Arena romhack: the whole Pause menu, Save your quest included, in the arena.
++  settingsOnly = ARENA_PAUSE_MENU ? 0 : GameFlag_GetFar(FLAG_IN_BATTLE_ARENA);
+   first = 0;
+   if (settingsOnly != 0) {
+     rows = 1;
+@@ -785,7 +788,8 @@ s32 PauseMenu_Choose(void) {
+ 
+   redraw = 1;
+   rows = PAUSE_MENU_ROWS;
+-  settingsOnly = GameFlag_GetFar(FLAG_IN_BATTLE_ARENA);
++  // Arena romhack: the whole Pause menu, Save your quest included, in the arena.
++  settingsOnly = ARENA_PAUSE_MENU ? 0 : GameFlag_GetFar(FLAG_IN_BATTLE_ARENA);
+   first = 0;
+   PauseMenu_Initialize();
+   work = gOptionMenuWork;
+-- 
+2.53.0
+

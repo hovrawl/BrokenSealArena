@@ -1,0 +1,162 @@
+From 686c0a5e0ec75159bf64e5a22e0799f39debfafb Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 30 Oct 2026 14:51:28 +1100
+Subject: [PATCH] Arena: New Game boots straight into the Battle Arena
+
+In the file screen's New Game branch, the hook calls ArenaBoot_NewGame
+(scene/arena_boot.c): Garet, Mia and Ivan join, all four are level 30, the
+party has 1500 coins, FLAG_IN_BATTLE_ARENA is set and the game goes to
+SceneId_BattleArena. No prologue, no save file read or written. Switch:
+ARENA_BOOT. The new object is a row in objects.tsv and the overlay's import
+list gains Unit_LevelUpTo and Unit_Calculate.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/objects.tsv                    |  1 +
+ games/tbs/src/scene/arena_boot.c         | 81 ++++++++++++++++++++++++
+ games/tbs/src/scene/file_screen.c        |  8 +++
+ games/tbs/src/scene/import/file_screen.s |  2 +
+ 4 files changed, 92 insertions(+)
+ create mode 100644 games/tbs/src/scene/arena_boot.c
+
+diff --git a/games/tbs/objects.tsv b/games/tbs/objects.tsv
+index 50fd95c912..ac61056b73 100644
+--- a/games/tbs/objects.tsv
++++ b/games/tbs/objects.tsv
+@@ -637,6 +637,7 @@ main	rom_tail_02	games/tbs/src/system/overlay/overlays
+ 36f	bss	games/tbs/src/scene/bss/title	.bss
+ 370	text	games/tbs/src/scene/entry/file_screen
+ 370	text	games/tbs/src/scene/file_screen
++370	text	games/tbs/src/scene/arena_boot
+ 370	text	games/tbs/src/scene/import/file_screen
+ 370	text	games/tbs/src/scene/file_screen_keyboard
+ 371	text	games/tbs/src/scene/entry/world_map
+diff --git a/games/tbs/src/scene/arena_boot.c b/games/tbs/src/scene/arena_boot.c
+new file mode 100644
+index 0000000000..94a8dcd6ea
+--- /dev/null
++++ b/games/tbs/src/scene/arena_boot.c
+@@ -0,0 +1,81 @@
++/// @file
++/// Arena romhack: New Game skips the prologue and enters the Battle Arena with
++/// a ready-made level 30 party and 1500 coins to train with.
++
++#include "scene_ids.h"
++#include "module/scene/file_screen.h"
++#include "module/field/field_sequence.h"
++#include "module/field/event_commands.h"
++#include "module/game/game.h"
++#include "module/window/window.h"
++#include "module/window/screens.h"
++#include "module/system/system.h"
++#include "battle.h"
++#include "input.h"
++#include "debug.h"
++#include "field.h"
++#include "game.h"
++#include "graphics.h"
++#include "menu.h"
++#include "types.h"
++#include "edition.h"
++#include "far_call.h"
++#include "sound.h"
++#include "system.h"
++#include "battle_sprite_id.h"
++#include "heap_slots.h"
++#include "edition.h"
++#include "tbs_edition.h"
++#include "text_font.h"
++#include "types.h"
++#include "dma.h"
++#include "ram_buffer.h"
++#include "event.h"
++#include "system_call.h"
++#include "resource_ids.h"
++#include "io_write_queue.h"
++#include "io_reg.h"
++#include "scene_tables.h"
++#include "serial.h"
++#include "heap_release.h"
++#include "window.h"
++#include "item.h"
++#include "main_routine_work.h"
++#include "text/msg_ids.h"
++#include "sounds.h"
++#include "sound_driver_symbols.h"
++#include "frame.h"
++#include "map_grid_scroll.h"
++#include "flags.h"
++#include "title.h"
++#include "arena_config.h"
++#include "module/arena.h"
++
++#if ARENA_BOOT
++void ArenaBoot_NewGame(void) {
++  // "New Game" skips the prologue and enters the Battle Arena with a
++  // ready-made level 30 party and 1500 coins to train with.
++  gMainRoutineWork.coins = 1500;
++  Party_AddMember(GARET);
++  Party_AddMember(MIA);
++  Party_AddMember(IVAN);
++  Unit_LevelUpTo(ISAAC, 30);
++  Unit_LevelUpTo(GARET, 30);
++  Unit_LevelUpTo(MIA, 30);
++  Unit_LevelUpTo(IVAN, 30);
++  Unit_Calculate(ISAAC);
++  Unit_Calculate(GARET);
++  Unit_Calculate(MIA);
++  Unit_Calculate(IVAN);
++  // Where Continue restarts a file saved by another build of the game.
++  gMainRoutineWork.restartScene = (s32)&SceneId_BattleArena;
++  gMainRoutineWork.restartEntrance = BATTLE_ARENA_FROM_FILE_SCREEN;
++  gMainRoutineWork.leaderActorId = 0;
++  GameFlag_Clear(FLAG_KEEP_PARTY_POSITION);
++  GameFlag_Clear(FLAG_MENU_OPEN);
++  GameFlag_Set(FLAG_IN_BATTLE_ARENA);
++  gSleepDisabled = 1;
++  Event_SetDestination((s32)&SceneId_BattleArena,
++                       BATTLE_ARENA_FROM_FILE_SCREEN);
++}
++#endif
+diff --git a/games/tbs/src/scene/file_screen.c b/games/tbs/src/scene/file_screen.c
+index f0c1ff6fdd..e89fd97ecc 100644
+--- a/games/tbs/src/scene/file_screen.c
++++ b/games/tbs/src/scene/file_screen.c
+@@ -3,6 +3,9 @@
+ /// continue, copy and delete), the door to the Battle Arena and the transfer of
+ /// a save's data, by link or as a password.
+ 
++#include "arena_config.h"
++#include "module/arena.h"
++
+ #include "scene_ids.h"
+ #include "module/scene/file_screen.h"
+ #include "module/field/field_sequence.h"
+@@ -515,6 +518,11 @@ menu_top:;
+     MainRoutineWork_InitializeDefaults();
+     WindowColor_Apply(gMainRoutineWork.windowColor[0],
+                       gMainRoutineWork.windowColor[1]);
++#if ARENA_BOOT
++    // Arena romhack: "New Game" enters the Battle Arena (scene/arena_boot.c).
++    ArenaBoot_NewGame();
++    goto leave;
++#endif
+     v5 = 1;
+     v7 = 0;
+     for (;;) {
+diff --git a/games/tbs/src/scene/import/file_screen.s b/games/tbs/src/scene/import/file_screen.s
+index 34ae43548a..b275b4cda5 100644
+--- a/games/tbs/src/scene/import/file_screen.s
++++ b/games/tbs/src/scene/import/file_screen.s
+@@ -45,6 +45,8 @@
+ 	.set import.Party_AddMember, 1
+ 	.set import.Party_RemoveMember, 1
+ 	.set import.Party_StartChildhood, 1
++	.set import.Unit_LevelUpTo, 1
++	.set import.Unit_Calculate, 1
+ 	.set import.BuildStamp_GetTime, 1
+ 	.set import.InventorySnapshot_Restore, 1
+ 	.set import.Event_Wait, 1
+-- 
+2.53.0
+
