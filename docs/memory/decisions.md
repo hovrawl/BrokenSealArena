@@ -36,5 +36,31 @@
   in `battle_arena.c`, `file_screen.c`, `formation.c`, `save.c`,
   `settings_menu.c`, `run.c`), the import and far-call table rows, one row each
   in `objects.tsv`, the bank start in `main.ld`, and `en.po`.
-  Not yet done: the series on `arena` is still the old chronological one; the
-  layered re-slice onto `arena-clean` is next.
+  The layered re-slice is done: `arena` is the seven-layer series (the old
+  chronological one is `arena-chrono`).
+- **Saves keep the tournament and rung; a series survives a break** (user,
+  2026-10-30). Between rounds the player is never forced into the next fight:
+  they can leave to heal, shop and upgrade and approach the gate again to
+  continue. The first Gauntlet must not need max levels or classes. Djinn raise
+  stats and change classes, a balance variable to test later. Levels are not
+  designed yet. **Multiplayer 1v1 is the end goal**; how to get there (emulator
+  linking, remote play) is an open research spike, see `docs/ROADMAP.md`.
+- **Attendant, loss and 1v1** (user, 2026-10-30): the attendant shows the current
+  menu when no Gauntlet is running and a Yes/No "give up?" when one is. A loss
+  ends the whole series, no retry; the player goes to the counter. 1v1 is **4v4**
+  (the stock link exchange is three a side, so the protocol must grow to four).
+- **Interfaces are finalised before Gauntlet design**, from written reusable rules
+  in `docs/UI.md`: reuse existing screens and their parts first, text is always a
+  message, fill in the spec template and review it before code.
+- **Series outcomes** (user, 2026-10-30): giving up is not a loss (the stock game
+  tallies losses in `gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_LOSSES]`;
+  keep that for real losses; giving up keeps the best streak). Rung 12 cleared is
+  a win and ends the series. The heal after each win stays (a future difficulty
+  modifier may skip it, probably per tournament). After a loss the party is
+  restored to full and the standard spawn is used. Roadmap later: post-battle
+  events (per win, tournament win, bespoke loss), a proper tournament win, and
+  fight data (log every action, derive damage by character, type and element).
+- **Spare save bytes are a future option, not a task** (user, 2026-10-30): story-only
+  persistent flags and, after the Lost Age decomp shows what its transfer reads, the
+  struct's unnamed bytes could hold per-gauntlet stats later. Repurpose, never shrink.
+  Fight logs are kept in memory per round, not saved. See `docs/ROADMAP.md`, "Later".
