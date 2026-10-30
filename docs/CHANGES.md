@@ -266,6 +266,11 @@ to look at when porting.
 - No up-arrow glyph exists in the message font, so the names say "Up".
 - The Characters picker is mode 3, Djinn 1, Psynergy 2; the counters are
   Psynergy 0, Djinn 1, Stats 2.
+- Patch 12 centres the names on the Psynergy icons and Djinn figures in the
+  picker panels. Tile text snaps to an 8-pixel row (a name at y + 4 drew at y),
+  so a 16-pixel row puts the name at y + 8 and the icon at y + 4, as the Status
+  screen does (`StatusScreen` preview lists: icon at +4, text at +8). The
+  panel window is 11 tiles tall.
 - Patch 11 (`0011-...`) removes the coins window from every panel mode (status,
   Djinn, Psynergy); only the old items mode, no longer used, still has it.
 
