@@ -1,0 +1,82 @@
+# Lose: the win count poked to 11 before the circle, so the fight is round 12 (level 45
+# bosses) and mashing A loses. Shots after every few presses to catch the loss line.
+include to_solo.txt
+poke 0x020004EA 2 11
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+mash A 3
+wait 100
+shot /tmp/shots/l00.png
+mash A 3
+wait 100
+shot /tmp/shots/l01.png
+mash A 3
+wait 100
+shot /tmp/shots/l02.png
+mash A 3
+wait 100
+shot /tmp/shots/l03.png
+mash A 3
+wait 100
+shot /tmp/shots/l04.png
+mash A 3
+wait 100
+shot /tmp/shots/l05.png
+mash A 3
+wait 100
+shot /tmp/shots/l06.png
+mash A 3
+wait 100
+shot /tmp/shots/l07.png
+mash A 3
+wait 100
+shot /tmp/shots/l08.png
+mash A 3
+wait 100
+shot /tmp/shots/l09.png
+mash A 3
+wait 100
+shot /tmp/shots/l10.png
+mash A 3
+wait 100
+shot /tmp/shots/l11.png
+mash A 3
+wait 100
+shot /tmp/shots/l12.png
+mash A 3
+wait 100
+shot /tmp/shots/l13.png
+mash A 3
+wait 100
+shot /tmp/shots/l14.png
+mash A 3
+wait 100
+shot /tmp/shots/l15.png
+mash A 3
+wait 100
+shot /tmp/shots/l16.png
+mash A 3
+wait 100
+shot /tmp/shots/l17.png
+mash A 3
+wait 100
+shot /tmp/shots/l18.png
+mash A 3
+wait 100
+shot /tmp/shots/l19.png
+mash A 3
+wait 100
+shot /tmp/shots/l20.png
+mash A 3
+wait 100
+shot /tmp/shots/l21.png
+mash A 3
+wait 100
+shot /tmp/shots/l22.png
+mash A 3
+wait 100
+shot /tmp/shots/l23.png

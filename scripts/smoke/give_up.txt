@@ -1,0 +1,29 @@
+# The attendant while a Gauntlet is running: the give-up question, No, then Yes,
+# then the normal menu is back. Starts from to_solo (series chosen, Isaac below
+# the left counter facing her).
+include to_solo.txt
+shot /tmp/shots/g00.png
+tap A
+wait 150
+shot /tmp/shots/g01.png
+tap B
+wait 150
+shot /tmp/shots/g02.png
+tap A
+wait 100
+shot /tmp/shots/g03.png
+tap A
+wait 150
+shot /tmp/shots/g04.png
+tap A
+wait 150
+shot /tmp/shots/g05.png
+tap A
+wait 150
+shot /tmp/shots/g06.png
+tap A
+wait 150
+shot /tmp/shots/g07.png
+tap A
+wait 150
+shot /tmp/shots/g08.png

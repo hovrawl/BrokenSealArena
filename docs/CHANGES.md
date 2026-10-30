@@ -40,6 +40,7 @@ and table rows, plus the `en.po` messages):
 | `src/shop/shop/arena_shop.c` | the member picker and the stat, Djinn and Psynergy counters (a part of `shop.c`) |
 | `src/scene/arena_menu.c` | the attendant's and the manager's menus (arena overlay, object `3cb`) |
 | `src/window/screens/arena_save.c` | saving in the arena (a part of `screens.c`) |
+| `src/scene/arena_series.c` | the series flow: give up, round reports, clearing (a part of `battle_arena.c`, which it needs for its statics) |
 
 Some upstream objects are unity builds ("Part of shop.c"): new code for them goes
 in a new part file included from the parent, not in a new object. Hooks that stay
@@ -235,6 +236,45 @@ Each is one layer, in order; each builds on its own.
 - History: an earlier attempt put Save in the party manager's menu. A fifth icon
   made the prompt's window open without its text, and a second attempt gave it a
   person to talk to; both were dropped for the Pause menu.
+
+### 8. A series you can leave, give up, clear or lose
+- Patch: `0008-Arena-a-series-you-can-leave-give-up-clear-or-lose.patch`
+- Switch: `ARENA_TRAINING`.
+- Files: `scene/arena_series.c` (new, a part of `battle_arena.c`),
+  `scene/battle_arena.c` (hooks and the spawn row), `include/module/arena.h`
+  (`ARENA_LADDER_COUNT`, now 12, shared with the ladder), `text/en.po` (three
+  messages).
+- A Gauntlet is twelve rounds. After a win (`BattleArena_RunRoundResult`) the
+  attendant says "Round n of 12 won! Step into the circle when you are ready."
+  and the series **keeps running**: the stock Yes/No (whose No ended the series) is
+  gone. The player stands outside the circle, facing it, and steps in when ready,
+  so the manager and its heal sit in between. The `BATTLE_ARENA_AFTER_MONSTER_WIN`
+  spawn moved from inside the circle (z 200) to z 240, facing north: inside, the
+  stock flow starts the next fight at once ("Good luck!").
+- Talking to the attendant while `FLAG_MONSTER_BATTLE` is set asks "Round n of 12.
+  Do you want to give up?" (`ArenaSeries_GiveUp`). Yes ends the series
+  (`ArenaSeries_End`: the flag and win count cleared, "You won n battles.", the best
+  streak kept); No says the stock "Good luck!". Not a loss: the losses tally is
+  untouched. With no series running the attendant shows the Solo/Multiplayer menu.
+- Clearing round 12 (`linkTallies[LINK_TALLY_MONSTER_STREAK]` reaches 12) is a win
+  and ends the series with "You cleared the Monster Gauntlet! Congratulations!".
+- A loss ends the series as before (stock loss line, losses tally, the standard
+  spawn) and now restores the party to full HP and PP.
+- The stock "record" write is skipped under this switch
+  (`BattleArena_SaveMonsterBattleResults` returns at once). It writes 16 bytes of
+  the file with its own saving messages into a "current file", which does not exist
+  after a New Game. The tallies live in `gMainRoutineWork.linkTallies` and are saved
+  with the game. Per-tournament stats are possible (the saved struct has unnamed
+  spare bytes) and are on the roadmap.
+- Traps found (also in `GOTCHAS.md`): ending a series before any fight must clear
+  `FLAG_BATTLE_ARENA_PLAYER_AGREED` (which starting one sets) or the link poll
+  reports "The link was disconnected."; a field message with two number blanks
+  shows the first number twice, so "of 12" is in the message text and the code
+  asserts the constant.
+- Not done: the series is not in the save (a load starts a new one); roadmap
+  Phase 1.
+- Port notes: the attendant, trigger and flag names differ in The Lost Age; the
+  spawn row and the circle position need checking there.
 
 ## Dropped on the way
 

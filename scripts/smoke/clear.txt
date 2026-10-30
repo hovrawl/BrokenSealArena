@@ -1,0 +1,60 @@
+# Clear the Gauntlet: win round 1 with the win count poked to 11 mid-battle, so
+# the win is the 12th. gMainRoutineWork 0x02000240 + 0x2a4 + 6 = 0x020004EA.
+include to_solo.txt
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+poke 0x020004EA 2 11
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+shot /tmp/shots/c00.png
+tap A
+wait 150
+shot /tmp/shots/c01.png
+tap A
+wait 150
+shot /tmp/shots/c02.png
+tap A
+wait 150
+shot /tmp/shots/c03.png
+tap A
+wait 150
+shot /tmp/shots/c04.png
+peek 0x020004EA 2
