@@ -274,6 +274,30 @@ to look at when porting.
 - Patch 11 (`0011-...`) removes the coins window from every panel mode (status,
   Djinn, Psynergy); only the old items mode, no longer used, still has it.
 
+### 13. Saving the party
+- Patch: `0013-Arena-save-the-party-from-the-manager-s-menu.patch`
+- Files: `scene/battle_arena.c` (`ArenaMenu_SaveGame`, the manager's fifth
+  entry), `scene/import/battle_arena.s`, `scene/file_screen.c`, `text/en.po`
+  (`MsgArenaSave`, inserted after `MsgArenaItems`; the later `MsgArena*` ids
+  moved up by one, since `IconMenu_Center` wants consecutive label messages).
+- The save is the game's own `Save_ToChosenFile` (file list, overwrite
+  question, "Saving", "Game saved"). A save file holds the whole game state, so
+  base stats, Psynergy, Djinn, items and coins all persist.
+- Before saving, `next`/`entrance` are set to the arena at
+  `BATTLE_ARENA_FROM_FILE_SCREEN` and `FLAG_MONSTER_BATTLE` is cleared, then
+  both are restored. Otherwise a load would enter with the last battle's
+  entrance (`BATTLE_ARENA_AFTER_MONSTER_WIN`) and pay the reward again, or
+  resume the series.
+- Loading: the title's **Battle** option loads a file into the arena (it
+  already did this for the original game); **Continue** works too. A file
+  stamped by another build of the game (every rebuild is one) makes Continue
+  restart at `restartScene`, which New Game now sets to the arena, so it still
+  lands there. Battle ignores the stamp.
+- **New Game** still starts a fresh level-30 party with 1500 coins and does not
+  touch the files.
+- Not done: the CPU series progress and the ladder position are not saved
+  (a saved game starts a new series).
+
 ## Planned
 
 - Save and load the upgraded party.

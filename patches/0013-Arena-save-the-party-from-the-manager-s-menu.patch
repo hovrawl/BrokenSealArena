@@ -1,0 +1,279 @@
+From edebe70d2a405566a3bd440d2d6e7a622cd2b0d1 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 30 Oct 2026 11:55:52 +1100
+Subject: [PATCH] Arena: save the party from the manager's menu
+
+The party manager gets a Save entry (the Save icon, a new MsgArenaSave label)
+that runs the game's own Save_ToChosenFile. The scene and entrance a Continue
+goes to are set to the arena's door for the save, and the series flag cleared,
+then put back, so loading does not replay a battle's reward or resume a series.
+New Game also sets restartScene and restartEntrance to the arena, so Continue
+on a file from another build lands there too. The new label goes in the middle
+of the arena messages, so the ones after it move up by one.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/scene/battle_arena.c        | 31 ++++++++++-
+ games/tbs/src/scene/file_screen.c         |  3 +
+ games/tbs/src/scene/import/battle_arena.s |  1 +
+ games/tbs/text/en.po                      | 68 ++++++++++++-----------
+ 4 files changed, 69 insertions(+), 34 deletions(-)
+
+diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
+index adf496ace6..98dbe6c1ce 100644
+--- a/games/tbs/src/scene/battle_arena.c
++++ b/games/tbs/src/scene/battle_arena.c
+@@ -1083,7 +1083,8 @@ static s32 BattleArena_EnterBattle(void) {
+ const u8 gArenaMenu_AttendantIcons[] = {COMMAND_ICON_FIGHT, COMMAND_ICON_CABLE};
+ const u8 gArenaMenu_TournamentIcons[] = {COMMAND_ICON_BATTLE};
+ const u8 gArenaMenu_ManagerIcons[] = {COMMAND_ICON_STATUS, COMMAND_ICON_DJINN,
+-                                      COMMAND_ICON_PSYNERGY, COMMAND_ICON_ITEM};
++                                      COMMAND_ICON_PSYNERGY, COMMAND_ICON_ITEM,
++                                      COMMAND_ICON_SAVE_QUEST};
+ const u8 gArenaMenu_ShopIcons[] = {COMMAND_ICON_ATTACK, COMMAND_ICON_DEFEND,
+                                    COMMAND_ICON_ITEM};
+ 
+@@ -1123,6 +1124,28 @@ static void ArenaMenu_ShowWin(s32 reward) {
+   Party_RestoreHpPp(1);
+ }
+ 
++/// Saves the party to a file the player chooses, with the game's own Save
++/// command, so the title's Battle (or Continue) brings it back to the arena.
++/// The file is written as if the game stood at the arena's door and no series
++/// were running: the scene and entrance a Continue goes to, and the series flag,
++/// are set for the save and put back after, so loading does not replay the last
++/// battle's reward or resume its series.
++static void ArenaMenu_SaveGame(void) {
++  s32 savedNext = gMainRoutineWork.next;
++  s32 savedEntrance = gMainRoutineWork.entrance;
++  s32 inSeries = Event_GetFlag(FLAG_MONSTER_BATTLE);
++
++  gMainRoutineWork.next = (s32)&SceneId_BattleArena;
++  gMainRoutineWork.entrance = BATTLE_ARENA_FROM_FILE_SCREEN;
++  if (inSeries)
++    GameFlag_Clear(FLAG_MONSTER_BATTLE);
++  Save_ToChosenFile();
++  if (inSeries)
++    GameFlag_Set(FLAG_MONSTER_BATTLE);
++  gMainRoutineWork.next = savedNext;
++  gMainRoutineWork.entrance = savedEntrance;
++}
++
+ /// Talking to ACTOR_LINKED_WINS_TELLER, now the party manager: characters,
+ /// Djinn, Psynergy and the item shops. B leaves; the party is healed on the
+ /// way out, since stats and gear may have changed.
+@@ -1135,9 +1158,13 @@ static s32 BattleArena_PartyManager(s32 actorId) {
+   for (;;) {
+     choice = ArenaMenu_IconChoose(MsgArenaManagerPrompt,
+                                   gArenaMenu_ManagerIcons, MsgArenaCharacters,
+-                                  4);
++                                  5);
+     if (choice < 0)
+       break;
++    if (choice == 4) {
++      ArenaMenu_SaveGame();
++      continue;
++    }
+     if (choice == 3) {
+       choice = ArenaMenu_IconChoose(MsgArenaShopPrompt, gArenaMenu_ShopIcons,
+                                     MsgArenaWeapons, 3);
+diff --git a/games/tbs/src/scene/file_screen.c b/games/tbs/src/scene/file_screen.c
+index 1d3cf5da8f..42c6b0d7ed 100644
+--- a/games/tbs/src/scene/file_screen.c
++++ b/games/tbs/src/scene/file_screen.c
+@@ -534,6 +534,9 @@ menu_top:;
+     Unit_Calculate(GARET);
+     Unit_Calculate(MIA);
+     Unit_Calculate(IVAN);
++    // Where Continue restarts a file saved by another build of the game.
++    gMainRoutineWork.restartScene = (s32)&SceneId_BattleArena;
++    gMainRoutineWork.restartEntrance = BATTLE_ARENA_FROM_FILE_SCREEN;
+     gMainRoutineWork.leaderActorId = 0;
+     GameFlag_Clear(FLAG_KEEP_PARTY_POSITION);
+     GameFlag_Clear(FLAG_MENU_OPEN);
+diff --git a/games/tbs/src/scene/import/battle_arena.s b/games/tbs/src/scene/import/battle_arena.s
+index 862b1f18da..da9b7f764b 100644
+--- a/games/tbs/src/scene/import/battle_arena.s
++++ b/games/tbs/src/scene/import/battle_arena.s
+@@ -41,6 +41,7 @@
+ 	.set import.ArenaMenu_IconChoose, 1
+ 	.set import.ItemPicker_ChooseMember, 1
+ 	.set import.ArenaShop_Run, 1
++	.set import.Save_ToChosenFile, 1
+ 	.set import.WindowSprite_CreateFromResource, 1
+ 	.set import.Sprite_Create, 1
+ 	.set import.Sprite_Destroy, 1
+diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
+index bc3563a919..526cc69286 100644
+--- a/games/tbs/text/en.po
++++ b/games/tbs/text/en.po
+@@ -65054,130 +65054,134 @@ msgctxt "MsgArenaItems"
+ msgid "10734"
+ msgstr "Items"
+ 
+-msgctxt "MsgArenaWeapons"
++msgctxt "MsgArenaSave"
+ msgid "10735"
++msgstr "Save"
++
++msgctxt "MsgArenaWeapons"
++msgid "10736"
+ msgstr "Weapons"
+ 
+ msgctxt "MsgArenaArmor"
+-msgid "10736"
++msgid "10737"
+ msgstr "Armor"
+ 
+ msgctxt "MsgArenaSupplies"
+-msgid "10737"
++msgid "10738"
+ msgstr "Supplies"
+ 
+ msgctxt "MsgArenaNumber"
+-msgid "10738"
++msgid "10739"
+ msgstr "{argument_signed_number}"
+ 
+ msgctxt "MsgArenaName"
+-msgid "10739"
++msgid "10740"
+ msgstr "{argument_actor_name:1}"
+ 
+ msgctxt "MsgArenaCoins"
+-msgid "10740"
++msgid "10741"
+ msgstr "Coins"
+ 
+ msgctxt "MsgArenaKnown"
+-msgid "10741"
++msgid "10742"
+ msgstr "Known"
+ 
+ msgctxt "MsgArenaOwned"
+-msgid "10742"
++msgid "10743"
+ msgstr "Owned"
+ 
+ msgctxt "MsgArenaMax"
+-msgid "10743"
++msgid "10744"
+ msgstr "MAX"
+ 
+ msgctxt "MsgArenaNoCoins"
+-msgid "10744"
++msgid "10745"
+ msgstr "Not enough coins"
+ 
+ msgctxt "MsgArenaNoPsynergyRoom"
+-msgid "10745"
++msgid "10746"
+ msgstr "No room for more Psynergy"
+ 
+ msgctxt "MsgArenaNoDjinnRoom"
+-msgid "10746"
++msgid "10747"
+ msgstr "No room for more Djinn"
+ 
+ msgctxt "MsgArenaStatHp"
+-msgid "10747"
++msgid "10748"
+ msgstr "HP"
+ 
+ msgctxt "MsgArenaStatPp"
+-msgid "10748"
++msgid "10749"
+ msgstr "PP"
+ 
+ msgctxt "MsgArenaStatAttack"
+-msgid "10749"
++msgid "10750"
+ msgstr "Attack"
+ 
+ msgctxt "MsgArenaStatDefense"
+-msgid "10750"
++msgid "10751"
+ msgstr "Defense"
+ 
+ msgctxt "MsgArenaStatAgility"
+-msgid "10751"
++msgid "10752"
+ msgstr "Agility"
+ 
+ msgctxt "MsgArenaStatLuck"
+-msgid "10752"
++msgid "10753"
+ msgstr "Luck"
+ 
+ msgctxt "MsgArenaNone"
+-msgid "10753"
++msgid "10754"
+ msgstr "None"
+ 
+ msgctxt "MsgArenaPage"
+-msgid "10754"
++msgid "10755"
+ msgstr "Page {argument_signed_number}/{argument_signed_number}"
+ 
+ msgctxt "MsgArenaStatUpHp"
+-msgid "10755"
++msgid "10756"
+ msgstr "HP Up"
+ 
+ msgctxt "MsgArenaStatUpPp"
+-msgid "10756"
++msgid "10757"
+ msgstr "PP Up"
+ 
+ msgctxt "MsgArenaStatUpAttack"
+-msgid "10757"
++msgid "10758"
+ msgstr "Attack Up"
+ 
+ msgctxt "MsgArenaStatUpDefense"
+-msgid "10758"
++msgid "10759"
+ msgstr "Defense Up"
+ 
+ msgctxt "MsgArenaStatUpAgility"
+-msgid "10759"
++msgid "10760"
+ msgstr "Agility Up"
+ 
+ msgctxt "MsgArenaStatUpLuck"
+-msgid "10760"
++msgid "10761"
+ msgstr "Luck Up"
+ 
+ msgctxt "MsgArenaStatInfoHp"
+-msgid "10761"
++msgid "10762"
+ msgstr "Raises HP by {argument_signed_number}. Now {argument_signed_number}."
+ 
+ msgctxt "MsgArenaStatInfoPp"
+-msgid "10762"
++msgid "10763"
+ msgstr "Raises PP by {argument_signed_number}. Now {argument_signed_number}."
+ 
+ msgctxt "MsgArenaStatInfoAttack"
+-msgid "10763"
++msgid "10764"
+ msgstr "Raises Attack by {argument_signed_number}. Now {argument_signed_number}."
+ 
+ msgctxt "MsgArenaStatInfoDefense"
+-msgid "10764"
++msgid "10765"
+ msgstr "Raises Defense by {argument_signed_number}. Now {argument_signed_number}."
+ 
+ msgctxt "MsgArenaStatInfoAgility"
+-msgid "10765"
++msgid "10766"
+ msgstr "Raises Agility by {argument_signed_number}. Now {argument_signed_number}."
+ 
+ msgctxt "MsgArenaStatInfoLuck"
+-msgid "10766"
++msgid "10767"
+ msgstr "Raises Luck by {argument_signed_number}. Now {argument_signed_number}."
+-- 
+2.53.0
+
