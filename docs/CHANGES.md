@@ -244,6 +244,29 @@ to look at when porting.
   `0x080b6000` for `tbs-en` (it had 5 KB free). Check slack with the map
   file when adding code to a bank.
 
+### 10. Status panel and the stat counter
+- Patch: `0010-Arena-status-panel-for-Characters-stat-upgrades-as-a-.patch`
+- Files: `shop/shop/item_picker.c`, `scene/battle_arena.c`, `text/en.po`
+  (`MsgArenaStatUp*`, `MsgArenaStatInfo*`, ids 10755 to 10766).
+- Picker mode 3 (`ARENA_PICKER_STATUS`): `ArenaPicker_DrawStatus` repeats the
+  Status screen's top rows (`ItemMenu_DrawMemberStatus` and the portrait from
+  `StatusScreen_ShowMemberStatus`): portrait, class and "Normal" under it,
+  name, level, experience, HP, PP, Attack, Defense, Agility and Luck. It is a
+  copy, not a call, because `ItemMenu_DrawMemberStatus` reads the field menu's
+  work and the shop's work holds the same bytes as something else. No coins
+  window and no item grid in this mode; the Djinn rows are left out. Status
+  conditions are not shown, only "Normal".
+- `ArenaShop_Run` kind 2 sells the six stats: HP (+20), PP (+10), Attack,
+  Defense and Agility (+5), Luck (+1). Each entry uses the icon of the item
+  that raises that stat for good, `<stat> Up` for its name, a price tag, and a
+  description "Raises X by n. Now m." (the two numbers are pushed with
+  `MessageArgument_PushFar` just before the description is drawn). At a stat's
+  cap the price window says MAX and a purchase does nothing. The overlay's list
+  screens and their stat helpers are removed.
+- No up-arrow glyph exists in the message font, so the names say "Up".
+- The Characters picker is mode 3, Djinn 1, Psynergy 2; the counters are
+  Psynergy 0, Djinn 1, Stats 2.
+
 ## Planned
 
 - Save and load the upgraded party.
