@@ -86,6 +86,12 @@
 - `MsgLobbyWonNumberBattle` uses `{plural_suffix}`: zero reads "You won 0 battle."
 - `BattleArena_SaveMonsterBattleResults` writes into the current file with its own
   saving messages; after a New Game there is no current file. It is skipped.
+- Isaac and Garet are created holding a **Machete**, and while it is equipped the battle
+  draws them with their prologue sprites (the weapon is part of the sprite, no
+  overlay). The prologue's end swaps it for an equipped Short Sword
+  (`Party_EndChildhood`). Anything that skips the prologue (our New Game) must do
+  the swap, or the party looks like the tutorial. `FLAG_CHILDHOOD` (class forms) is a
+  separate thing and was not set.
 - C89: a declaration after a `return` (or any statement) is a parse error in this
   compiler; put the early return after the declarations.
 
