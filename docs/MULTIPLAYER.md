@@ -43,6 +43,31 @@ Psynergy, Djinn held and set. Whatever the party manager changes travels with it
 tested.) The Djinn recovery table is the party's `gMainRoutineWork.summonMask`
 block.
 
+## Baseline: the stock link battle is real time and player driven (confirmed)
+
+Read in `battle/battle/turn.c` (`Battle_GatherActions`, `Battle_AppendLinkedActions`):
+
+- Each turn, each console builds **its own party's** actions from the player's command
+  menu (`Battle_BuildUnitActions`).
+- In a link battle (`isLink`) the enemy AI is **not called**: where a normal battle
+  does `Battle_BuildOpponentActions` (which runs `BattleAI_ChooseAction`), a link battle
+  does `Battle_AppendLinkedActions` instead, which **sends this console's actions over
+  the serial link and receives the other player's**. The received actions become the
+  opponent's, with their targets flipped to this console's point of view.
+- The consoles stay in lockstep: the parent sends first and gives the turn its random
+  seed, the child checks both agree on the next random number, and `LinkBattle_SyncTurn`
+  and `LinkBattle_WaitSync` handshake before and after every action. Both consoles
+  compute the same battle.
+
+So the link is the "online" part: if the emulator carries the link cable between two
+players, the game needs no change for real-time play, and the AI is not involved. This
+is the baseline for the rest. The records-plus-AI route below is a **fallback for
+later**, not the plan.
+
+Not observed: the test run reached the battle and showed both parties, but did not
+issue commands on both consoles and watch actions cross. That is the next check; the
+confirmation above is from the code.
+
 ## What was tried
 
 `scripts/smoke/link.c` runs **two ROM instances linked by libmgba's own lockstep
@@ -96,9 +121,13 @@ Result, shown in `build\smoke\link_battle3.png` (not committed):
    - **both consoles must run the hack**: a hacked game's exchange will not match a
      stock one's.
 
-## Recommended route
+## Recommended route (revised)
 
-**Do the offline-record route first.** It reuses most of this and avoids the hard part.
+**Revised after the baseline above: build 4v4 on the real-time link first; the
+offline-record route is a later fallback.** The text below describes the fallback and
+is kept; step 3 (4v4) is now the first thing to do.
+
+**The offline-record route** (fallback) reuses most of this and avoids the hard part.
 
 1. **A party record file.** Export a party as the same bytes the link sends: four
    units (0x154 each) and the recovery table (0x140): about 1.7 KB. That is a small

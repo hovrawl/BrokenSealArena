@@ -79,3 +79,7 @@
   play is a separate step, in increments. The spike (`docs/MULTIPLAYER.md`) showed two
   hack instances link and fight locally, and that 4v4 needs the opponent's Djinn table
   moved out of enemy unit 3.
+- **Multiplayer baseline** (2026-10-31): the stock link battle is real time and player
+  driven (each console sends its own chosen actions over the link; the enemy AI is not
+  used). Online play therefore rests on the emulator carrying the link cable. Records
+  plus an AI opponent is a later fallback, not the plan. Next: investigate 4v4.
