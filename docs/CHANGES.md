@@ -1,11 +1,11 @@
 # Romhack changes against upstream alchemy
 
 This project is a patch series on top of
-[PascalPixel/alchemy](https://github.com/PascalPixel/alchemy), pinned at the
-commit in `UPSTREAM_BASE`. Nothing from upstream is copied here: the whole
-romhack is the `.patch` files in `patches/`, one per commit, plus the notes
-below. That keeps the diff against upstream small and lets us rebase onto a
-newer upstream, or onto The Lost Age (`games/tla`), later.
+[PascalPixel/alchemy](https://github.com/PascalPixel/alchemy), pinned as the
+`alchemy` submodule. Nothing from upstream is copied here: the whole romhack is
+the `.patch` files in `patches/tbs/`, one per commit, plus the notes below. That
+keeps the diff against upstream small and lets us rebase onto a newer upstream, or
+onto The Lost Age (`games/tla`), later. `docs/WORKFLOW.md` explains the model.
 
 Target: **The Broken Seal, English (`tbs-en`)**. Edition-specific work (other
 languages) is not done; the changes below are guarded so they can be turned off.
@@ -18,7 +18,7 @@ languages) is not done; the changes below are guarded so they can be turned off.
 | Build | `powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1` (ROM to `build\tbs-en.gba`) |
 | Edit | work in `~/alchemy` (WSL), branch `arena`, and commit there |
 | Save the work | `scripts\export-patches.ps1`, then commit this repo |
-| Move to newer upstream | in `~/alchemy`: `git fetch origin && git rebase origin/main arena`, fix conflicts, update `UPSTREAM_BASE`, export |
+| Move to newer upstream | `scripts\update-upstream.ps1` (look), then `-Apply`; see `docs/WORKFLOW.md` |
 
 Upstream's `make compare-*` checks no longer pass. They compare against the
 original ROM bytes, and the romhack changes them on purpose.

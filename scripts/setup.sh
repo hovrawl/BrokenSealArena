@@ -1,24 +1,40 @@
 #!/usr/bin/env bash
 # Rebuilds the romhack's working copy from scratch inside WSL:
-#   upstream alchemy at the pinned commit + the patch series in patches/.
-# Usage (from WSL):  bash /mnt/c/Dev/NahFarn/BrokenSealArena/scripts/setup.sh
+#   upstream alchemy at the commit this repo pins (the `alchemy` submodule)
+#   + the patch series in patches/<game>/ applied on a branch.
+# Usage (from WSL):
+#   bash /mnt/c/Dev/NahFarn/BrokenSealArena/scripts/setup.sh [GAME [DEST]]
+# GAME is tbs (default) or tla; DEST defaults to ~/alchemy. Set SKIP_BOOTSTRAP=1
+# to skip building the compilers (about 10 minutes), for checking patches only.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEST="${1:-$HOME/alchemy}"
-BASE="$(head -n1 "$ROOT/UPSTREAM_BASE" | tr -d '[:space:]')"
+GAME="${1:-tbs}"
+DEST="${2:-$HOME/alchemy}"
+BRANCH="arena"
+[ "$GAME" = "tbs" ] || BRANCH="arena-$GAME"
+BASE="$(git -C "$ROOT" ls-files -s alchemy | awk '{print $2}')"
+URL="$(git -C "$ROOT" config -f .gitmodules submodule.alchemy.url)"
 
+if [ -z "$BASE" ]; then
+  echo "The alchemy submodule is not recorded in $ROOT" >&2
+  exit 1
+fi
 if [ -e "$DEST" ]; then
   echo "$DEST already exists; move it away first" >&2
   exit 1
 fi
 
-git clone --recurse-submodules https://github.com/PascalPixel/alchemy.git "$DEST"
+git clone "$URL" "$DEST"
 cd "$DEST"
-git checkout -b arena "$BASE"
+git checkout -b "$BRANCH" "$BASE"
 git submodule update --init --recursive
 git config user.name "${GIT_AUTHOR_NAME:-$(git config --global user.name || echo romhack)}"
 git config user.email "${GIT_AUTHOR_EMAIL:-$(git config --global user.email || echo romhack@localhost)}"
-git am "$ROOT"/patches/*.patch
-make -j"$(nproc)" bootstrap
-echo "Done. Build with: make -j\$(nproc) tbs-en"
+if ls "$ROOT"/patches/"$GAME"/*.patch >/dev/null 2>&1; then
+  git am --3way "$ROOT"/patches/"$GAME"/*.patch
+fi
+if [ -z "${SKIP_BOOTSTRAP:-}" ]; then
+  make -j"$(nproc)" bootstrap
+fi
+echo "Done: $GAME patches on $BRANCH at $DEST. Build with: make -j\$(nproc) $GAME-en"

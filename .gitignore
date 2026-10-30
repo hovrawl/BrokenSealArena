@@ -1,6 +1,3 @@
 # Your own cartridge dump and build output are never committed.
 rom/
 build/
-# The working copy of the upstream decomp lives in WSL (~/alchemy); this
-# reference clone is only a convenience.
-alchemy/
