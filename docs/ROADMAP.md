@@ -77,7 +77,7 @@ finished screens, a review checklist and a spec template.
 | Item | Size | Notes |
 |---|---|---|
 | Agree `docs/UI.md` | S | Review the intents and rules; fix anything that does not match how you want the game to feel. This is the document that saves back-and-forth. |
-| Spec the remaining interfaces | S | One filled-in spec (UI.md section 7) for each row of UI.md section 8: give up (Yes/No), after a win, after a loss, tournament choice, progress display. Review the specs, not code. |
+| Spec the remaining interfaces | S | One filled-in spec (UI.md section 7) for each row of UI.md section 8: give up (Yes/No), after a win, after a loss, tournament choice, progress display. Review the specs, not code. Drafted in `docs/UI-SPECS.md` (S1 to S6, with six questions at the end). |
 | Build them | M | Mostly reuse: the stock yes/no, the attendant speaking a message, the icon row. New messages go at the end of `en.po`. |
 | Smoke-sheet every state | S | A script per interface that reaches every state, with a stock screen in the sheet to compare against. |
 | Review in the emulator | S | Your pass, on pictures that have already been through the checklist. |
