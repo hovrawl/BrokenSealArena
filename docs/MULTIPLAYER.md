@@ -262,6 +262,34 @@ the problem to whoever is fourth.
 - Test of the diagnosis, worth doing first: a 4v3 (four of ours, three of theirs) should fit
   (7 x 64 + 28 = 476) and Ivan should be stable. That is the stock limit plus one.
 
+**What a sprite costs, and the shrink test (2026-10-31).** Read from the ROM
+(`gBattleSprites` rows and `gSprite_AnimationMetadata`, width x height / 64 bytes):
+
+| Frame | Blocks | Who |
+|---|---|---|
+| 64 x 64 | 64 | the four characters (resources 300 to 303, both sides) and **117 of the 172 enemy classes**, every large monster and boss |
+| 32 x 32 | 16 | the other 55 classes (43 of them the "small" ones that share a slot) |
+
+- A battle has six enemy sprite slots; a large enemy takes two, so a stock enemy side costs
+  at most 3 x 64 = 192 blocks (or 6 x 16 = 96 small). With four characters (256) the worst
+  stock battle is about 450 blocks plus the UI's 30, which fits. That is why "more than four
+  enemies" is fine: the budget is blocks, not heads. Four a side is 512 before any UI.
+- **Weapon overlays cost nothing extra.** The body, weapon overlay and shadow are layers of one
+  `Sprite` that are composited into the unit's own frame; the table shows exactly one 64-block
+  entry per unit (plus shared entries 8, 9, 10 and 93 for markers and shadows). Removing the
+  opponents' overlays earlier did not change the flicker, which agrees.
+- **The shrink test.** A throwaway change gave only the fourth opponent a 32 x 32 sprite
+  (resource 453, a Bat). The block table then showed entries 0 to 6 at 64, entry 7 at 16, and
+  **entry 3, the party's Ivan, resident again** with 18 blocks free. So the budget really is
+  the cause. (Reverted; the visual is not a fix.)
+- **Implication for a real fix.** The opponents are the ones to make cheap: they are drawn
+  at 1.3 x scale anyway (enemies are), and a 32 x 32 frame for each of the four opponents
+  costs 4 x 16 = 64 blocks instead of 256, leaving about 190 free. That needs 32 x 32
+  versions of the four characters' battle pictures (new resources and metadata rows, made
+  by downscaling each frame) and either no weapon overlay for opponents or downscaled weapon
+  pictures, since overlays are composited into the frame at its size. A 48 x 48 frame (36
+  blocks) is the middle road.
+
 **Control, to prove the offset is needed:** the same four-a-side build with only the table
 put back in unit 3 shows **three** opposing characters, and the intro reads "EnemyMia
 appeared! (blank) appeared!": the table overwrote the fourth unit's record, so its name is
