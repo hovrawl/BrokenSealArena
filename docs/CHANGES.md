@@ -215,6 +215,35 @@ to look at when porting.
 - Imports added (stubs existed in `FIELD.S`): `Sprite_Create`,
   `Sprite_Destroy`, `Render_ApplyProjectedPlacement`.
 
+### 9. Psynergy and Djinn counters like the Buy counter
+- Patch: `0009-Arena-Psynergy-and-Djinn-counters-built-like-the-shops.patch`
+- Files: `shop/shop/item_picker.c` (`ArenaShop_Run` and helpers),
+  `gamepak/far_call/SHOP.S`, `system/overlay/imports.inc`,
+  `include/module/shop/shop.h`, `scene/battle_arena.c`,
+  `scene/import/battle_arena.s`, `games/tbs/main.ld`.
+- `ArenaShop_Run(kind, unitId)` follows `Shop_SelectBuy`: the stock row
+  (`stockItemIds`, seven a page, page arrows, a price tag from
+  `Shop_CreatePriceSprite` under each entry), the hand cursor
+  (`MenuCursor_Place`), the name/price window (as `Shop_DrawItemPrice`), the
+  coins window (`Shop_DrawMoney`) and the description in the bottom window
+  (`Shop_DrawMessage`). The prompt is `MsgWhatWouldYouLike`. Left/Right move by
+  one with wrap, Up/Down by a page, A buys, B leaves.
+- Descriptions: `MsgAbilityDescription` plus the ability id; a Djinni's is its
+  ability (`ABILITY_DJINNI_FIRST` plus its number). Psynergy prices come from
+  the PP cost (150 + 50 each); Djinn cost 500.
+- Psynergy entries are ability icons, the chosen one swelling as in the shops;
+  Djinn entries are the element's animated figure (see patch 8), the one under
+  the hand drawn at full size.
+- The overlay's list-grid screens and their shop data are removed. The Stats
+  screen stays. The manager now calls `ArenaShop_Run` after the character strip.
+- The shop item sub-menu uses the Attack icon for Weapons; the Equip icon did
+  not draw in the arena.
+- **Bank size:** the shop code is in bank `rom_main_06`, which had 114 bytes
+  to spare and overflowed by about 2 KB (`cannot move location counter
+  backwards` at `main.ld:72`). Bank 07's start moved from `0x080b5000` to
+  `0x080b6000` for `tbs-en` (it had 5 KB free). Check slack with the map
+  file when adding code to a bank.
+
 ## Planned
 
 - Save and load the upgraded party.
