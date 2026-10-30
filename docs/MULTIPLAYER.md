@@ -64,9 +64,18 @@ players, the game needs no change for real-time play, and the AI is not involved
 is the baseline for the rest. The records-plus-AI route below is a **fallback for
 later**, not the plan.
 
-Not observed: the test run reached the battle and showed both parties, but did not
-issue commands on both consoles and watch actions cross. That is the next check; the
-confirmation above is from the code.
+**Observed too (2026-10-31, `link_turns_*.txt`, `link_psy_*.txt`).** Both consoles
+issued real commands and the actions crossed the link:
+
+- An Attack turn: one console shows "Mia attacks! EnemyGaret takes 34 damage!" then
+  "EnemyGaret attacks! Garet takes 30 damage!", the other player's Garet answering.
+- A **Psynergy** turn (command row: Fight, then Right to Psynergy, A, pick, A, target):
+  Isaac casts Ragnarok (PP 7). One console shows "Isaac casts Ragnarok! EnemyGaret takes
+  79 damage!!!" with Isaac's PP 84 to 77; the other shows "EnemyIsaac casts Ragnarok!
+  Garet takes 79 damage!!!" with Garet 300 to 221. **Both agree on the 79**, so the shared
+  random seed and the lockstep hold for Psynergy as well.
+- The command layout, for scripts: the top row is Fight, Flee, Item; Fight opens
+  Attack, Psynergy, Item, Defend. (Djinn and Summon rows appear once Djinn are set.)
 
 ## What was tried
 
@@ -86,6 +95,36 @@ Result, shown in `build\smoke\link_battle3.png` (not committed):
 - both step into the circle and **a real linked battle starts**: each console shows
   the other's party as "EnemyIsaac", with three a side (Isaac, Garet and Mia).
   **Ivan is left out on both sides, the stock three-a-side limit.**
+
+## What the recovery tables are
+
+In a battle, a Djinni can be **set** (giving its character stats), then spent: used for
+its attack it goes to **standby**, and a standby Djinni is then used for a **Summon** or
+**recovers** over a number of turns and is set again. The game tracks this in a
+**Djinn recovery table** for each side (`struct DjinnRecoveryTable`, 268 bytes):
+
+- `summonMask` (4 bytes): which Summons are available this turn;
+- one more word (the party's table has the coins here, "not named");
+- a **list of up to 64 entries** plus a count. Each entry (4 bytes) is one Djinni on
+  standby or recovering: its element, which Djinni, **which unit it belongs to**, and the
+  turns until it is set again.
+
+It is what the Djinn menu in battle reads ("which Djinn can I use, which are
+recovering"), what Summon availability is computed from, what ticks down at the end of a
+turn (`DjinnRecovery_CountDown`), and what battle setup fills when the Djinn a unit has
+set are put on the field. The party's own table is a block inside the saved game state
+(`gMainRoutineWork`, from byte 12, which is why the first word is `summonMask` and the
+second is the coins: the table overlays the start of that struct).
+
+**In a link battle each console needs the other's table too**, because the opponent's
+Djinn are theirs to use and their recovery must be shown and ticked the same on both
+screens. So after the units, each console sends its table, **with each entry's owner
+renumbered** to the number the other console gives that unit (0x80 plus its place) and the
+entries of units not sent removed (`BattleArena_SendPartyRecords`). The receiver stores it
+as the "enemy side's" table. **There is no separate place for it: it is written over a
+battle unit record** (`Djinn_GetRecoveryTable(1)` returns `Unit_Get(FIRST_ENEMY_UNIT + 3)`),
+and the stock game can only do that because a link battle looks at the opponent's first
+three units and never at the fourth.
 
 ## Answers to the four questions
 
@@ -115,11 +154,42 @@ Result, shown in `build\smoke\link_battle3.png` (not committed):
      `Djinn_GetRecoveryTable` and its far-call users;
    - each packet is 340 bytes and the receive writes 8 bytes into the next unit
      (the next packet rewrites it), so four units fit, with the table moved;
-   - the battle's sprite slots and turn order for four enemies, which I did not read:
-     the enemy side normally has up to six sprites (`BattleSprite_IsSmall`), and
-     characters are not "small", so four may not fit beside any other sprite.
+   - **sprite slots are not a problem** (corrects an earlier guess): the six enemy
+     *sprite slots* are for monsters. A link opponent is a character (`classId` set), drawn
+     by `BATTLE_CHARACTER(...)` in `placement.c`, and `BattlePlacement_LayoutEnemies` places
+     any count (it has a case for four or fewer).
    - **both consoles must run the hack**: a hacked game's exchange will not match a
      stock one's.
+
+## 4v4 prototype (2026-10-31, branch `link4` in `~/alchemy`, not exported)
+
+The table can be **offset**, and four a side works. Behind a new switch `ARENA_LINK4`
+(`arena_config.h`, default on), the changes are small (24 lines in four upstream files):
+
+| File | Change |
+|---|---|
+| `battle/battle_internal.h` | `LINK_PARTY_SIZE` 3 to 4 (the battle's party limit in `BattleParty_PrepareMembers`, and the number of opponent units `BattleEnemy_List` scans) |
+| `scene/battle_arena.c` | `LOBBY_UNIT_RECORD_COUNT` 3 to 4; the receive loop (`slot > 2`) and the send padding loop (`i <= 2`) use it; `BattleArena_PartyContains` allows four |
+| `game/game/units.c` | `Djinn_GetRecoveryTable(1)` returns unit `FIRST_ENEMY_UNIT + 4` instead of `+ 3` |
+
+The battle holds six enemy units (`ENEMY_UNITS_SIZE` is 0x7c8, six of 332), so units 0x80
+to 0x83 are the four opponents and the table takes 0x84, with room to spare (the table's
+320 bytes fit in one 332-byte unit).
+
+**Result** (`link_turns_*.txt`, two consoles): the HUD shows Isaac, Garet, Mia and Ivan;
+four characters stand on the opposing side; the intro names them ("EnemyGaret appeared!
+EnemyMia appeared!"); and turns run, with mirror lines agreeing ("EnemyIvan attacks! Garet
+takes 13 damage!" and "Ivan attacks! EnemyGaret takes 13 damage!").
+
+**Control, to prove the offset is needed:** the same four-a-side build with only the table
+put back in unit 3 shows **three** opposing characters, and the intro reads "EnemyMia
+appeared! (blank) appeared!": the table overwrote the fourth unit's record, so its name is
+empty and its side is not set. Moving the table to unit 4 fixes it.
+
+**Not yet checked:** a battle where Djinn are actually set and used (the tables in the
+test were empty, so the renumbering and the Djinn menu in a 4v4 link are untested);
+a 4v4 through to a result; saving and the series interacting with a linked battle;
+and a stock (3v3) ROM against a hacked one (they will not link).
 
 ## Recommended route (revised)
 
@@ -151,8 +221,11 @@ is kept; step 3 (4v4) is now the first thing to do.
 
 - Drive the linked battle through to a result in the driver (mash A on both).
 - Change a stat or Djinn on one console and confirm it on the other (question 3).
-- Prototype the 4-unit exchange with the recovery table moved, and run it in the
-  driver; read the sprite-slot and turn code for four opponents first.
+- **Test 4v4 with Djinn set and used** (set Djinn in the manager on both consoles,
+  then a Djinn command, standby, a Summon, and recovery over turns), since that is
+  exactly what the moved table carries.
+- Turn the `link4` prototype into a patch (it is a working branch only; the durable
+  record of the work is this document and the diff summary above).
 - Decide the record's home (save, code, file) and the virtual opponent's AI scope.
 - The Lost Age: confirm its record is the same shape (the unit struct's `enemyId` is
   "read as the unit's id" there, per the source comment), and decide on party switching.
