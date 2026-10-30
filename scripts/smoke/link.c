@@ -42,7 +42,7 @@
 #define MAX_EVENTS 20000
 #define BARRIER_SLACK 2
 
-enum EvType { EV_KEYS, EV_SHOT, EV_PEEK, EV_POKE };
+enum EvType { EV_KEYS, EV_SHOT, EV_PEEK, EV_POKE, EV_PEEKP };
 
 struct Event {
   int frame;
@@ -168,6 +168,12 @@ static void compile(struct Player *p, const char *path, const char *dir, int *fr
       n = 0;
       sscanf(line, "%*s %x %d", &a, &n);
       addEvent(p, *frame, EV_PEEK, 0, NULL, a, n, 0);
+    } else if (!strcmp(cmd, "peekp")) {
+      /* peekp PTRADDR OFFSET SIZE: read the pointer at PTRADDR, then SIZE bytes at pointer+OFFSET */
+      unsigned off = 0;
+      n = 1;
+      sscanf(line, "%*s %x %x %d", &a, &off, &n);
+      addEvent(p, *frame, EV_PEEKP, 0, NULL, a, n, off);
     } else if (!strcmp(cmd, "poke")) {
       b = 0;
       sscanf(line, "%*s %x %d %u", &a, &n, &b);
@@ -245,6 +251,23 @@ static void applyEvents(struct Player *p, int frame) {
       fflush(stdout);
       pthread_mutex_unlock(&printLock);
       break;
+    case EV_PEEKP: {
+      uint32_t base = p->core->busRead32(p->core, e->addr);
+      uint32_t at = base + e->value;
+      pthread_mutex_lock(&printLock);
+      if (e->size == 4)
+        printf("P%d f%d +%x = %08x: %u\n", p->id, frame, e->value, at,
+               p->core->busRead32(p->core, at));
+      else if (e->size == 2)
+        printf("P%d f%d +%x = %08x: %u\n", p->id, frame, e->value, at,
+               p->core->busRead16(p->core, at));
+      else
+        printf("P%d f%d +%x = %08x: %u\n", p->id, frame, e->value, at,
+               p->core->busRead8(p->core, at));
+      fflush(stdout);
+      pthread_mutex_unlock(&printLock);
+      break;
+    }
     case EV_POKE:
       if (e->size == 4)
         p->core->busWrite32(p->core, e->addr, e->value);

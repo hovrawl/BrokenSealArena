@@ -181,14 +181,33 @@ four characters stand on the opposing side; the intro names them ("EnemyGaret ap
 EnemyMia appeared!"); and turns run, with mirror lines agreeing ("EnemyIvan attacks! Garet
 takes 13 damage!" and "Ivan attacks! EnemyGaret takes 13 damage!").
 
+**Correction (same day): the first screenshots showed 4v3.** I called it 4v4 from the
+pictures, and the data was right but the picture was not. Read from memory on both
+consoles (`peekp`, the opponent units at `gEnemyUnits`): units 0x80 to 0x83 are Isaac,
+Garet, Mia, Ivan, all side 2 with HP 287, 300, 220, 188, and unit 0x84 is the table
+(side 0). So it was **four opponents, but only three drawn**: the stock enemy layout
+spaces characters 38 pixels apart from z 45, which puts a fourth at z -69, off the end of
+the line. Fixed in `battle/battle/arena_link.c`: with four link opponents they stand where
+the party's four stand, mirrored (x -80, z 48, 16, -16, -48). After the fix all four are
+visible on both consoles (`link_view_*.txt`).
+
 **Control, to prove the offset is needed:** the same four-a-side build with only the table
 put back in unit 3 shows **three** opposing characters, and the intro reads "EnemyMia
 appeared! (blank) appeared!": the table overwrote the fourth unit's record, so its name is
 empty and its side is not set. Moving the table to unit 4 fixes it.
 
-**Not yet checked:** a battle where Djinn are actually set and used (the tables in the
-test were empty, so the renumbering and the Djinn menu in a 4v4 link are untested);
-a 4v4 through to a result; saving and the series interacting with a linked battle;
+**Djinn in a 4v4 link (`link_djinn_*.txt`, `link_dj4_*.txt`).** Both consoles bought a
+Djinni (Flint) for Isaac at the manager and linked. In the command row, Fight gives Attack,
+Psynergy, **Djinn**, Item, Defend. Isaac set Flint and used it: the other console showed
+"EnemyIsaac unleashes Flint! Garet takes 69 damage!!!" and the casting console "Isaac
+unleashes Flint! EnemyGaret takes 69 damage!!!" (both 69). The tables crossed through the
+moved slot: after the turn the casting console's own table count was 1 and the other's
+**opponent table, in unit 0x84, read 1 as well** (and 0 on the console that did not cast).
+So the table sits and updates correctly in the fifth enemy unit.
+
+**Not yet checked:** a Djinni **recovering over several turns and being set again**, and
+a Summon from standby Djinn (one turn showed the table fill, not the countdown); a 4v4
+through to a result; saving and the series interacting with a linked battle;
 and a stock (3v3) ROM against a hacked one (they will not link).
 
 ## Recommended route (revised)

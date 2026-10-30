@@ -1,0 +1,52 @@
+# Both consoles choose Multiplayer at the attendant (the first talk makes the
+# request), then talk to her again: with the partner heard she asks whether to accept
+# the opponent's request. Yes arranges the linked battle; then step into the circle.
+include to_lobby.txt
+press U 40
+press L 44
+press U 60
+press L 10
+press U 10
+wait 30
+tap A
+wait 150
+tap R
+wait 20
+tap A
+wait 200
+tap A
+wait 200
+shot /tmp/shots/p1_a.png
+wait 200
+tap A
+wait 150
+shot /tmp/shots/p1_b.png
+tap A
+wait 150
+shot /tmp/shots/p1_c.png
+tap A
+wait 150
+shot /tmp/shots/p1_d.png
+tap A
+wait 150
+shot /tmp/shots/p1_e.png
+tap A
+wait 100
+shot /tmp/shots/p1_f.png
+tap A
+wait 100
+tap A
+wait 100
+press R 40
+press U 30
+press R 14
+wait 330
+shot /tmp/shots/p1_v1.png
+wait 60
+shot /tmp/shots/p1_v2.png
+tap A
+wait 90
+shot /tmp/shots/p1_v3.png
+tap A
+wait 90
+shot /tmp/shots/p1_v4.png
