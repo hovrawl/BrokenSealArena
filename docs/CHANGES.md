@@ -361,7 +361,9 @@ Each is one layer, in order; each builds on its own.
 - The first training menu was a full-screen canvas-text window with its own list
   screens, then paged icon grids. They were replaced by the shop-style counters
   in layer 5 once it was clear the shops are the model. The original thirteen
-  chronological patches are kept on the branch `arena-chrono` in `~/alchemy`.
+  chronological patches are in this repo's history: `patches/tbs/` at commit
+  `01a3234`, the one before the re-slice (the branch that held them in `~/alchemy`
+  has been deleted).
 
 ## Planned
 

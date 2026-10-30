@@ -1,7 +1,7 @@
 # Project state (update when it changes)
 
 As of the 7-patch layered series on upstream `0033cb64ef` (re-sliced from the
-original 13 chronological patches, which are the branch `arena-chrono`; our code
+original 13 chronological patches, kept in this repo's history at commit `01a3234`; our code
 now lives in our own files, see `docs/CHANGES.md`):
 
 **Built and smoke-tested:** New Game boots into the arena (level 30 Isaac, Garet,

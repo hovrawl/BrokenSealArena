@@ -36,8 +36,9 @@
   in `battle_arena.c`, `file_screen.c`, `formation.c`, `save.c`,
   `settings_menu.c`, `run.c`), the import and far-call table rows, one row each
   in `objects.tsv`, the bank start in `main.ld`, and `en.po`.
-  The layered re-slice is done: `arena` is the seven-layer series (the old
-  chronological one is `arena-chrono`).
+  The layered re-slice is done: `arena` is the layered series (the old
+  chronological one is `patches/tbs/` at commit `01a3234` in this repo; the spike
+  branches in `~/alchemy` are deleted and their work is in `arena`).
 - **Saves keep the tournament and rung; a series survives a break** (user,
   2026-10-30). Between rounds the player is never forced into the next fight:
   they can leave to heal, shop and upgrade and approach the gate again to
