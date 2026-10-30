@@ -45,6 +45,30 @@ a `docs/CHANGES.md` entry that includes port notes.
 
 ## Moving to newer upstream
 
+Upstream moves only when we choose. Try it first, with nothing real touched:
+
+```powershell
+scripts\try-upstream.ps1                  # fetch, trial-rebase, build, smoke; back on arena after
+scripts\try-upstream.ps1 -Target REF      # any ref ~/alchemy knows
+```
+
+It rebases a copy of `arena` onto the target on a scratch branch (`arena-trial`),
+builds it, and runs `attendant`, `manager` and `win` (look at
+`build\smoke\trial_*.png`). It reports which of our edits to upstream files
+overlap upstream's changes, and on failure says which it is:
+
+- **Rebase conflict** (exit 3): the files, with the upstream commits that touched
+  them. Nothing is changed.
+- **Our patches break the build** (exit 4): the compiler and linker errors, and for
+  each name in them the upstream commits that changed it (`git log -S`), so a rename
+  shows as a commit. Upstream alone builds.
+- **Upstream itself does not build** (exit 5): not our fault; wait or pin earlier.
+
+The report is also in `~/try-upstream-report.txt` (WSL), the build log in
+`~/try-upstream-build.log`. A good trial is adopted with the commands below.
+`scripts\check-submodule.ps1` runs first and fails if `alchemy/` is not exactly the
+pinned commit.
+
 ```powershell
 scripts\update-upstream.ps1            # new upstream commits, files both sides touch
 scripts\update-upstream.ps1 -Apply     # rebase ~/alchemy's arena branch onto them

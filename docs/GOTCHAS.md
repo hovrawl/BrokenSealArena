@@ -4,6 +4,10 @@
 
 - `make ...; echo rc=$?` through `wsl` printed 0 on a failed build. Check the log
   for `***` and that `out/tbs-en/tbs-en.gba` has a fresh timestamp.
+- After switching `~/alchemy` to a tree with different source files, `make` can
+  stop with "No rule to make target ...c, needed by out/tbs-en/deps.mk": the
+  generated `out/tbs-en/deps.mk` and `objects.mk` name the last tree's sources.
+  Delete both (make rebuilds them). `try-upstream.sh` does this before each build.
 - The whole build is in WSL's own disk (`~/alchemy`). Cloning or building under
   `/mnt/c` is slow and risks CRLF and file-mode problems.
 - `build.ps1` cannot overwrite `build\tbs-en.gba` while an emulator has it open;
