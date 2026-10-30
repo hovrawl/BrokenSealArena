@@ -274,48 +274,35 @@ to look at when porting.
 - Patch 11 (`0011-...`) removes the coins window from every panel mode (status,
   Djinn, Psynergy); only the old items mode, no longer used, still has it.
 
-### 13. Saving the party
-- Patch: `0013-Arena-save-the-party-from-the-manager-s-menu.patch`
-- Files: `scene/battle_arena.c` (`ArenaMenu_SaveGame`, the manager's fifth
-  entry), `scene/import/battle_arena.s`, `scene/file_screen.c`, `text/en.po`
-  (`MsgArenaSave`, inserted after `MsgArenaItems`; the later `MsgArena*` ids
-  moved up by one, since `IconMenu_Center` wants consecutive label messages).
-- The save is the game's own `Save_ToChosenFile` (file list, overwrite
-  question, "Saving", "Game saved"). A save file holds the whole game state, so
-  base stats, Psynergy, Djinn, items and coins all persist.
-- Before saving, `next`/`entrance` are set to the arena at
-  `BATTLE_ARENA_FROM_FILE_SCREEN` and `FLAG_MONSTER_BATTLE` is cleared, then
-  both are restored. Otherwise a load would enter with the last battle's
-  entrance (`BATTLE_ARENA_AFTER_MONSTER_WIN`) and pay the reward again, or
-  resume the series.
-- Loading: the title's **Battle** option loads a file into the arena (it
-  already did this for the original game); **Continue** works too. A file
-  stamped by another build of the game (every rebuild is one) makes Continue
-  restart at `restartScene`, which New Game now sets to the arena, so it still
-  lands there. Battle ignores the stamp.
-- **New Game** still starts a fresh level-30 party with 1500 coins and does not
-  touch the files.
-- Not done: the CPU series progress and the ladder position are not saved
-  (a saved game starts a new series).
-
-### 14. The save clerk
-- Patch: `0014-Arena-saving-moves-to-the-man-by-the-front-door.patch`
-- Files: `scene/battle_arena.c`, `text/en.po`.
-- Patch 13 put Save in the manager's menu as a fifth icon. With five icons the
-  prompt's message window opened but showed no text (likely the icons and the
-  message text compete for the same VRAM cache slots; four icons were fine).
-  The manager is back to four, and `MsgArenaSave` is removed (later `MsgArena*`
-  ids renumbered back down).
-- `BattleArena_SaveClerk` replaces the talk trigger of `ACTOR_DEBUG_HELPER`, the
-  man at (256, 384), the south end of the room (the debug parameter menu there
-  is no longer reachable). He asks `MsgArenaSavePrompt` with the Save icon
-  (`MsgArenaSaveYes`) and the No icon (`MsgArenaSaveNo`), and runs
-  `ArenaMenu_SaveGame` on Save.
-- Lesson for later menus: keep an icon row to four, or check that the prompt
-  still draws.
-- The title screen's Battle option is absent in this build's menu; New Game
-  starts the arena and Continue loads a save, which is the intended flow.
-
+### 13. Saving through the Pause menu
+- Patch: `0013-Arena-saving-through-the-Pause-menu.patch`
+- Switch: `ARENA_PAUSE_MENU` (defined at the top of each file below; set to 0 to
+  restore the original arena, where the Pause menu is unavailable).
+- Files: `field/field_sequence/run.c`, `window/window/settings_menu.c`,
+  `window/screens/save.c`, `scene/file_screen.c`.
+- The Start (Pause) menu already has Save your quest, Sleep and Change
+  settings. Two things shut it in the arena: the field answers
+  `MsgFieldPauseUnavailable` when `FLAG_IN_BATTLE_ARENA` is set (`run.c`), and
+  `PauseMenu_Open`/`PauseMenu_Choose` show only Change settings under that flag
+  (`settings_menu.c`). Both are bypassed.
+- Save is the game's own `Save_ToChosenFile` (file list, overwrite question).
+  A save holds the whole game state, so base stats, Psynergy, Djinn, items and
+  coins persist.
+- In the arena `Save_ToChosenFile` sets `next`/`entrance` to the arena at
+  `BATTLE_ARENA_FROM_FILE_SCREEN` and clears `FLAG_MONSTER_BATTLE` for the
+  write, then puts both back. Without it a load enters with the last
+  battle's entrance (`BATTLE_ARENA_AFTER_MONSTER_WIN`) and pays its reward
+  again, or resumes the series.
+- Loading: the title's Continue. New Game sets `restartScene` and
+  `restartEntrance` to the arena, so Continue on a file from another build of
+  the ROM (every rebuild is one) lands in the arena instead of at a Sanctum.
+  There is no Battle option in this build's flow; New Game starts the arena.
+- Not saved: the Monster Gauntlet rung, so a loaded game starts a new series.
+- History: an earlier attempt put Save in the party manager's menu. A fifth
+  icon made the prompt's message window open without its text (icons and
+  message text appear to compete for the same VRAM cache slots; four icons were
+  fine), and a second attempt gave it a person to talk to; both were dropped
+  for the Pause menu. Keep icon rows to four.
 ## Planned
 
 - Save and load the upgraded party.
