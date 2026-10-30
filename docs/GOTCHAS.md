@@ -68,3 +68,15 @@
 - A stray A press beside a person starts their talk (or opens the field menu).
   Step with `tap A`, `shot`, and decide from the picture.
 - Auto-battle flag poking (`0x16a`) did not win fights; mashing A does.
+
+## Layout of upstream modules
+
+- Some upstream objects are unity builds: `shop/shop.c` includes the files under
+  `shop/shop/` ("Part of shop.c"), which share statics and `shop_internal.h`.
+  New code for such a module goes in a new part file included from the parent,
+  not in a new object. Check for "Part of ..." at the top of a file first.
+- Scene enums such as `ACTOR_ATTENDANT` are defined inside the scene's `.c`, so
+  a second file cannot see them: pass the value in, or move the enum to a header.
+- Shell variables inside `wsl -- bash -lc '...'` called from Git Bash were
+  expanded wrongly (a `git diff $B` came out reversed). Use literal values, or a
+  script file.

@@ -15,3 +15,14 @@
 - **No Battle option on the title**: New Game starts the arena, Continue loads.
 - **Headless testing on libmgba** because the installed mGBA 0.10.5 has no
   `--script` flag or CLI debugger.
+- **Our code in our own files, upstream files only get hooks.** Spiked on branch
+  `spike-newfile` of `~/alchemy` (two moves, both built and smoke-tested):
+  `scene/arena_menu.c` (a new object in the 3cb overlay: one row in
+  `objects.tsv`, a header, and ids passed in as parameters) and
+  `shop/arena_shop.c` (a part file; `shop.c` includes it with one line, and
+  `item_picker.c` is byte-identical to upstream again). Upstream's footprint in
+  `battle_arena.c` fell from 134 lines to 46. Rule of thumb: a new object where
+  the code is self-contained; where the module is a unity build (`shop.c` and
+  its `shop/*.c` parts) add a part file; the hooks inside upstream functions
+  stay as short edits that call into our code. See `docs/WORKFLOW.md` for the
+  trial run that checks a new upstream.
