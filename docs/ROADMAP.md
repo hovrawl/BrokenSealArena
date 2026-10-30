@@ -299,9 +299,9 @@ above.
   minutes and names the commit that broke us.
 - **CI:** the build needs the original ROM, which cannot be in the repo, so hosted
   CI cannot build it. The local trial run is the substitute.
-- **Housekeeping:** delete the leftover branches in `~/alchemy` (`spike-newfile`,
-  `arena-trial`); keep `arena-chrono` until PR #1 is merged and has been used for a
-  while.
+- **Housekeeping:** done (2026-10-31): the merged branches are deleted here and on the
+  remote, and the experiment branches in `~/alchemy` too (`arena` and `main` are
+  what is left; `arena-trial` is recreated by each `try-upstream` run).
 
 ## Still open
 
