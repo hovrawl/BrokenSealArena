@@ -1,0 +1,16 @@
+# Prefix: New Game, step through the greeter, walk to the manager (the man at the
+# right counter) and talk to him. Ends with his icon menu open.
+wait 900
+tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 60
+press U 80
+press R 50
+press R 8
+tap A
+wait 150

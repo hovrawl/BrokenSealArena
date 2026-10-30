@@ -37,6 +37,8 @@ a C compiler are already there for the build).
 | `wait N` | run N frames |
 | `press KEYS N` | hold KEYS for N frames, then release |
 | `tap KEYS` | press for 4 frames, then 20 frames of nothing |
+| `mash KEYS N` | tap N times (steps through dialogue and battle menus) |
+| `include FILE` | run another script from this folder first |
 | `shot /tmp/shots/NAME.png` | save the screen, 240 by 160 scaled by 3 |
 | `peek HEXADDR N` | print N (1, 2 or 4) bytes at an address |
 | `poke HEXADDR N VALUE` | write VALUE (decimal) as N bytes |
@@ -47,11 +49,22 @@ Combine them: `press AD 3`.
 
 ## Scripts here
 
-- `boot.txt`: logos, file screen, New Game, with a shot every 150 frames
-  (for finding when things appear).
-- `pause.txt`: New Game, step through the greeter, open the Pause menu.
-- `save.txt`: the same, then Save your quest to the first file.
+Prefixes (use them with `include`):
+- `to_lobby.txt`: New Game and the greeter's lines; ends with control of Isaac.
+- `to_manager.txt`: walk to the party manager (right counter) and talk to him.
+- `to_solo.txt`: talk to the attendant (left counter), choose Solo and the
+  Monster Gauntlet.
 
+Tests (each ends in shots; `build\smoke\shots\sheet.png` shows them all):
+- `attendant.txt`: Solo/Multiplayer, tournaments, her last line.
+- `manager.txt`: Characters: status panel, the stat counter, a purchase.
+- `djinn.txt`, `psynergy.txt`: picker panel, counter, a purchase, paging.
+- `items.txt`: the shop choice and the real Xian shop.
+- `battle.txt`: walk into the circle; the first team appears.
+- `win.txt`: fight the Gauntlet by mashing A; shows each step and the
+  "Victory! You won 200 coins." message.
+- `pause.txt`, `save.txt`: the Pause menu and Save your quest.
+- `boot.txt`, `walk.txt`: calibration runs.
 ## Tips
 
 - New Game starts a fresh arena with the greeter talking at once; each `tap A`

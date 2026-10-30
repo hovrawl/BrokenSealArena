@@ -1,0 +1,11 @@
+# Prefix: New Game and step through the greeter's lines; ends in control of Isaac
+# at the arena's door.
+wait 900
+tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 60

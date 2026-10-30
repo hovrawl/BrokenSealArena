@@ -1,0 +1,62 @@
+# Win the first battle by mashing A and catch the reward message.
+include to_solo.txt
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+mash A 6
+wait 100
+shot /tmp/shots/e00.png
+mash A 6
+wait 100
+shot /tmp/shots/e01.png
+mash A 6
+wait 100
+shot /tmp/shots/e02.png
+mash A 6
+wait 100
+shot /tmp/shots/e03.png
+mash A 6
+wait 100
+shot /tmp/shots/e04.png
+mash A 6
+wait 100
+shot /tmp/shots/e05.png
+mash A 6
+wait 100
+shot /tmp/shots/e06.png
+mash A 6
+wait 100
+shot /tmp/shots/e07.png
+mash A 6
+wait 100
+shot /tmp/shots/e08.png
+mash A 6
+wait 100
+shot /tmp/shots/e09.png
+mash A 6
+wait 100
+shot /tmp/shots/e10.png
+mash A 6
+wait 100
+shot /tmp/shots/e11.png
+mash A 6
+wait 100
+shot /tmp/shots/e12.png
+mash A 6
+wait 100
+shot /tmp/shots/e13.png
+mash A 6
+wait 100
+shot /tmp/shots/e14.png
+mash A 6
+wait 100
+shot /tmp/shots/e15.png
+mash A 6
+wait 100
+shot /tmp/shots/e16.png
+mash A 6
+wait 100
+shot /tmp/shots/e17.png

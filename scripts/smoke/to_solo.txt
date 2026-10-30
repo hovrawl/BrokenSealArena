@@ -1,0 +1,16 @@
+# Prefix: talk to the attendant, choose Solo and the Monster Gauntlet, and read her
+# last line. Ends in control of Isaac below the left counter.
+include to_lobby.txt
+press U 40
+press L 44
+press U 60
+press L 10
+press U 10
+tap A
+wait 150
+tap A
+wait 150
+tap A
+wait 200
+tap A
+wait 200

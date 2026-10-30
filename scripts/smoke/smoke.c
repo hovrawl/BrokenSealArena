@@ -114,43 +114,13 @@ static int copyFile(const char *from, const char *to) {
   return 0;
 }
 
-int main(int argc, char **argv) {
-  char romCopy[1024];
+static void runScript(const char *path, const char *dir) {
   char line[1024];
-  FILE *script;
-  const char *saveDir;
+  FILE *script = fopen(path, "r");
 
-  if (argc < 3) {
-    fprintf(stderr, "usage: smoke ROM SCRIPT [SAVEDIR]\n");
-    return 2;
-  }
-  saveDir = argc > 3 ? argv[3] : ".";
-  snprintf(romCopy, sizeof romCopy, "%s/smoke.gba", saveDir);
-  if (copyFile(argv[1], romCopy) != 0) {
-    fprintf(stderr, "cannot copy the ROM to %s\n", romCopy);
-    return 2;
-  }
-  core = mCoreFind(romCopy);
-  if (!core) {
-    fprintf(stderr, "no core for %s\n", romCopy);
-    return 2;
-  }
-  core->init(core);
-  mCoreInitConfig(core, NULL);
-  core->desiredVideoDimensions(core, &width, &height);
-  pixels = calloc(width * height, sizeof(uint32_t));
-  core->setVideoBuffer(core, pixels, width);
-  if (!mCoreLoadFile(core, romCopy)) {
-    fprintf(stderr, "cannot load %s\n", romCopy);
-    return 2;
-  }
-  mCoreAutoloadSave(core);
-  core->reset(core);
-
-  script = fopen(argv[2], "r");
   if (!script) {
-    fprintf(stderr, "cannot read %s\n", argv[2]);
-    return 2;
+    fprintf(stderr, "cannot read %s\n", path);
+    exit(2);
   }
   while (fgets(line, sizeof line, script)) {
     char cmd[32] = "";
@@ -161,13 +131,27 @@ int main(int argc, char **argv) {
     if (line[0] == '#' || line[0] == '\n')
       continue;
     sscanf(line, "%31s %899s", cmd, arg);
-    if (!strcmp(cmd, "wait")) {
+    if (!strcmp(cmd, "include")) {
+      char sub[1200];
+      snprintf(sub, sizeof sub, "%s/%s", dir, arg);
+      runScript(sub, dir);
+    } else if (!strcmp(cmd, "wait")) {
       runFrames(atoi(arg), 0);
     } else if (!strcmp(cmd, "press")) {
       uint32_t keys = parseKeys(arg);
       const char *p = strchr(line + strlen(cmd) + 1, ' ');
       runFrames(p ? atoi(p) : 4, keys);
       runFrames(1, 0);
+    } else if (!strcmp(cmd, "mash")) {
+      /* mash KEYS N: tap the keys N times, 4 frames down and 20 up */
+      const char *p = strchr(line + strlen(cmd) + 1, ' ');
+      int times = p ? atoi(p) : 1;
+      int k;
+
+      for (k = 0; k < times; k++) {
+        runFrames(4, parseKeys(arg));
+        runFrames(20, 0);
+      }
     } else if (!strcmp(cmd, "tap")) {
       runFrames(4, parseKeys(arg));
       runFrames(20, 0);
@@ -209,6 +193,51 @@ int main(int argc, char **argv) {
     fflush(stdout);
   }
   fclose(script);
+}
+
+int main(int argc, char **argv) {
+  char romCopy[1024];
+  const char *saveDir;
+
+  if (argc < 3) {
+    fprintf(stderr, "usage: smoke ROM SCRIPT [SAVEDIR]\n");
+    return 2;
+  }
+  saveDir = argc > 3 ? argv[3] : ".";
+  snprintf(romCopy, sizeof romCopy, "%s/smoke.gba", saveDir);
+  if (copyFile(argv[1], romCopy) != 0) {
+    fprintf(stderr, "cannot copy the ROM to %s\n", romCopy);
+    return 2;
+  }
+  core = mCoreFind(romCopy);
+  if (!core) {
+    fprintf(stderr, "no core for %s\n", romCopy);
+    return 2;
+  }
+  core->init(core);
+  mCoreInitConfig(core, NULL);
+  core->desiredVideoDimensions(core, &width, &height);
+  pixels = calloc(width * height, sizeof(uint32_t));
+  core->setVideoBuffer(core, pixels, width);
+  if (!mCoreLoadFile(core, romCopy)) {
+    fprintf(stderr, "cannot load %s\n", romCopy);
+    return 2;
+  }
+  mCoreAutoloadSave(core);
+  core->reset(core);
+
+  {
+    char dir[1024];
+    char *slash;
+
+    snprintf(dir, sizeof dir, "%s", argv[2]);
+    slash = strrchr(dir, 47);
+    if (slash)
+      *slash = 0;
+    else
+      strcpy(dir, ".");
+    runScript(argv[2], dir);
+  }
   core->deinit(core);
   return 0;
 }

@@ -1,0 +1,17 @@
+# Start the Monster Gauntlet: walk into the circle and look at the first team.
+include to_solo.txt
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/b0.png
+wait 300
+shot /tmp/shots/b1.png
+tap A
+wait 200
+shot /tmp/shots/b2.png
+tap A
+wait 200
+shot /tmp/shots/b3.png

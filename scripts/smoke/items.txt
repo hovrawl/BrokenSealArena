@@ -1,0 +1,25 @@
+# The manager's Items: the choice of shop and the real shop screens.
+include to_manager.txt
+tap R
+tap R
+tap R
+wait 20
+shot /tmp/shots/i0.png
+tap A
+wait 100
+shot /tmp/shots/i1.png
+tap R
+wait 20
+shot /tmp/shots/i2.png
+tap R
+wait 20
+shot /tmp/shots/i3.png
+tap L
+tap L
+wait 20
+tap A
+wait 300
+shot /tmp/shots/i4.png
+tap A
+wait 100
+shot /tmp/shots/i5.png

@@ -1,0 +1,24 @@
+# Walking calibration: stand under the manager (the man at the right counter).
+wait 900
+tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 60
+press U 80
+press R 20
+shot /tmp/shots/w0.png
+press R 10
+shot /tmp/shots/w1.png
+press R 10
+shot /tmp/shots/w2.png
+press R 10
+shot /tmp/shots/w3.png
+press U 6
+shot /tmp/shots/w4.png
+tap A
+wait 60
+shot /tmp/shots/w5.png
