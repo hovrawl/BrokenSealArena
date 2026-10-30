@@ -1,0 +1,53 @@
+From e6db16076fe6c249fd5e7bf20bb216d01277f813 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sat, 31 Oct 2026 07:48:01 +1100
+Subject: [PATCH] Arena: quitting before winning a round says "Try again next
+ time!"
+
+Giving up with no wins meant the player did not want to compete, and the stock end
+line would read "You won 0 battle." (its plural rule treats zero as singular). The
+series end now says a plain MsgArenaTryAgain for that case; with wins it is
+unchanged (the stock "You won n battles", or the record line).
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/scene/arena_series.c | 8 ++++++--
+ games/tbs/text/en.po               | 6 ++++++
+ 2 files changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/games/tbs/src/scene/arena_series.c b/games/tbs/src/scene/arena_series.c
+index 69e34ddbb2..322e12d1e5 100644
+--- a/games/tbs/src/scene/arena_series.c
++++ b/games/tbs/src/scene/arena_series.c
+@@ -44,8 +44,12 @@ static void ArenaSeries_End(void) {
+   MessageArgument_ClearAll();
+   MessageArgument_Push(gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK],
+                        MESSAGE_ARGUMENT_NUMBER);
+-  if (gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] <
+-      gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK]) {
++  if (gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK] == 0) {
++    // Quit before winning a round: they did not want to compete. (The stock line
++    // would say "You won 0 battle.")
++    Event_SetMessageId(MsgArenaTryAgain);
++  } else if (gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] <
++             gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK]) {
+     gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] =
+         gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK];
+     Event_SetMessageId(MsgLobbyWonNumberBattleBroke);
+diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
+index 8ae0d3a2ee..e243c8417c 100644
+--- a/games/tbs/text/en.po
++++ b/games/tbs/text/en.po
+@@ -65232,3 +65232,9 @@ msgstr "Monster Gauntlet"
+ msgctxt "MsgArenaTournamentBossRush"
+ msgid "10774"
+ msgstr "Boss Rush"
++
++msgctxt "MsgArenaTryAgain"
++msgid "10775"
++msgstr ""
++"Try again\n"
++"next time!{end_wait}"
+-- 
+2.53.0
+

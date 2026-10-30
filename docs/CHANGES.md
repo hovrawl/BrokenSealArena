@@ -356,6 +356,13 @@ Each is one layer, in order; each builds on its own.
 - Port notes: the Lost Age has its own starting equipment and sprite special cases;
   look for the same kind of "drawn as part of the sprite" check.
 
+### 12. Quitting before winning a round
+- Patch: `0012-Arena-quitting-before-winning-a-round-says-Try-again.patch`
+- Files: `scene/arena_series.c`, `text/en.po` (`MsgArenaTryAgain`).
+- Giving up with no wins ends the series with "Try again next time!" instead of
+  the stock "You won 0 battle." (its `{plural_suffix}` treats zero as singular):
+  they did not want to compete, so the line is generic. With wins it is unchanged.
+
 ## Dropped on the way
 
 - The first training menu was a full-screen canvas-text window with its own list

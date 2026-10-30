@@ -22,8 +22,8 @@ building taught, and what to look at in review:
 - S2 needed one more change the spec missed: the stock after-win spawn is **inside
   the circle**, so with the question gone the next fight started at once. The
   spawn moved outside the circle, facing it (z 200 to 240).
-- Giving up before any win reads "You won 0 battle." (the stock plural rule treats
-  zero as singular). Worth a better line? Review.
+- Giving up before any win used to read "You won 0 battle." (the stock plural rule
+  treats zero as singular). Now "Try again next time!" (patch 12; decided).
 - The stock record write into the file is skipped for the whole flow: it shows its
   own saving messages and writes into a "current file" that does not exist after a
   New Game. Tallies are saved with the game. See "Stats" in `docs/ROADMAP.md`.
