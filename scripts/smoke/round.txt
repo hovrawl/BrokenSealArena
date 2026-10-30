@@ -1,0 +1,54 @@
+# Win round 1: the victory line, then the next-round line, and the series stays
+# running. Same fight as win.txt.
+include to_solo.txt
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+shot /tmp/shots/r00.png
+tap A
+wait 150
+shot /tmp/shots/r01.png
+tap A
+wait 100
+shot /tmp/shots/r02.png
+wait 100
+shot /tmp/shots/r03.png

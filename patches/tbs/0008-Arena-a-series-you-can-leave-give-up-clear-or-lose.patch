@@ -1,0 +1,270 @@
+From 01a75a449f318984bdfdd33008e840e12c2e1f88 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 30 Oct 2026 15:41:53 +1100
+Subject: [PATCH] Arena: a series you can leave, give up, clear or lose
+
+A monster series is now a Gauntlet of twelve rounds that survives a break.
+After a win the attendant reports the round ("Round n of 12 won! Step into the
+circle when you are ready."), the series keeps running, and the player is placed
+outside the circle, facing it, instead of inside it (which started the next
+fight at once); the gate resumes it. Talking to the attendant while a series
+runs asks "Do you want to give up?" Yes ends it (not a loss; the best streak is
+kept), No says "Good luck!". Clearing round 12 is a win and ends the series
+with its own line. A loss ends it as before and now restores the party to full
+HP and PP. The stock record write into a file is skipped (no saving messages,
+no "current file" after New Game); the tallies are saved with the game.
+
+scene/arena_series.c is a part of battle_arena.c (it uses that file's statics).
+The round count is in module/arena.h and asserted against the message text.
+Three messages are added. Switch: ARENA_TRAINING.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/module/arena.h           |  4 ++
+ games/tbs/src/battle/battle/arena_ladder.c |  2 +-
+ games/tbs/src/scene/arena_series.c         | 75 ++++++++++++++++++++++
+ games/tbs/src/scene/battle_arena.c         | 37 +++++++++--
+ games/tbs/text/en.po                       | 21 ++++++
+ 5 files changed, 131 insertions(+), 8 deletions(-)
+ create mode 100644 games/tbs/src/scene/arena_series.c
+
+diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
+index 0d760f3fbc..1e299428d5 100644
+--- a/games/tbs/include/module/arena.h
++++ b/games/tbs/include/module/arena.h
+@@ -6,6 +6,10 @@
+ 
+ #include "types.h"
+ 
++/// The rounds in the Monster Gauntlet: the rungs of gArenaLadder. Clearing the last
++/// is a win and ends the series.
++#define ARENA_LADDER_COUNT 12
++
+ // Battle Arena overlay (scene/arena_menu.c)
+ 
+ /// The attendant's menu: 1 for a solo series, 2 for a linked battle, 0 to leave.
+diff --git a/games/tbs/src/battle/battle/arena_ladder.c b/games/tbs/src/battle/battle/arena_ladder.c
+index 0c100c537a..2bde1d61ce 100644
+--- a/games/tbs/src/battle/battle/arena_ladder.c
++++ b/games/tbs/src/battle/battle/arena_ladder.c
+@@ -5,6 +5,7 @@
+ 
+ #include "../battle_internal.h"
+ #include "arena_config.h"
++#include "module/arena.h"
+ 
+ /// Arena romhack: one rung of the team ladder. In a monster series, win number
+ /// n (0-based) fights rung n; its enemies are levelled to targetLevel.
+@@ -13,7 +14,6 @@ struct ArenaTeam {
+   struct Formation formation;
+ };
+ 
+-#define ARENA_LADDER_COUNT 12
+ 
+ // clang-format off
+ // Arena romhack: the team ladder. Members are rows of enemy_table.c; a small
+diff --git a/games/tbs/src/scene/arena_series.c b/games/tbs/src/scene/arena_series.c
+new file mode 100644
+index 0000000000..210f6f6170
+--- /dev/null
++++ b/games/tbs/src/scene/arena_series.c
+@@ -0,0 +1,75 @@
++/// @file
++/// Arena romhack: a monster series you can leave and come back to. It is a
++/// Gauntlet of ARENA_LADDER_COUNT rounds. After a win the series stays running
++/// and the player steps back into the circle when ready; talking to the attendant
++/// while it runs offers to give up; clearing the last round ends it as a win; a
++/// loss ends it (stock). Giving up and clearing are not losses.
++// Part of battle_arena.c: it uses that file's statics.
++
++#include "static_assert.h"
++
++// MsgArenaGiveUpPrompt and MsgArenaNextRound say "of 12": a field message reads
++// every number blank from the first number pushed, so the count is in the text.
++STATIC_ASSERT(ARENA_LADDER_COUNT == 12);
++
++/// The series is over. As the stock "No" after a win ends it: the flag and the
++/// win count are cleared, the attendant reports the run and the best streak is
++/// kept. The record is not written into a file
++/// (BattleArena_SaveMonsterBattleResults does nothing under ARENA_TRAINING).
++/// Starting a series set FLAG_BATTLE_ARENA_PLAYER_AGREED; the stock flow clears
++/// it when a battle begins, so a series ended before any fight clears it here, or
++/// the link poll reports the link lost.
++static void ArenaSeries_End(void) {
++  GameFlag_Clear(FLAG_MONSTER_BATTLE);
++  GameFlag_Clear(FLAG_BATTLE_ARENA_PLAYER_AGREED);
++  FieldGameFlag_SetByte(FLAG_MONSTER_BATTLE_WINS, -1);
++  MessageArgument_ClearAll();
++  MessageArgument_Push(gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK],
++                       MESSAGE_ARGUMENT_NUMBER);
++  if (gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] <
++      gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK]) {
++    gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] =
++        gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK];
++    Event_SetMessageId(MsgLobbyWonNumberBattleBroke);
++  } else {
++    Event_SetMessageId(MsgLobbyWonNumberBattle);
++  }
++  FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++  BattleArena_WriteSlotValue(LOBBY_SLOT_SIGNATURE);
++}
++
++/// Talking to the attendant while a series runs: "Round n of m. Do you want to
++/// give up?" Yes ends the series (not a loss); No lets it carry on.
++static void ArenaSeries_GiveUp(void) {
++  MessageArgument_ClearAll();
++  MessageArgument_Push(
++      gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK] + 1,
++      MESSAGE_ARGUMENT_NUMBER);
++  Event_SetMessageId(MsgArenaGiveUpPrompt);
++  FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++  if (Event_AskYesNoWithActorAnimation(0, 0) == YES) {
++    ArenaSeries_End();
++  } else {
++    Event_SetMessageId(MsgLobbyGoodLuck);
++    FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++  }
++}
++
++/// After a monster battle is won (the win and its coins are already counted):
++/// say the round is won and leave the series running, or, after the last round,
++/// say the tournament is cleared and end it as a win.
++static void ArenaSeries_AfterWin(void) {
++  s32 won = gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK];
++
++  Actor_SetAngleToward(ACTOR_ATTENDANT, gMainRoutineWork.leaderActorId, 0);
++  if (won >= ARENA_LADDER_COUNT) {
++    Event_SetMessageId(MsgArenaGauntletCleared);
++    FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++    ArenaSeries_End();
++    return;
++  }
++  MessageArgument_ClearAll();
++  MessageArgument_Push(won, MESSAGE_ARGUMENT_NUMBER);
++  Event_SetMessageId(MsgArenaNextRound);
++  FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++}
+diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
+index 2b47d4b4f9..5e8494d232 100644
+--- a/games/tbs/src/scene/battle_arena.c
++++ b/games/tbs/src/scene/battle_arena.c
+@@ -1065,6 +1065,10 @@ static s32 BattleArena_EnterBattle(void) {
+ }
+ 
+ 
++#if ARENA_TRAINING
++#include "arena_series.c"
++#endif
++
+ /// Talking to ACTOR_ATTENDANT, who arranges a battle. With no partner, offers
+ /// a monster battle. With one, calls off a monster battle in waiting, then asks
+ /// the player to apply or to accept the partner's request; a yes is published
+@@ -1089,13 +1093,14 @@ static s32 BattleArena_ChooseBattleMode(void) {
+   Event_Start();
+   Actor_SetAngleToward(ACTOR_ATTENDANT, gMainRoutineWork.leaderActorId, 0);
+ #if ARENA_TRAINING
+-  // Solo or Multiplayer, unless a series is already under way.
+-  mode = 2;
+-  if (!Event_GetFlag(FLAG_MONSTER_BATTLE)) {
+-    mode = ArenaMenu_AttendantMode();
+-    if (mode == 0)
+-      goto leave;
++  // A series under way: offer to give up. Otherwise Solo or Multiplayer.
++  if (Event_GetFlag(FLAG_MONSTER_BATTLE)) {
++    ArenaSeries_GiveUp();
++    goto leave;
+   }
++  mode = ArenaMenu_AttendantMode();
++  if (mode == 0)
++    goto leave;
+ #endif
+   // Look for the partner's signature twice, a frame apart.
+   if (BattleArena_PeerSlotMatches(LOBBY_SLOT_SIGNATURE) == 0) {
+@@ -1517,6 +1522,11 @@ static s32 BattleArena_SaveBattleResults(void) {
+ static s32 BattleArena_SaveMonsterBattleResults(void) {
+   // See BattleArena_SaveBattleResults for the measured shared-helper trial.
+   struct Window *window;
++#if ARENA_TRAINING
++  // The record is not written into a file here (no saving messages, and no
++  // "current file" after a New Game); the tallies are saved with the game.
++  return 0;
++#endif
+ 
+   Sound_Play(MUS_SAVED);
+   window = Message_OpenWindow(MsgLobbySavingMonsterBattle, 5, 4, 1);
+@@ -1615,7 +1625,9 @@ s32 BattleArena_RunRoundResult(void) {
+     if (gMainRoutineWork.coins > 999999)
+       gMainRoutineWork.coins = 999999;
+     ArenaMenu_ShowWin(ACTOR_ATTENDANT, reward);
+-#endif
++    // The series stays running until it is lost, given up or cleared.
++    ArenaSeries_AfterWin();
++#else
+     // The offer has two lines a level (FLAG_MONSTER_BATTLE_WINS, -1 when a
+     // series starts), the even line capped at 14. FLAG_AREA_TEMP_E8's byte
+     // counts the victories 0 to 2; the third raises the level and takes the
+@@ -1661,6 +1673,7 @@ s32 BattleArena_RunRoundResult(void) {
+       }
+       BattleArena_WriteSlotValue(LOBBY_SLOT_SIGNATURE);
+     }
++#endif
+     Event_End();
+     // A monster battle lost: the series ends, and a new
+     // record is saved.
+@@ -1689,6 +1702,10 @@ s32 BattleArena_RunRoundResult(void) {
+     GameFlag_Clear(FLAG_MONSTER_BATTLE);
+     FieldGameFlag_SetByte(FLAG_MONSTER_BATTLE_WINS, -1);
+     BattleArena_WriteSlotValue(LOBBY_SLOT_SIGNATURE);
++#if ARENA_TRAINING
++    // Full HP and PP: the only purpose now is to play again.
++    Party_RestoreHpPp(1);
++#endif
+     Event_End();
+     // A linked battle won: count the win and the run; a
+     // longer run is the board's new record. Saved.
+@@ -1787,7 +1804,13 @@ u8 gBattleArena_SlotColumns[] = {
+ struct SceneEntrance gBattleArenaEntrances[] = {
+     { BATTLE_ARENA_AFTER_LINK_LOSS, CONDITION_ALWAYS, 128, 0, 164, FACING_NORTH, 0, 16, 0, 416, 310, 0 },
+     { BATTLE_ARENA_AFTER_LINK_WIN, CONDITION_ALWAYS, 352, 0, 148, FACING_NORTH, 0, 16, 0, 416, 310, 0 },
++#if ARENA_TRAINING
++    // Outside the circle, facing it: the stock spawn is inside it, which starts
++    // the next fight at once, and the player chooses when to go in.
++    { BATTLE_ARENA_AFTER_MONSTER_WIN, CONDITION_ALWAYS, 216, 0, 240, FACING_NORTH, 0, 16, 0, 416, 310, 0 },
++#else
+     { BATTLE_ARENA_AFTER_MONSTER_WIN, CONDITION_ALWAYS, 216, 0, 200, FACING_WEST, 0, 16, 0, 416, 310, 0 },
++#endif
+     { BATTLE_ARENA_AFTER_MONSTER_LOSS, CONDITION_ALWAYS, 216, 0, 200, FACING_WEST, 0, 16, 0, 416, 310, 0 },
+     { BATTLE_ARENA_FROM_FILE_SCREEN, CONDITION_ALWAYS, 216, 0, 288, FACING_NORTH, 0, 16, 0, 416, 310, 0 },
+     { 0, CONDITION_ALWAYS, 216, 0, 208, FACING_NORTH, 0, -1, -1, -1, -1, 0 },
+diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
+index bc3563a919..30da40eee4 100644
+--- a/games/tbs/text/en.po
++++ b/games/tbs/text/en.po
+@@ -65181,3 +65181,24 @@ msgstr "Raises Agility by {argument_signed_number}. Now {argument_signed_number}
+ msgctxt "MsgArenaStatInfoLuck"
+ msgid "10766"
+ msgstr "Raises Luck by {argument_signed_number}. Now {argument_signed_number}."
++
++msgctxt "MsgArenaGiveUpPrompt"
++msgid "10767"
++msgstr ""
++"Round {argument_signed_number} of 12.\n"
++"Do you want to\n"
++"give up?{end_now}"
++
++msgctxt "MsgArenaNextRound"
++msgid "10768"
++msgstr ""
++"Round {argument_signed_number} of 12 won!\n"
++"Step into the circle\n"
++"when you are ready.{end_wait}"
++
++msgctxt "MsgArenaGauntletCleared"
++msgid "10769"
++msgstr ""
++"You cleared the\n"
++"Monster Gauntlet!\n"
++"Congratulations!{end_wait}"
+-- 
+2.53.0
+

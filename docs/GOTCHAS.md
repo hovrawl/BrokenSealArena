@@ -63,6 +63,23 @@
 - `New Game` ignores existing files; Continue loads one. There is no Battle
   option in this flow.
 
+## Arena flow
+
+- The stock after-win spawn (`BATTLE_ARENA_AFTER_MONSTER_WIN`) is inside the
+  circle, which starts the next fight at once ("Good luck!"); the stock Yes/No was
+  the only gate. Anything that removes the question must also move the spawn.
+- Starting a series sets `FLAG_BATTLE_ARENA_PLAYER_AGREED`; the stock flow clears
+  it when a battle begins. Ending a series earlier must clear it, or the link poll
+  (`BattleArena_PollPeerReady`) shows "The link was disconnected."
+- A field message (`FieldMessage_ShowAtActor`) with two `{argument_signed_number}`
+  blanks showed the first number twice ("Round 1 of 1"). Cause not confirmed; put
+  the second number in the text and assert the constant.
+- `MsgLobbyWonNumberBattle` uses `{plural_suffix}`: zero reads "You won 0 battle."
+- `BattleArena_SaveMonsterBattleResults` writes into the current file with its own
+  saving messages; after a New Game there is no current file. It is skipped.
+- C89: a declaration after a `return` (or any statement) is a parse error in this
+  compiler; put the early return after the declarations.
+
 ## Testing
 
 - A stray A press beside a person starts their talk (or opens the field menu).
