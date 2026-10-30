@@ -36,8 +36,8 @@
   in `battle_arena.c`, `file_screen.c`, `formation.c`, `save.c`,
   `settings_menu.c`, `run.c`), the import and far-call table rows, one row each
   in `objects.tsv`, the bank start in `main.ld`, and `en.po`.
-  Not yet done: the series on `arena` is still the old chronological one; the
-  layered re-slice onto `arena-clean` is next.
+  The layered re-slice is done: `arena` is the seven-layer series (the old
+  chronological one is `arena-chrono`).
 - **Saves keep the tournament and rung; a series survives a break** (user,
   2026-10-30). Between rounds the player is never forced into the next fight:
   they can leave to heal, shop and upgrade and approach the gate again to
