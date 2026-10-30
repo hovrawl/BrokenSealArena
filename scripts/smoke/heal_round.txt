@@ -1,0 +1,60 @@
+# The Gauntlet heals (contrast with rush_round.txt): the same flow, and the next
+# fight's HUD shows full HP.
+include to_solo.txt
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+shot /tmp/shots/n00.png
+tap A
+wait 150
+shot /tmp/shots/n01.png
+tap A
+wait 100
+shot /tmp/shots/n02.png
+press U 40
+wait 300
+shot /tmp/shots/n03.png
+wait 300
+shot /tmp/shots/n04.png
+tap A
+wait 400
+shot /tmp/shots/n05.png

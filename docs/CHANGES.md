@@ -288,12 +288,55 @@ Each is one layer, in order; each builds on its own.
   (the flag was cleared for the write while `FLAG_BATTLE_ARENA_PLAYER_AGREED`, a
   scene temp flag that is saved raw, stayed set, which the link poll reads as a
   lost link).
-- Not done: the tournament is not stored (there is only one, so Continue is
-  right today). A second tournament needs a persistent byte for it (roadmap
-  Phase 1, "A tournament flag").
+- The tournament was not stored here (there was only one); patch 10 stores it.
 - Smoke: `resume.txt` saves mid-series, restarts the console (the new `reset`
   driver command), chooses Continue, reads the tally and flag with `peek`, and
   talks to the attendant.
+
+### 10. A second tournament: the Boss Rush, a tournament flag, no healing
+- Patch: `0010-Arena-a-second-tournament-the-Boss-Rush-with-a-tourn.patch`
+- Files: `include/module/arena.h` (the flag and the tournament macros),
+  `battle/battle/arena_ladder.c` (a second ladder, a tournament-aware
+  `ArenaLadder_Select`), `scene/arena_series.c`, `scene/arena_menu.c`,
+  `text/en.po` (five messages).
+- **The tournament flag.** `FLAG_ARENA_TOURNAMENT` is 0x7f8, a persistent byte flag
+  (byte 0xff of `gGameFlagBytes`, read with `GameFlag_GetByteFar` in the main image
+  and `FieldGameFlag_GetByte` in an overlay), so a save and Continue keep it. How it
+  was chosen: persistent flags are those below 0x200 and 0x400 upward (0x200 to
+  0x2ff are scene temps, 0x300 to 0x3ff area temps, cleared on a change). Every
+  computed range was excluded: the Djinn (from 0x100), the Psynergy tints (0x148),
+  the visited areas (0x180), the shop stock (0x400 plus a row, 35 rows),
+  `ENEMY_DEFEATED_FLAG(classId)` (0x600 plus an enemy, `battle_internal.h`), and the
+  clusters of story flags (0x800 to 0x9f0, 0xec0 to 0xfd7) with their offsets. The
+  band 0x7f8 to 0x7ff has no name and no computed use anywhere in `games/tbs/src`
+  or `include`. More bytes can be claimed downward from it; list them in `arena.h`.
+- **The tournament menu** has two icons and labels (`MsgArenaTournamentGauntlet`
+  and `MsgArenaTournamentBossRush`, consecutive). The Boss Rush uses the Summon icon
+  (a dark silhouette, which suits a boss). The choice is written to the flag when
+  Solo is chosen.
+- **Per-tournament data.** `ARENA_ROUNDS(t)` gives 12 or 6 rounds; the ladder is
+  `gArenaLadder` (12) or `gArenaBossRush` (6). The Boss Rush's rungs are bosses:
+  Orc Lord and Lizard King, Manticore and Chimera, Tempest Lizard and Cerebus,
+  Saturos and Menardi, Deadbeard and the Hydros Statue, then the Fusion Dragon
+  alone, at target levels 14, 22, 30, 36, 41 and 45 (data only; not balanced).
+  Rows are enemy ids less `ENEMY_ID_FIRST` (8).
+- **Messages per tournament.** Each tournament has three consecutive messages (give
+  up, next round, cleared), so `MsgArenaGiveUpPrompt + 3 * t + kind` finds them. The
+  round count is in the text ("of 12", "of 6"), asserted against the macros in
+  `arena_series.c`.
+- **Healing is a tournament setting.** `ARENA_HEALS(t)` is false for the Boss Rush.
+  `ArenaMenu_ShowWin` skips the heal after a win, and the manager's exit skips it
+  while a series is running (outside a series it heals as before, so the manager
+  cannot undo it mid-run). After a loss the party is restored as before. Without
+  healing, the way to recover is items and the field menu's Cure.
+- Smoke: `tournaments.txt`, `rungs_rush.txt`, `rush_round.txt` (HP carried into the
+  next fight), `heal_round.txt` (the Gauntlet's contrast), `rush_manager.txt` (the
+  manager's exit does not heal), `rush_clear.txt` and `resume_rush.txt`.
+- Not done: the Boss Rush is not balanced (round 1 cannot be won by pressing A);
+  per-tournament stats; the scripts that need a won round use a test trick (start as
+  the Gauntlet's easy first team, then set the byte to the Boss Rush).
+- Port notes: the flag byte, the tournament macros and the message layout port as
+  they are; re-pick the bosses from the Lost Age's enemy table.
 
 ## Dropped on the way
 

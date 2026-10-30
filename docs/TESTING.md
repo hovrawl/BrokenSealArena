@@ -82,6 +82,21 @@ Tests (each ends in shots; `build\smoke\shots\sheet.png` shows them all):
   walk up and talk: "Round 6 of 12. Do you want to give up?". The title needs
   Continue chosen with D, A, A, A (with waits); Isaac starts at the door with no
   greeter walk-in, so the walk to the attendant differs from `to_solo.txt`.
+- `tournaments.txt`: the tournament menu (two icons), choosing the Boss Rush, the
+  give-up question saying "of 6", and the tournament byte (`peek 0x0200013F`).
+  `to_rush.txt` is the prefix that picks it.
+- `rungs_rush.txt`: the first frame of each of the six Boss Rush rungs.
+- `rush_round.txt` / `heal_round.txt`: win round 1 and walk into the next fight; the
+  HUD shows the HP carried over (Boss Rush) or full HP (Gauntlet).
+- `rush_manager.txt`: after a Boss Rush win, leave the manager with B and read
+  Garet's HP in his Characters panel (it stays hurt; the exit does not heal).
+- `rush_clear.txt`: clear the Boss Rush (win count poked to 5): 700 coins, the
+  cleared line, "You won 6 battles."
+- `resume_rush.txt`: save in the Boss Rush, `reset`, Continue: "Round 4 of 6.", and
+  the tournament byte is kept.
+  Boss Rush round 1 cannot be won by pressing A (bosses), so the scripts that need
+  a win start the battle as the Gauntlet's easy first team (poke the tournament byte
+  to 0), then poke it back to 1 once the battle is under way.
 - `pause.txt`, `save.txt`: the Pause menu and Save your quest.
 - `boot.txt`, `walk.txt`: calibration runs.
 ## Tips

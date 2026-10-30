@@ -101,10 +101,15 @@ Phase 1 so far:
   (patch 9): the round and the series flag survive a save and Continue, tested
   with `resume.txt`; **every rung loads** (`rungs.txt`: all twelve teams, within
   six sprite slots).
-- Left: the tournament flag (deferred until a second tournament exists, since with
-  one the saved flag already says which; it needs a persistent byte, see "Stats
-  per gauntlet" below for how to pick one), playing every rung and the balance
-  pass, and the stock text and party order. The table below keeps the original
+- Done (patch 10): **the tournament flag** (`FLAG_ARENA_TOURNAMENT`, persistent byte
+  0x7f8, found by scanning every flag range for computed uses) and a **second
+  tournament, the Boss Rush** (six rounds, a different ladder) with **healing
+  switched off** (`ARENA_HEALS`): the win and the manager's exit do not heal, tested
+  with HP carried into the next fight. It also exercises a per-tournament round
+  count, per-tournament messages, and saving and resuming a non-default tournament.
+- Left: playing every rung and the balance pass (now data only: the Boss Rush's
+  round 1 is too hard to win by pressing A, the Gauntlet is unplayed past round 1),
+  and the stock text and party order. The table below keeps the original
   descriptions.
 
 | Item | Size | Notes |

@@ -1,0 +1,80 @@
+# Boss Rush, the manager does not heal on the way out: win round 1 (party hurt), walk
+# to the manager and leave with B, then read Garet's HP in the field menu (it stays hurt).
+include to_rush.txt
+# Test trick: start the battle as the Gauntlet's easy first team (tournament byte 0),
+# then set the byte back to the Boss Rush once it is under way, so the win runs under
+# Boss Rush rules without needing to beat the bosses.
+poke 0x0200013F 1 0
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+poke 0x0200013F 1 1
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+shot /tmp/shots/n00.png
+tap A
+wait 150
+shot /tmp/shots/n01.png
+tap A
+wait 100
+shot /tmp/shots/n02.png
+# Walk right, then up to the manager without crossing the circle, and talk.
+press R 58
+press U 32
+wait 20
+shot /tmp/shots/q00.png
+tap A
+wait 150
+shot /tmp/shots/q01.png
+# Leave with B: this is where a heal would happen.
+tap B
+wait 120
+shot /tmp/shots/q02.png
+# Talk to him again: Characters shows each character's HP; R moves to Garet. If the
+# exit had healed, Garet would read 300/300.
+tap A
+wait 120
+shot /tmp/shots/q03.png
+tap A
+wait 120
+shot /tmp/shots/q04.png
+tap R
+wait 40
+shot /tmp/shots/q05.png

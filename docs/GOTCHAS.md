@@ -89,6 +89,20 @@
 - C89: a declaration after a `return` (or any statement) is a parse error in this
   compiler; put the early return after the declarations.
 
+## Flags we claim
+
+- Claimed persistent flags are listed in `module/arena.h`: so far `FLAG_ARENA_TOURNAMENT`
+  (0x7f8, one byte). Before claiming another, check `ENEMY_DEFEATED_FLAG(classId)`
+  (0x600 plus an enemy: 0x600 to 0x6ff are taken), the shop stock (0x400 plus a row),
+  the Djinn, Psynergy tint and area-visited ranges below 0x200, and the named
+  clusters; `flags.h` lists names only, and computed ranges are in macros and in the
+  code (search for `FLAG_X +`). A byte flag must start at a multiple of 8.
+- Boss rows in the ladder are enemy ids less `ENEMY_ID_FIRST` (8): Menardi is id 126,
+  row 118. Large enemies take two of the six sprite slots.
+- A boss pair at a low target level is still hard: pressing A does not win round 1 of
+  the Boss Rush. Tests that need a win start as an easy team and switch the
+  tournament byte after the battle begins.
+
 ## Testing
 
 - A stray A press beside a person starts their talk (or opens the field menu).
