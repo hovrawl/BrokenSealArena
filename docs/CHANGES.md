@@ -196,6 +196,25 @@ to look at when porting.
   and its sprites each redraw.
 - The Characters menu still uses the item strip and the stat list.
 
+### 8. Animated Djinni figures
+- Patch: `0008-Arena-animated-Djinni-figures-in-the-Djinn-picker-and.patch`
+- Files: `shop/shop/item_picker.c`, `scene/battle_arena.c`,
+  `scene/import/battle_arena.s`, `system/overlay/imports.inc`.
+- The creature in the Djinn menu is an actor `Sprite` (ids 90 to 93, one per
+  element, `gDjinnFigures_SpriteIds`), animation 2 for a set Djinni. It is not
+  per Djinni: a Mercury Djinni of any name is the same figure.
+- Each visible Djinni gets `Sprite_Create(VENUS_DJINNI + element)`,
+  `Sprite_StartAnimation(.., 2)`, and a `Render_ApplyProjectedPlacement` call
+  every frame (the sprite is not drawn otherwise), as
+  `DjinnFigures_UpdateAllPositions` does, at scale `0xb000` (about 0.69). A
+  sprite that cannot be created leaves the icon tile in its place.
+- Positions assume the window's first pixel is at screen (8, 8) and that the
+  figure stands at its feet: x = cell icon centre, y = bottom of the cell.
+- The picker panel's Djinn rows are now 16 pixels (12 shown), to fit a figure.
+  The purchase grid makes its 12 figures when the page changes.
+- Imports added (stubs existed in `FIELD.S`): `Sprite_Create`,
+  `Sprite_Destroy`, `Render_ApplyProjectedPlacement`.
+
 ## Planned
 
 - Save and load the upgraded party.

@@ -1,0 +1,365 @@
+From 1461ee0ce79366f62dca5d1cbb78e272ca17e0b2 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 30 Oct 2026 11:25:51 +1100
+Subject: [PATCH] Arena: animated Djinni figures in the Djinn picker and shop
+
+The Djinn lists mark each Djinni with a small animated figure of its element
+(the field Djinni sprites 90 to 93, as the Djinn menu shows them) instead of
+the element icon tile. The picker panel and the purchase grid create one sprite
+per visible Djinni, place it every frame at 0.69 scale
+(Render_ApplyProjectedPlacement) and destroy them on a page or member change.
+A figure that cannot be made falls back to the icon tile.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/scene/battle_arena.c        | 80 +++++++++++++++++---
+ games/tbs/src/scene/import/battle_arena.s |  3 +
+ games/tbs/src/shop/shop/item_picker.c     | 92 +++++++++++++++++++----
+ games/tbs/src/system/overlay/imports.inc  |  3 +
+ 4 files changed, 153 insertions(+), 25 deletions(-)
+
+diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
+index 5400394ba8..a00d7d4198 100644
+--- a/games/tbs/src/scene/battle_arena.c
++++ b/games/tbs/src/scene/battle_arena.c
+@@ -10,6 +10,7 @@
+ #include "djinn_ids.h"
+ #include "module/shop/shop.h"
+ #include "render_input.h"
++#include "sprite.h"
+ #include "module/scene/battle_arena.h"
+ #include "module/field/field_sequence.h"
+ #include "module/field/event_commands.h"
+@@ -1375,18 +1376,49 @@ static s32 Training_GridCount(s32 kind) {
+                                   : TRAINING_PSYNERGY_COUNT;
+ }
+ 
+-/// Draws entry `entry`'s icon and name with its cell at (x, y).
++/// How big a Djinni figure is drawn, 16.16: the Djinn menu shows them at full
++/// size (0x10000).
++#define TRAINING_FIGURE_SCALE 0xb000
++
++/// Places a Djinni figure so it stands at screen (x, y), the way the Djinn menu
++/// places its figures (DjinnFigures_UpdateAllPositions). Called every frame a
++/// figure shows.
++static void Training_PlaceFigure(struct Sprite *figure, s32 x, s32 y) {
++  struct SpriteScale scale;
++  struct SpritePlacement placement;
++  u32 vertical = 0x01e20000u;
++
++  figure->image.priority = 0;
++  scale.x = TRAINING_FIGURE_SCALE;
++  scale.y = TRAINING_FIGURE_SCALE;
++  placement.x = x << 16;
++  placement.height = vertical;
++  placement.y = (y << 16) + vertical;
++  placement.groundHeight = 0;
++  Render_ApplyProjectedPlacement(figure, &placement, &scale, FACING_SOUTH);
++}
++
++/// Where the figure of grid cell `cell` stands, in screen pixels: at the
++/// icon's place in the cell, the grid's window starting at (8, 8).
++#define TRAINING_CELL_FIGURE_X(cell)                                           \
++  (((cell) % GRID_COLUMNS) * GRID_CELL_WIDTH + 24)
++#define TRAINING_CELL_FIGURE_Y(cell)                                           \
++  (GRID_TOP + ((cell) / GRID_COLUMNS) * GRID_CELL_HEIGHT + 23)
++
++/// Draws entry `entry`'s icon and name with its cell at (x, y). A Djinni's icon
++/// is an animated figure of its element, `figure`, which the screen places each
++/// frame; with none, the element's icon tile stands in.
+ static void Training_GridDrawCell(struct Window *window, s32 kind, s32 entry,
+-                                  s32 x, s32 y) {
++                                  s32 x, s32 y, struct Sprite *figure) {
+   if (kind == TRAIN_GRID_DJINN) {
+     s32 element = entry / TRAINING_DJINN_PER_ELEMENT;
+     s32 index = entry % TRAINING_DJINN_PER_ELEMENT;
+ 
+-    // The Djinn lists mark a Djinni with its element's icon tile.
+-    Window_SetTilemapEntry(window, TRAINING_ELEMENT_TILE + element, x / 8,
+-                           y / 8, 0);
++    if (figure == 0)
++      Window_SetTilemapEntry(window, TRAINING_ELEMENT_TILE + element, x / 8,
++                             y / 8, 0);
+     Text_DrawMessageAsTiles(MsgDjinnName + element * DJINN_PER_ELEMENT + index,
+-                            window, x + 12, y);
++                            window, x + 20, y + 4);
+   } else {
+     s32 id = gTraining_PsynergyShop[entry].id;
+     struct WindowSprite *icon =
+@@ -1439,22 +1471,43 @@ static s32 Training_GridBuy(s32 kind, s32 unitId, s32 entry) {
+ 
+ /// The purchase screen for Psynergy and for Djinn: icons and names in columns,
+ /// rows and pages, one character's. The D-pad moves (Left and Right by one,
+-/// Up and Down by a row), L and R turn the page, A buys, B leaves.
++/// Up and Down by a row), L and R turn the page, A buys, B leaves. The Djinn
++/// icons are animated figures, made when the page changes and placed every
++/// frame.
+ static void Training_RunGrid(s32 unitId, s32 kind) {
+   struct Window *window = Training_OpenScreen();
++  struct Sprite *figures[GRID_PAGE];
+   s32 count = Training_GridCount(kind);
+   s32 pages = (count + GRID_PAGE - 1) / GRID_PAGE;
+   s32 cursor = 0;
+   s32 redraw = 1;
+   s32 notice = 0;
++  s32 figuresPage = -1;
++  s32 i;
+ 
++  for (i = 0; i < GRID_PAGE; i++)
++    figures[i] = 0;
+   for (;;) {
+     if (redraw) {
+       s32 first = (cursor / GRID_PAGE) * GRID_PAGE;
+-      s32 i;
+ 
+       // Clears the window and the sprites of the last draw.
+       WindowSprite_PrepareForRedraw(window);
++      if (kind == TRAIN_GRID_DJINN && figuresPage != cursor / GRID_PAGE) {
++        figuresPage = cursor / GRID_PAGE;
++        for (i = 0; i < GRID_PAGE; i++) {
++          if (figures[i] != 0)
++            Sprite_Destroy(figures[i]);
++          figures[i] = 0;
++          if (first + i < count) {
++            figures[i] =
++                Sprite_Create(VENUS_DJINNI + (first + i) /
++                                                 TRAINING_DJINN_PER_ELEMENT);
++            if (figures[i] != 0)
++              Sprite_StartAnimation(figures[i], 2);
++          }
++        }
++      }
+       Training_DrawHeader(window, unitId);
+       for (i = 0; i < GRID_PAGE && first + i < count; i++) {
+         s32 x = (i % GRID_COLUMNS) * GRID_CELL_WIDTH;
+@@ -1462,7 +1515,7 @@ static void Training_RunGrid(s32 unitId, s32 kind) {
+ 
+         if (first + i == cursor)
+           Text_DrawStringInWindow(gTraining_Cursor, window, x, y + 4);
+-        Training_GridDrawCell(window, kind, first + i, x + 8, y);
++        Training_GridDrawCell(window, kind, first + i, x + 8, y, figures[i]);
+       }
+       if (notice != 0)
+         Text_DrawMessageAsTiles(notice, window, 0, GRID_FOOTER_Y);
+@@ -1480,6 +1533,11 @@ static void Training_RunGrid(s32 unitId, s32 kind) {
+       redraw = 0;
+     }
+     wait(1);
++    for (i = 0; i < GRID_PAGE; i++) {
++      if (figures[i] != 0)
++        Training_PlaceFigure(figures[i], TRAINING_CELL_FIGURE_X(i),
++                             TRAINING_CELL_FIGURE_Y(i));
++    }
+     if (gKeysRepeat & KEY_B)
+       break;
+     if (notice != 0) {
+@@ -1513,6 +1571,10 @@ static void Training_RunGrid(s32 unitId, s32 kind) {
+       redraw = 1;
+     }
+   }
++  for (i = 0; i < GRID_PAGE; i++) {
++    if (figures[i] != 0)
++      Sprite_Destroy(figures[i]);
++  }
+   Window_Close(window, 2);
+ }
+ 
+diff --git a/games/tbs/src/scene/import/battle_arena.s b/games/tbs/src/scene/import/battle_arena.s
+index e24709f4c3..11071048b8 100644
+--- a/games/tbs/src/scene/import/battle_arena.s
++++ b/games/tbs/src/scene/import/battle_arena.s
+@@ -41,6 +41,9 @@
+ 	.set import.ArenaMenu_IconChoose, 1
+ 	.set import.ItemPicker_ChooseMember, 1
+ 	.set import.WindowSprite_CreateFromResource, 1
++	.set import.Sprite_Create, 1
++	.set import.Sprite_Destroy, 1
++	.set import.Render_ApplyProjectedPlacement, 1
+ 	.set import.Window_SetTilemapEntry, 1
+ 	.set import.MessageArgument_ClearAll, 1
+ 	.set import.MessageArgument_Push, 1
+diff --git a/games/tbs/src/shop/shop/item_picker.c b/games/tbs/src/shop/shop/item_picker.c
+index 5fa4e743e9..f89b2e1655 100644
+--- a/games/tbs/src/shop/shop/item_picker.c
++++ b/games/tbs/src/shop/shop/item_picker.c
+@@ -99,28 +99,56 @@ s32 ItemPicker_Run(s32 *selectedUnit, s32 *selectedSlot) {
+ /// Arena romhack: what the member picker shows beside the party strip.
+ enum ArenaPickerMode {
+   ARENA_PICKER_ITEMS = 0,    ///< the member's items, as the shops' Sell shows
+-  ARENA_PICKER_DJINN = 1,    ///< the member's Djinn, an element icon and name
+-  ARENA_PICKER_PSYNERGY = 2, ///< the member's Psynergy, an icon and name
++  ARENA_PICKER_DJINN = 1,    ///< the member's Djinn, a figure and a name
++  ARENA_PICKER_PSYNERGY = 2, ///< the member's Psynergy, an icon and a name
+ };
+ 
+ /// The Djinn and Psynergy panels are a 30 by 10 tile window across the top of
+-/// the screen, 224 by 64 pixels inside. Djinn run in three columns of eight
+-/// pixel rows, Psynergy in two columns of sixteen pixel rows; what does not fit
+-/// is not shown.
++/// the screen, 224 by 64 pixels inside (the first pixel is at screen 8, 8).
++/// Both run in rows of sixteen pixels: Djinn in three columns, Psynergy in two.
++/// What does not fit is not shown.
+ #define ARENA_PANEL_DJINN_COLUMNS 3
+-#define ARENA_PANEL_DJINN_ROWS 8
++#define ARENA_PANEL_DJINN_ROWS 4
+ #define ARENA_PANEL_DJINN_COLUMN_WIDTH 72
++#define ARENA_PANEL_DJINN_MAX                                                  \
++  (ARENA_PANEL_DJINN_COLUMNS * ARENA_PANEL_DJINN_ROWS)
+ #define ARENA_PANEL_PSYNERGY_COLUMNS 2
+ #define ARENA_PANEL_PSYNERGY_ROWS 4
+ #define ARENA_PANEL_PSYNERGY_COLUMN_WIDTH 112
+ /// The first of the four element icons among the window tiles; the Djinn
+-/// menu's list uses the same (DJINN_ELEMENT_TILE).
++/// menu's list uses the same (DJINN_ELEMENT_TILE). The fallback for a Djinni
++/// whose figure cannot be made.
+ #define ARENA_ELEMENT_TILE 0x5001
+ /// The game has seven Djinn of each element.
+ #define ARENA_DJINN_PER_ELEMENT 7
++/// How big a Djinni figure is drawn, 16.16: the Djinn menu shows them at full
++/// size (0x10000).
++#define ARENA_FIGURE_SCALE 0xb000
++
++/// Places a Djinni figure so it stands at screen (x, y), the way the Djinn menu
++/// places its figures (DjinnFigures_UpdateAllPositions), at `scale`. Called
++/// every frame a figure shows.
++static void ArenaFigure_Place(struct Sprite *figure, s32 x, s32 y, s32 scale) {
++  struct SpriteScale spriteScale;
++  struct SpritePlacement placement;
++  u32 vertical = 0x01e20000u;
++
++  figure->image.priority = 0;
++  spriteScale.x = scale;
++  spriteScale.y = scale;
++  placement.x = x << 16;
++  placement.height = vertical;
++  placement.y = (y << 16) + vertical;
++  placement.groundHeight = 0;
++  Actor_ApplyProjectedPlacementFar(figure, &placement, &spriteScale,
++                                   FACING_SOUTH);
++}
+ 
+-/// Draws the member's Djinn as an element icon and a name each.
+-static void ArenaPicker_DrawDjinn(struct Window *window, s32 unitId) {
++/// Draws the member's Djinn as a small animated figure of the Djinni's element
++/// and a name each. The figures go in `figures`, with where each stands in
++/// `positions`; returns how many.
++static s32 ArenaPicker_DrawDjinn(struct Window *window, s32 unitId,
++                                 struct Sprite **figures, s16 *positions) {
+   struct Unit *unit = Unit_GetFar(unitId);
+   s32 shown = 0;
+   s32 element;
+@@ -131,23 +159,33 @@ static void ArenaPicker_DrawDjinn(struct Window *window, s32 unitId) {
+     for (index = 0; index < ARENA_DJINN_PER_ELEMENT; index++) {
+       s32 x;
+       s32 y;
++      struct Sprite *figure;
+ 
+       if (!(unit->djinnHeld[element] & (1 << index)))
+         continue;
+-      if (shown >= ARENA_PANEL_DJINN_COLUMNS * ARENA_PANEL_DJINN_ROWS)
+-        return;
++      if (shown >= ARENA_PANEL_DJINN_MAX)
++        return shown;
+       x = (shown % ARENA_PANEL_DJINN_COLUMNS) * ARENA_PANEL_DJINN_COLUMN_WIDTH;
+-      y = (shown / ARENA_PANEL_DJINN_COLUMNS) * 8;
+-      Window_SetTilemapEntryFar(window, ARENA_ELEMENT_TILE + element, x / 8,
+-                                y / 8, 0);
++      y = (shown / ARENA_PANEL_DJINN_COLUMNS) * 16;
++      figure = Sprite_CreateFar(VENUS_DJINNI + element);
++      if (figure != 0) {
++        Sprite_StartAnimationFar(figure, 2);
++        figures[shown] = figure;
++        positions[shown * 2] = 8 + x + 8;
++        positions[shown * 2 + 1] = 8 + y + 15;
++      } else {
++        Window_SetTilemapEntryFar(window, ARENA_ELEMENT_TILE + element, x / 8,
++                                  y / 8, 0);
++      }
+       Text_DrawMessageAsTilesFar(MsgDjinnName + element * DJINN_PER_ELEMENT +
+                                      index,
+-                                 window, x + 12, y);
++                                 window, x + 20, y + 4);
+       shown++;
+     }
+   }
+   if (shown == 0)
+     Text_DrawMessageAsTilesFar(MsgArenaNone, window, 8, 0);
++  return shown;
+ }
+ 
+ /// Draws the member's Psynergy as an icon and a name each.
+@@ -191,11 +229,17 @@ s32 ItemPicker_ChooseMember(s32 mode) {
+   struct ShopWork *shop;
+   struct WindowSprite *cursorAnchor;
+   struct Window *partyWindow;
++  struct Sprite *figures[ARENA_PANEL_DJINN_MAX];
++  s16 positions[ARENA_PANEL_DJINN_MAX * 2];
++  s32 figureCount = 0;
+   s32 memberIndex = 0;
+   s32 redraw = 1;
+   s32 unitId = 0;
+   s32 result = 0;
++  s32 i;
+ 
++  for (i = 0; i < ARENA_PANEL_DJINN_MAX; i++)
++    figures[i] = 0;
+   Shop_InitializeWork();
+   shop = gMenuWork;
+   if (mode == ARENA_PICKER_ITEMS) {
+@@ -227,8 +271,15 @@ s32 ItemPicker_ChooseMember(s32 mode) {
+       MenuCursor_Place(partyWindow, memberIndex * 24 - 12, 0);
+       shop->mode = 3;
+       Shop_DrawParty(partyWindow, memberIndex, 0);
++      for (i = 0; i < ARENA_PANEL_DJINN_MAX; i++) {
++        if (figures[i] != 0)
++          Sprite_DestroyFar(figures[i]);
++        figures[i] = 0;
++      }
++      figureCount = 0;
+       if (mode == ARENA_PICKER_DJINN)
+-        ArenaPicker_DrawDjinn(shop->itemWindow, unitId);
++        figureCount = ArenaPicker_DrawDjinn(shop->itemWindow, unitId, figures,
++                                            positions);
+       else if (mode == ARENA_PICKER_PSYNERGY)
+         ArenaPicker_DrawPsynergy(shop->itemWindow, unitId);
+       else
+@@ -236,6 +287,11 @@ s32 ItemPicker_ChooseMember(s32 mode) {
+     }
+ 
+     wait(1);
++    for (i = 0; i < figureCount; i++) {
++      if (figures[i] != 0)
++        ArenaFigure_Place(figures[i], positions[i * 2], positions[i * 2 + 1],
++                          ARENA_FIGURE_SCALE);
++    }
+     if ((gKeysPressed & KEY_A) != 0) {
+       Sound_PlayFar(SE_MENU_CONFIRM);
+       result = unitId;
+@@ -260,6 +316,10 @@ s32 ItemPicker_ChooseMember(s32 mode) {
+     }
+   }
+ 
++  for (i = 0; i < figureCount; i++) {
++    if (figures[i] != 0)
++      Sprite_DestroyFar(figures[i]);
++  }
+   Menu_ReleaseEntryActorsFar();
+   Window_CloseFar(partyWindow, 2);
+   Window_CloseFar(shop->itemWindow, 2);
+diff --git a/games/tbs/src/system/overlay/imports.inc b/games/tbs/src/system/overlay/imports.inc
+index 643acb4eea..831fcffb11 100644
+--- a/games/tbs/src/system/overlay/imports.inc
++++ b/games/tbs/src/system/overlay/imports.inc
+@@ -75,6 +75,9 @@
+ 	import Task_SetFlags, Task_SetFlagsFar
+ @ Field bank (far_call/FIELD.S)
+ 	import Sprite_StartAnimation, Sprite_StartAnimationFar
++	import Sprite_Create, Sprite_CreateFar
++	import Sprite_Destroy, Sprite_DestroyFar
++	import Render_ApplyProjectedPlacement, Actor_ApplyProjectedPlacementFar
+ 	import Sprite_AddAnimation, Sprite_AddAnimationFar
+ 	import SpriteAnimation_Clear, SpriteAnimation_ClearFar
+ 	import Actor_SelectAnimation, Actor_SelectAnimationFar
+-- 
+2.53.0
+
