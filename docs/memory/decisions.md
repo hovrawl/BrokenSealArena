@@ -38,3 +38,10 @@
   in `objects.tsv`, the bank start in `main.ld`, and `en.po`.
   Not yet done: the series on `arena` is still the old chronological one; the
   layered re-slice onto `arena-clean` is next.
+- **Saves keep the tournament and rung; a series survives a break** (user,
+  2026-10-30). Between rounds the player is never forced into the next fight:
+  they can leave to heal, shop and upgrade and approach the gate again to
+  continue. The first Gauntlet must not need max levels or classes. Djinn raise
+  stats and change classes, a balance variable to test later. Levels are not
+  designed yet. **Multiplayer 1v1 is the end goal**; how to get there (emulator
+  linking, remote play) is an open research spike, see `docs/ROADMAP.md`.

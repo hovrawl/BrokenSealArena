@@ -8,8 +8,9 @@ the next phase is chosen after looking at it. What each patch does today is in
 ## The goal
 
 The Broken Seal turned into a team-versus-team arena: you build a party in the
-manager, fight ladders of CPU teams, and keep your progress. Long term, the same
-hack on The Lost Age, with both games' data and characters in one hack.
+manager, fight ladders of CPU teams, keep your progress, and in the end **take
+your team into a 1v1 against another player's**. Long term, the same hack on The
+Lost Age, with both games' data and characters in one hack.
 
 Two rules shape every phase:
 
@@ -20,6 +21,21 @@ Two rules shape every phase:
    review in the emulator is the user's, so the headless run should have caught
    everything else.
 
+## Decided
+
+These came from the user and are not open:
+
+- **A save keeps where the player got to**: which tournament and which rung, on
+  top of the usual game state (stats, Djinn, items, coins).
+- **A series survives a break.** Between rounds the player is never forced into
+  the next fight. They can walk away to heal, shop and upgrade, then approach the
+  gate again and carry on from the same rung. Only losing, finishing, or an
+  explicit "give up" ends a series.
+- **The first Gauntlet must not need max levels or maxed classes.** A sensibly
+  built party should be able to clear it.
+- **Multiplayer (1v1, team against team) is the end goal.** How to get there is
+  Phase 4.
+
 ## Where we are
 
 Done and smoke-tested: New Game into the arena (level 30 party, 1500 coins), the
@@ -29,28 +45,48 @@ from the game's own shop parts, coins per win, saving through the Pause menu and
 loading with Continue. The patch series is seven layers, our code is in our own
 files, and the trial run for new upstream commits works.
 
-Known gaps: only rungs 1 to 3 have been played; a loaded game starts a new
-series; only the four starting characters exist; one tournament; English only;
-the stock arena still talks about link cables and resets the party order on load.
+Known gaps against the decisions above:
 
-## Phase 1: a loop that is fun to repeat
+- After a win the attendant asks yes or no, and **No ends the series** (the
+  series flag is cleared and the win count reset). Nothing lets the player pause
+  and come back.
+- A save is written as if no series is running (`arena_save.c` clears
+  `FLAG_MONSTER_BATTLE` for the write), so a loaded game starts a new series.
+- Only rungs 1 to 3 have been played; only the four starting characters exist;
+  one tournament; English only; the stock arena still talks about link cables and
+  resets the party order on load.
 
-Goal: start, fight the whole Gauntlet, lose or win, come back tomorrow, and it
-feels fair.
+## Phase 1: a series you can leave and come back to
+
+Goal: start the Gauntlet, win a few fights, go and shop, save, quit, load, walk
+back to the gate, and carry on from the same rung. Losing or finishing ends it.
 
 | Item | Size | Notes |
 |---|---|---|
 | Land PR #1 (the layered series) | S | Everything below builds on it. |
-| Check every rung loads | S | Poke the series' win count (`linkTallies[3]`) in a smoke script and look at each rung's first frame: sprite slots within six, nobody missing, names right. Rungs 4 to 12 have never been seen. |
-| Play every rung | M | A smoke script per rung that fights by mashing A, with the party's level and gear as a variable. Record win or loss and the turns it took in a table here. This is the balance pass's data. |
-| Balance pass | M | Use the table: enemy levels, coin rewards (200 + 100 per win) against prices (stats scale with base, Psynergy 150 + 50 per PP, Djinn 500), and the round 3 boss spike. Decide the target: "a fully upgraded party just clears rung 12". |
-| Save the rung | M | Today a save is written as if no series is running, so Continue starts a new one. Decide what a save means (see Decisions). Needs a game flag byte or the existing `FLAG_MONSTER_BATTLE_WINS`; the rung must survive the save and the stock arena's resets. |
-| A tournament flag | S | A game flag byte that `ArenaLadder_Select` reads, so more than one ladder can exist. This is the prerequisite for Phase 2's second tournament. |
+| Pause and resume | M | Change the post-win flow in `BattleArena_RunRoundResult` and the attendant: after a win, report the coins and leave the series running (no forced yes/no, no auto-start); `BattleArena_EnterBattle` (the gate, step trigger 10) already starts a monster battle at once while the series flag is set, so stepping back into the circle resumes it. Give the attendant a way to give up a series on purpose. The manager and its free heal are available in between. Smoke script: win, walk to the manager, buy, return, fight again. |
+| Series state in the save | M | Store `{tournament, rung}` where it survives a save, and stop `ArenaSave_Begin` clearing the series (it now hides it so a load does not replay a reward). Unknown to settle first: which of the series flags and `linkTallies` the stock save already keeps (the best-streak tally is saved by `BattleArena_SaveMonsterBattleResults`, which suggests tallies have their own path), and that a load must not replay `BATTLE_ARENA_AFTER_MONSTER_WIN`'s reward. Prefer a game flag byte (as `FLAG_MONSTER_BATTLE_WINS` is) for the rung and one for the tournament. Smoke: save mid-series, reload, check the rung with `peek`. |
+| A tournament flag | S | The same tournament byte, read by `ArenaLadder_Select`, so more than one ladder can exist. Needed for Phase 2's second tournament, and it is the "which tournament" in the save. |
+| Check every rung loads | S | Poke the rung in a smoke script and look at each rung's first frame: sprite slots within six, nobody missing, names right. Rungs 4 to 12 have never been seen. |
+| Play every rung and balance | M | A smoke script per rung that fights by mashing A. Record win or loss and the turns in a table here. **Target: a sensible party clears the Gauntlet without max levels or maxed classes.** Variables: the party's level (all four start at 30), Djinn (see below), gear bought, the stat and Psynergy shops, the coins earned (200 + 100 per win). Fix the round 3 boss spike. If a rung is unfair, change the data, not the code. |
 | Stock text and party order | S | Remove the link-cable lines from the attendant's talk; keep the party order across a load. |
 
-Exit: every rung seen and played, a written balance table, a save that keeps your
-place, and a smoke run for each. If a rung turns out to be unfair, change the
-data, not the code.
+**Djinn are a balance variable.** Setting a Djinni on a character raises their
+stats and can change their class, so a party with Djinn set is stronger than the
+stat shop alone suggests. The first balance pass should test it: set Djinn on the
+party, see which classes that gives, and how far the Gauntlet goes with and
+without. The first Gauntlet is not tuned around them yet; the table records what
+they do so the later tournaments can be.
+
+**Levels are not designed yet.** The party starts at level 30 and the ladder
+targets run from 10 to 45. Whether characters level up (from fights, from the
+shop) and how their growth fits the ladder is open. The balance pass should find
+out where level 30 plus purchases and Djinn stands against each rung before we
+design it.
+
+Exit: pause, shop, resume and save and load all work and are scripted; every rung
+seen and played; a written balance table; a sensible party clears the first
+Gauntlet.
 
 ## Phase 2: more to do
 
@@ -59,10 +95,10 @@ played; they are independent.
 
 | Item | Size | Notes |
 |---|---|---|
-| A second tournament | M | A second ladder (`gArenaLadder` is one table today) chosen from the attendant's menu, with its own theme and rewards. Needs the tournament flag. Teams are rows of `enemy_table.c`; a rung stays within six sprite slots. |
+| A second tournament | M | A second ladder (`gArenaLadder` is one table today) chosen from the attendant's menu, with its own theme and rewards. Needs the tournament flag. Teams are rows of `enemy_table.c`; a rung stays within six sprite slots. May assume Djinn and levelling. |
+| Levels and growth | M | Design after the Phase 1 findings: how characters grow beyond buying stats. |
 | Rewards beyond coins | M | Items, Djinn or Psynergy for clearing a tournament; the manager's stock changing as you progress. |
-| Characters beyond the four | L | The party is fixed at Isaac, Garet, Mia and Ivan. More means more recruits in the manager and the right sprites in battle and in the shop's strip (CHILD sprites are the open question). Investigate before committing; this may be much larger than it looks. |
-| Rematch and rest options | S | Healing between rounds is already free; decide if that is right once the balance pass is done. |
+| Characters beyond the four | L | The party is fixed at Isaac, Garet, Mia and Ivan. More means more recruits in the manager and the right sprites in battle and in the shop's strip (CHILD sprites are the open question). Investigate before committing; this may be much larger than it looks. Note a 1v1 link battle takes three a side (Phase 4). |
 
 Exit: at least one new thing to do that has been played end to end.
 
@@ -77,18 +113,54 @@ Do not start it on a hunch. After the Phase 1 balance pass, play the Gauntlet an
 decide: if fights are fine, Route A stays; if they feel flat, spike Route B on one
 rung first (one hand-built team that uses Djinn and a summon) and judge that.
 
-Multiplayer (the stock link battle) is a separate question: it needs two
-emulators linked, and the attendant's Multiplayer branch is the stock one. Treat
-it as research (can the headless driver link two instances?) before planning.
+## Phase 4: 1v1, team against team
 
-## Phase 4: something to hand to a player
+You said you have no idea how to get there, so here is what is already true and
+what is not known.
+
+**What the stock game already does.** The Battle Arena has a linked battle: two
+players, each with a Game Boy Advance and a link cable, talk to the attendant and
+step into the circle, and the game exchanges their parties over the link
+(`BattleArena_ExchangePartyRecords`, `SendPartyRecords`, `ReceivePartyRecords`:
+about 0x154 bytes a unit) before the battle. Our attendant's Multiplayer choice
+already goes into that stock branch. So the game side of 1v1 largely exists; the
+work is making it run, and fit our hack. Things that follow from the code:
+
+- **Three a side.** A linked battle takes the first three party members
+  (`FLAG_LINK_BATTLE_ARRANGED`, `LOBBY_UNIT_RECORD_COUNT` is 3). Our party has four.
+  Either the hack's 1v1 is three-versus-three, or the exchange grows to four (a
+  protocol change, which needs both sides to run the hack).
+- **Both players need the same build.** The records carry the units as built, so
+  stats from our shop should travel with them, but ids and layouts must match.
+  That means one released version for both players.
+- **Our edits to the arena touch this path** (the attendant's menu, the pause
+  between rounds). Phase 1 must leave the stock link flow intact.
+
+**What is not known (a research spike, before any plan):**
+
+1. Can two copies of the hack link at all in an emulator on one machine? mGBA has
+   multiplayer windows that emulate the link cable, and libmgba exposes a lockstep
+   mode for linked cores; unverified that our headless driver can run two, which
+   would let a smoke script test a linked battle.
+2. Can two players do it over the internet? Emulators link locally only; remote
+   play needs a relay or netplay tool, and none is chosen. This is the hard part
+   and the likeliest to decide the shape of the feature (how players meet, whether
+   a turn-by-turn lockstep over latency is tolerable).
+3. Do the exchanged records include everything our shop changes (base stats,
+   Djinn, Psynergy, gear)? Read the record builder before assuming.
+4. Is a second ROM build needed for testing, or can both emulators load the same?
+
+Exit of the spike: a written answer to those four, a recommended route, and a
+smoke script that links two instances if (1) is yes. Then plan the feature.
+
+## Phase 5: something to hand to a player
 
 Goal: someone with their own copy of the game can play the hack.
 
 - A binary patch (BPS or xdelta) as a release artifact, built from a clean
   checkout of the pinned upstream plus our patches, applied to the player's own
   original ROM. `tbs-en` reproduces the original byte for byte, so the base is well
-  defined (`docs/WORKFLOW.md`).
+  defined (`docs/WORKFLOW.md`). Both players of a 1v1 need the same release.
 - Player-facing instructions and a changelog. Never publish a ROM, a save or
   anything extracted from one.
 - Check upstream's licence terms for what we may distribute, and credit it.
@@ -97,7 +169,7 @@ Goal: someone with their own copy of the game can play the hack.
 
 Exit: a patch file and a short README that a stranger can follow.
 
-## Phase 5: The Lost Age
+## Phase 6: The Lost Age
 
 Blocked on upstream decompiling `games/tla`. The pieces to prepare now cost
 nothing: the layered patches, the port notes in `CHANGES.md`, and our code in our
@@ -112,31 +184,34 @@ own files (so the port is "re-hook a handful of files"). When `games/tla` builds
 ## Cross-cutting
 
 - **Tests:** the smoke suite checks pictures. Add `peek` assertions where a value
-  matters (the rung, the coins, a stat after a purchase) so a regression fails
-  without someone looking.
-- **Upstream updates:** run `scripts\try-upstream.ps1` on a schedule or before any
-  update; it takes minutes and names the commit that broke us.
+  matters (the rung, the tournament, the coins, a stat after a purchase) so a
+  regression fails without someone looking.
+- **Upstream updates:** run `scripts\try-upstream.ps1` before any update; it takes
+  minutes and names the commit that broke us.
 - **CI:** the build needs the original ROM, which cannot be in the repo, so hosted
   CI cannot build it. The local trial run is the substitute.
 - **Housekeeping:** delete the leftover branches in `~/alchemy` (`spike-newfile`,
   `arena-trial`); keep `arena-chrono` until PR #1 is merged and has been used for a
   while.
 
-## Decisions needed from you
+## Still open
 
-1. **What does a save mean?** Options: (a) save between series, as now, and the
-   Gauntlet restarts (simple; the rung is lost); (b) save keeps the current rung
-   and resumes it (needs care so a load does not replay a reward); (c) both: save
-   at a rung boundary only. I would take (b) with a one-rung checkpoint.
-2. **How hard should the Gauntlet be?** "A fully upgraded party just clears rung
-   12" is my proposal for the balance target; say if you want it harder.
-3. **Which Phase 2 item first?** I would take the second tournament; the
+1. **Give up on purpose.** With no forced yes/no, how does a player abandon a
+   series? Suggest a "give up" option on the attendant's menu while one is running.
+   Does giving up count as a loss for the tallies?
+2. **What happens on a loss?** Today it ends the series. Keep that, or send the
+   player back a rung, or let them retry the rung? A harsher ending makes pausing
+   more important; a softer one makes balance easier.
+3. **Three or four a side in 1v1?** Decide after the Phase 4 spike, since four
+   means changing the link protocol.
+4. **Which Phase 2 item first?** I would take the second tournament; the
    characters item should be investigated before it is promised.
-4. **Is Multiplayer in scope at all?** It changes how much of the stock arena we
-   keep.
 
 ## Order, in short
 
-PR #1, then Phase 1 top to bottom (rungs seen, rungs played, balance, rung save,
-tournament flag), then the gate in Phase 3, then Phase 2 and 4 in whichever order
-you want a playable thing first. Phase 5 waits for upstream.
+PR #1, then Phase 1 (pause and resume first, because the save design depends on
+it; then series state in the save and the tournament flag; then rungs seen and
+played and the balance pass). Run the Phase 4 spike alongside, since it is
+research and its answer should not wait until the end. Then the Phase 3 gate,
+Phase 2 and Phase 5 in whichever order you want a playable thing first. Phase 6
+waits for upstream.
