@@ -43,6 +43,7 @@ a C compiler are already there for the build).
 | `peek HEXADDR N` | print N (1, 2 or 4) bytes at an address |
 | `poke HEXADDR N VALUE` | write VALUE (decimal) as N bytes |
 | `save FILE` / `load FILE` | savestate |
+| `reset` | restart the console; the cartridge save is kept (to test Continue) |
 
 Keys: `A B`, `S` select, `T` start, `U D L R` the D-pad, `l r` the shoulders.
 Combine them: `press AD 3`.
@@ -73,6 +74,14 @@ Tests (each ends in shots; `build\smoke\shots\sheet.png` shows them all):
 - `lose.txt`: the win count poked to 11 before the circle, so the fight is round 12
   and mashing A loses; shots every few presses to catch the loss line (more A
   presses open the field menu, which shows the party restored).
+- `rungs.txt`: the first frame of every Gauntlet rung. It reaches the series once,
+  saves a state, then for each rung loads it, pokes the win count and walks into the
+  circle (all twelve teams render, within six sprite slots).
+- `resume.txt`: save mid-series through the Pause menu, `reset`, choose Continue,
+  `peek` the win count (0x020004EA) and the series flag (0x0200006E, 8 when set),
+  walk up and talk: "Round 6 of 12. Do you want to give up?". The title needs
+  Continue chosen with D, A, A, A (with waits); Isaac starts at the door with no
+  greeter walk-in, so the walk to the attendant differs from `to_solo.txt`.
 - `pause.txt`, `save.txt`: the Pause menu and Save your quest.
 - `boot.txt`, `walk.txt`: calibration runs.
 ## Tips

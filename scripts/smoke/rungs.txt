@@ -1,0 +1,113 @@
+# Look at every rung of the Monster Gauntlet: the first frame of each fight.
+# Reach the series once, save a state, then for each rung load it, poke the win
+# count (linkTallies[3] at 0x020004EA) and walk into the circle.
+include to_solo.txt
+save /tmp/solo.state
+load /tmp/solo.state
+poke 0x020004EA 2 0
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung00.png
+load /tmp/solo.state
+poke 0x020004EA 2 1
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung01.png
+load /tmp/solo.state
+poke 0x020004EA 2 2
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung02.png
+load /tmp/solo.state
+poke 0x020004EA 2 3
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung03.png
+load /tmp/solo.state
+poke 0x020004EA 2 4
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung04.png
+load /tmp/solo.state
+poke 0x020004EA 2 5
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung05.png
+load /tmp/solo.state
+poke 0x020004EA 2 6
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung06.png
+load /tmp/solo.state
+poke 0x020004EA 2 7
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung07.png
+load /tmp/solo.state
+poke 0x020004EA 2 8
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung08.png
+load /tmp/solo.state
+poke 0x020004EA 2 9
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung09.png
+load /tmp/solo.state
+poke 0x020004EA 2 10
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung10.png
+load /tmp/solo.state
+poke 0x020004EA 2 11
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung11.png

@@ -227,12 +227,11 @@ Each is one layer, in order; each builds on its own.
   save holds the whole game state, so base stats, Psynergy, Djinn, items and
   coins persist.
 - `ArenaSave_Begin`/`ArenaSave_End` set `next`/`entrance` to the arena at
-  `BATTLE_ARENA_FROM_FILE_SCREEN` and clear `FLAG_MONSTER_BATTLE` for the write,
-  then put both back. Without it a load enters with the last battle's entrance
-  (`BATTLE_ARENA_AFTER_MONSTER_WIN`) and pays its reward again, or resumes the
-  series.
+  `BATTLE_ARENA_FROM_FILE_SCREEN` for the write, then put both back. Without it a
+  load enters with the last battle's entrance (`BATTLE_ARENA_AFTER_MONSTER_WIN`)
+  and pays its reward again. (This patch also cleared `FLAG_MONSTER_BATTLE` for
+  the write, so a load started a new series; patch 9 stopped that.)
 - Loading: the title's Continue.
-- Not saved: the Monster Gauntlet rung, so a loaded game starts a new series.
 - History: an earlier attempt put Save in the party manager's menu. A fifth icon
   made the prompt's window open without its text, and a second attempt gave it a
   person to talk to; both were dropped for the Pause menu.
@@ -271,10 +270,30 @@ Each is one layer, in order; each builds on its own.
   reports "The link was disconnected."; a field message with two number blanks
   shows the first number twice, so "of 12" is in the message text and the code
   asserts the constant.
-- Not done: the series is not in the save (a load starts a new one); roadmap
-  Phase 1.
 - Port notes: the attendant, trigger and flag names differ in The Lost Age; the
   spawn row and the circle position need checking there.
+
+### 9. A series in progress is saved and resumed
+- Patch: `0009-Arena-a-series-in-progress-is-saved-and-resumed.patch`
+- Files: `window/screens/arena_save.c` only (a smaller `ArenaSaveState`).
+- A series needs two things to survive a save, and both were already saved:
+  `FLAG_MONSTER_BATTLE` is 0x173, a persistent game flag (the scene and area temp
+  ranges start at 0x200 and are cleared on scene or area changes), and the win
+  count (`linkTallies[3]`, the round) is in the saved `MainRoutineWork`. Patch 7
+  cleared the flag for the write; this patch stops, so Continue resumes the
+  Gauntlet at the same round and the attendant asks "Round n of 12. Do you want to
+  give up?". The entrance is still overridden to the arena's door, so the last
+  battle's reward is not replayed.
+- It fixes a bug in patch 7: saving mid-series showed "The link was disconnected."
+  (the flag was cleared for the write while `FLAG_BATTLE_ARENA_PLAYER_AGREED`, a
+  scene temp flag that is saved raw, stayed set, which the link poll reads as a
+  lost link).
+- Not done: the tournament is not stored (there is only one, so Continue is
+  right today). A second tournament needs a persistent byte for it (roadmap
+  Phase 1, "A tournament flag").
+- Smoke: `resume.txt` saves mid-series, restarts the console (the new `reset`
+  driver command), chooses Continue, reads the tally and flag with `peek`, and
+  talks to the attendant.
 
 ## Dropped on the way
 

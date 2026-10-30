@@ -74,6 +74,15 @@
 - A field message (`FieldMessage_ShowAtActor`) with two `{argument_signed_number}`
   blanks showed the first number twice ("Round 1 of 1"). Cause not confirmed; put
   the second number in the text and assert the constant.
+- Scene temp flags (0x200 to 0x2ff) are written to the save raw, so a loaded game
+  can start with one set that the live game had set. A file saved mid-series with
+  `FLAG_MONSTER_BATTLE` cleared but `FLAG_BATTLE_ARENA_PLAYER_AGREED` set loaded
+  into "The link was disconnected." Save state consistently: leave both as they are.
+- The flag range decides what a save keeps: below 0x200 persistent; 0x200 to 0x2ff
+  scene temp and 0x300 to 0x3ff area temp (cleared on a scene or area change).
+  `FLAG_MONSTER_BATTLE` is 0x173 (persistent); `FLAG_MONSTER_BATTLE_WINS` (0x3f8)
+  and `FLAG_AREA_TEMP_E8` are area temp, so keep real state in persistent flags or
+  the saved struct (`linkTallies`).
 - `MsgLobbyWonNumberBattle` uses `{plural_suffix}`: zero reads "You won 0 battle."
 - `BattleArena_SaveMonsterBattleResults` writes into the current file with its own
   saving messages; after a New Game there is no current file. It is skipped.

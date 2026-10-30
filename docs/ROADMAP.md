@@ -95,6 +95,18 @@ Goal: start the Gauntlet, win a few fights, go and shop, save, quit, load, walk
 back to the gate, and carry on from the same rung. Losing, finishing or giving up
 ends it. Its screens are the Phase 0 ones; this phase is the logic behind them.
 
+**Status (2026-10-30).** Phase 0 is done (S1 to S3 built and reviewed, patch 8).
+Phase 1 so far:
+- Done: PR #1 landed; **pause and resume** (patch 8); **series state in the save**
+  (patch 9): the round and the series flag survive a save and Continue, tested
+  with `resume.txt`; **every rung loads** (`rungs.txt`: all twelve teams, within
+  six sprite slots).
+- Left: the tournament flag (deferred until a second tournament exists, since with
+  one the saved flag already says which; it needs a persistent byte, see "Stats
+  per gauntlet" below for how to pick one), playing every rung and the balance
+  pass, and the stock text and party order. The table below keeps the original
+  descriptions.
+
 | Item | Size | Notes |
 |---|---|---|
 | Land PR #1 (the layered series) | S | Everything below builds on it. |
