@@ -11,6 +11,24 @@ gate resumes it; the attendant shows the current menu when no Gauntlet is runnin
 and a give-up Yes/No when one is; a loss ends the whole series with no retry;
 saves keep the tournament and rung.
 
+## Status
+
+**S1, S2 and S3 are built** (patch 8, branch `ui-series`, PR pending) and
+smoke-checked with `give_up.txt`, `round.txt`, `clear.txt` and `lose.txt`. What
+building taught, and what to look at in review:
+
+- S1 needs only **one** new message: the Yes branch reuses the stock end-of-series
+  lines and the No branch the stock "Good luck!".
+- S2 needed one more change the spec missed: the stock after-win spawn is **inside
+  the circle**, so with the question gone the next fight started at once. The
+  spawn moved outside the circle, facing it (z 200 to 240).
+- Giving up before any win reads "You won 0 battle." (the stock plural rule treats
+  zero as singular). Worth a better line? Review.
+- The stock record write into the file is skipped for the whole flow: it shows its
+  own saving messages and writes into a "current file" that does not exist after a
+  New Game. Tallies are saved with the game. See "Stats" in `docs/ROADMAP.md`.
+- S3 verified: after a loss the party is back at full HP and PP.
+
 ## Summary
 
 | # | Screen | Reuses | New messages |
@@ -42,12 +60,15 @@ Windows:       The stock ones. The question is a field message at the actor
                (FieldMessage_ShowAtActor); the Yes/No is the game's own icon pair
                with the hand. We place nothing ourselves.
 Text:          MsgArenaGiveUpPrompt  (new, ends {end_now})
-                 "Round {n} of {m}.\nDo you want to\ngive up?{end_now}"
-               MsgArenaGaveUp        (new, ends {end_wait})
-                 "Very well.\nPlease speak to me\nwhen you wish to\nbattle again.{end_wait}"
-               MsgLobbyGoodLuck      (stock, "Good luck!{end_wait}")
-               {n} is the round being faced (wins + 1), {m} is the number of
-               rungs. Both are MessageArgument_Push numbers.
+                 "Round {n} of 12.\nDo you want to\ngive up?{end_now}"
+               Yes:  the stock end-of-series lines, MsgLobbyWonNumberBattle
+                 ("You won {n} battles. Please speak to me when you wish to
+                 battle again.") or ...Broke, so no new message.
+               No:   MsgLobbyGoodLuck (stock, "Good luck!{end_wait}")
+               {n} is the round being faced (wins + 1), pushed with
+               MessageArgument_Push. BUILT NOTE: a field message with two number
+               blanks showed the first number twice, so 12 is in the text and the
+               code asserts ARENA_LADDER_COUNT == 12.
 Icons/sprites: Yes and No, the stock pair; nothing new to check.
 Input:         A on a choice; B is No (stock behaviour). The Start key is not
                handled (see open questions).
@@ -86,7 +107,7 @@ Windows:       Field messages at the attendant, as now.
 Text:          MsgArenaVictory       (exists)
                  "Victory! You won\n{n} coins.{end_wait}"
                MsgArenaNextRound     (new, ends {end_wait})
-                 "Round {n} of {m} won!\nStep into the circle\nwhen you are ready.{end_wait}"
+                 "Round {n} of 12 won!\nStep into the circle\nwhen you are ready.{end_wait}"
                MsgArenaGauntletCleared (new, ends {end_wait}; rung 12)
                  "You cleared the\nMonster Gauntlet!\nCongratulations!{end_wait}"
 Icons/sprites: none.

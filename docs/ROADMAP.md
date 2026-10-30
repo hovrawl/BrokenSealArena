@@ -222,6 +222,19 @@ own files (so the port is "re-hook a handful of files"). When `games/tla` builds
 Ideas from the user that the current design leaves room for. None blocks a phase
 above.
 
+- **Stats per gauntlet type.** Possible, and cheap, but ours to build: the stock
+  tallies (`gMainRoutineWork.linkTallies`: wins, losses, best streak, current
+  streak) are one set for all monster battles, not per tournament. The save
+  writes the whole `MainRoutineWork` struct (0xd20 bytes) and the game flags, and
+  checksums them, and the struct has unnamed spare bytes ("no code names it":
+  about 0x84 after the Lucky Wheel prizes and 0x50 after the halt fields, plus a
+  few small gaps). A few bytes per tournament (attempts, wins, losses, clears,
+  best round) fit and are saved and checksummed for free. Caveats to check first:
+  "no code names it" is not proof the original never used it (the Lost Age may
+  read some of it when a TBS file is transferred); and the tournament flag (Phase
+  1) must exist so there is a key. Until then the stock tallies are enough and
+  the stock record write into the file stays off. Detailed fight data (below) does
+  not fit in the save.
 - **Post-battle events.** Today every outcome is the attendant speaking a line
   and the standard spawn. Wanted: a minor event for each win, a major one for
   winning a whole tournament (rung 12 is a plain win for now), and a bespoke one
