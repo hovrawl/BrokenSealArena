@@ -59,11 +59,19 @@ change costs nothing, before it costs a build.
   `Text_DrawMessageAsTiles`, `Text_Draw*InWindow`, `Text_DrawNumberInWindow`. Never
   the canvas calls `Text_DrawString` and `Text_DrawNumber`: they use a different,
   monospaced font and ignore `Window_ClearInteriorTiles`.
-- **Wrapping only exists for messages.** A message wraps and pages (a page has at
-  most four lines); a tile label is one line and does not wrap. Anything long is
-  a message. Anything dynamic ("You won 200 coins.") is a message with a blank
-  filled by `MessageArgument_Push` before it is drawn (eight blanks at most;
-  numbers `MESSAGE_ARGUMENT_NUMBER`, names `{argument_actor_name:1}`).
+- **Messages are laid out by hand.** The stock messages break their lines with
+  `\n` in the `.po` (about 20 characters or fewer a line, for example "Not bad!
+  Would you" / "like to fight" / "the next monster?"), start a new page with
+  `{page_break}`, and have at most four lines a page; the window is sized to the
+  text. Write ours the same way, and compare the line length with a stock message.
+  A tile label is one line and never wraps. Anything long is a message.
+- **End codes matter.** A prompt that leads into a menu or a Yes/No ends with
+  `{end_now}` (the window stays for the choice). A line the player must read ends
+  with `{end_wait}` (it waits for a button). Copy the stock message nearest in
+  purpose.
+- **Dynamic text is a message with a blank**, filled by `MessageArgument_Push`
+  before it is drawn (eight blanks at most; numbers `MESSAGE_ARGUMENT_NUMBER`,
+  names `{argument_actor_name:1}`, a plural with `battle{plural_suffix}`).
 - **Clear before every redraw** with `Window_ClearInteriorTiles`, or the old text
   shows through wherever the new text is shorter. The text-tile pool is small
   (128 tiles, 256 with `Text_UseExtraTiles`); a screen that redraws long lists
@@ -162,7 +170,8 @@ What each is made of, so a new one can start from the nearest.
 ## 6. Review checklist (before anyone looks at it)
 
 - [ ] Every string the player reads is a message; nothing uses the canvas calls.
-- [ ] Long text is a message, not a tile label, and wraps inside its window.
+- [ ] Long text is a message, not a tile label; its lines are hand-broken at stock
+      length and it ends with the right code (`{end_now}` or `{end_wait}`).
 - [ ] Every redraw clears first; no old text shows through. Check by going to a
       shorter entry and back.
 - [ ] Windows, icons and the cursor sit in the standard slots; alignment is the
