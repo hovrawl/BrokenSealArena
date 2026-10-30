@@ -40,7 +40,8 @@ at `\\wsl.localhost\Ubuntu\home\nathan\alchemy`.
 ## Everyday loop
 
 1. Edit in `~/alchemy` (branch `arena`). Guard each change behind a switch
-   (`ARENA_BOOT`, `ARENA_LADDER`, `ARENA_TRAINING`, `ARENA_PAUSE_MENU`).
+   (`ARENA_BOOT`, `ARENA_LADDER`, `ARENA_TRAINING`, `ARENA_PAUSE_MENU`, all in
+   `include/arena_config.h`).
 2. Build: `powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1`
    (output `build\tbs-en.gba`; if the emulator holds it open it writes
    `tbs-en.new.gba`). **Check the build log for `***` or the ROM's timestamp;
@@ -54,8 +55,11 @@ Upstream moves: `scripts\update-upstream.ps1` (look), then `-Apply`.
 
 ## Conventions
 
-- One patch = one coherent change; squash false starts (history in `CHANGES.md`
-  records what was tried and dropped).
+- One patch = one feature layer, in dependency order, each building on its own;
+  squash false starts (history in `CHANGES.md` records what was tried and
+  dropped). Our code goes in our own files (`arena_*.c`, `arena_config.h`,
+  `module/arena.h`); upstream files get only short hooks, so a new upstream
+  rebases cleanly. Run `scripts\try-upstream.ps1` before adopting one.
 - Follow alchemy's rules for the code you touch: C89 with GNU extensions,
   `Module_PascalCase` functions, `gName` globals, `LOUD_CASE` constants,
   clang-format LLVM style. Byte-matching no longer matters for hack code, but

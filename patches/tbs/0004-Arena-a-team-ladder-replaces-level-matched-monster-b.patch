@@ -1,0 +1,159 @@
+From c99a1b627c67a50cd93c9da516b5f04e911b1513 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 30 Oct 2026 14:51:36 +1100
+Subject: [PATCH] Arena: a team ladder replaces level-matched monster battles
+
+battle/battle/arena_ladder.c (a part of battle.c, included before formation.c)
+holds gArenaLadder, twelve fixed mixed teams of existing enemies with a target
+level each, and ArenaLadder_Select. Under FLAG_MONSTER_BATTLE,
+BattleFormation_BuildEnemyList takes the rung for the series' win count
+(linkTallies[3]) instead of BattleFormation_SelectLevelMatchedCandidate; the
+levels come from the existing BattleEnemy_AdjustLevel. Switch: ARENA_LADDER.
+A formation has six sprite slots: a small enemy takes one, any other two.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/battle/battle.c              |  1 +
+ games/tbs/src/battle/battle/arena_ladder.c | 87 ++++++++++++++++++++++
+ games/tbs/src/battle/battle/formation.c    |  7 ++
+ 3 files changed, 95 insertions(+)
+ create mode 100644 games/tbs/src/battle/battle/arena_ladder.c
+
+diff --git a/games/tbs/src/battle/battle.c b/games/tbs/src/battle/battle.c
+index 5b964da09d..dfad8ec900 100644
+--- a/games/tbs/src/battle/battle.c
++++ b/games/tbs/src/battle/battle.c
+@@ -39,6 +39,7 @@
+ #include "battle/transition.c"
+ #include "battle/background.c"
+ #include "battle/element_glow.c"
++#include "battle/arena_ladder.c"
+ #include "battle/formation.c"
+ #include "battle/battle_sprite.c"
+ #include "battle/spoils.c"
+diff --git a/games/tbs/src/battle/battle/arena_ladder.c b/games/tbs/src/battle/battle/arena_ladder.c
+new file mode 100644
+index 0000000000..0c100c537a
+--- /dev/null
++++ b/games/tbs/src/battle/battle/arena_ladder.c
+@@ -0,0 +1,87 @@
++/// @file
++/// Arena romhack: the team ladder. In a monster series, the enemies come from
++/// gArenaLadder, a rung for each win, instead of from level-matched formations.
++// Part of battle.c.
++
++#include "../battle_internal.h"
++#include "arena_config.h"
++
++/// Arena romhack: one rung of the team ladder. In a monster series, win number
++/// n (0-based) fights rung n; its enemies are levelled to targetLevel.
++struct ArenaTeam {
++  u8 targetLevel;
++  struct Formation formation;
++};
++
++#define ARENA_LADDER_COUNT 12
++
++// clang-format off
++// Arena romhack: the team ladder. Members are rows of enemy_table.c; a small
++// enemy takes one of the battle's six sprite slots and any other two, so each
++// rung's counts stay within six. Counts are fixed (minimum equals maximum).
++#define ARENA_TEAM(level, ...) {(level), {.layout = 2, __VA_ARGS__}}
++static const struct ArenaTeam gArenaLadder[ARENA_LADDER_COUNT] = {
++    // Skeleton, Bats and a Slime
++    ARENA_TEAM(10, .memberIds = {24, 5, 11}, .minimumCounts = {1, 2, 1}, .maximumCounts = {1, 2, 1}),
++    // Rat Fighter, Drone Bees and a Mole
++    ARENA_TEAM(13, .memberIds = {34, 36, 63}, .minimumCounts = {1, 2, 1}, .maximumCounts = {1, 2, 1}),
++    // Brigand, Harpy and a Dirge
++    ARENA_TEAM(16, .memberIds = {23, 57, 66}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
++    // Mercury Djinni, Gnome Mage and a Golem
++    ARENA_TEAM(19, .memberIds = {154, 46, 93}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
++    // Orc Captain, Siren and a Mole Mage
++    ARENA_TEAM(22, .memberIds = {76, 60, 65}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
++    // The Colosso champions: Azart, Satrage and Navampa
++    ARENA_TEAM(25, .memberIds = {124, 126, 128}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
++    // Cannibal Ghoul, Ice Gargoyle and two Recluses
++    ARENA_TEAM(28, .memberIds = {50, 89, 44}, .minimumCounts = {1, 1, 2}, .maximumCounts = {1, 1, 2}),
++    // Lizard King, Wild Gryphon and a Jupiter Djinni
++    ARENA_TEAM(31, .memberIds = {121, 91, 163}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
++    // Thunder Lizard, Chimera Mage and a Skull Warrior
++    ARENA_TEAM(34, .memberIds = {80, 103, 26}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
++    // Three Djinn: Mars, Venus and Mercury
++    ARENA_TEAM(37, .memberIds = {159, 152, 156}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
++    // Poison Toad, Fenrir and an Earth Lizard
++    ARENA_TEAM(41, .memberIds = {134, 98, 79}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
++    // Menardi, Saturos and Cerebus
++    ARENA_TEAM(45, .memberIds = {118, 116, 97}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
++};
++// clang-format on
++
++#if ARENA_LADDER
++/// Arena romhack: the team a monster series fights next. Win number n of the
++/// series (the Battle Arena's LINK_TALLY_MONSTER_STREAK, linkTallies[3]) fights
++/// rung n of gArenaLadder; past the last rung it fights the last again, a level
++/// stronger for each win. outMargin is the levels each enemy gains to reach the
++/// rung's level from the average of its members.
++static const struct Formation *ArenaLadder_Select(s32 *outMargin) {
++  s32 streak = gMainRoutineWork.linkTallies[3];
++  s32 rung = streak;
++  s32 target;
++  s32 levelTotal = 0;
++  s32 members = 0;
++  s32 i;
++  const struct ArenaTeam *team;
++
++  if (rung >= ARENA_LADDER_COUNT)
++    rung = ARENA_LADDER_COUNT - 1;
++  team = &gArenaLadder[rung];
++  for (i = 0; i < 5; i++) {
++    struct EnemyDefinition *enemy;
++
++    if (team->formation.maximumCounts[i] == 0)
++      continue;
++    enemy = (struct EnemyDefinition *)Enemy_GetDefinitionFar(
++        team->formation.memberIds[i] + ENEMY_ID_FIRST);
++    if (enemy == 0)
++      continue;
++    levelTotal += enemy->level;
++    members++;
++  }
++  target = team->targetLevel + (streak - rung);
++  if (target > UNIT_LEVEL_MAX)
++    target = UNIT_LEVEL_MAX;
++  *outMargin = members != 0 ? target - levelTotal / members : 0;
++  return &team->formation;
++}
++#endif
+diff --git a/games/tbs/src/battle/battle/formation.c b/games/tbs/src/battle/battle/formation.c
+index d56e52646e..45c6927af4 100644
+--- a/games/tbs/src/battle/battle/formation.c
++++ b/games/tbs/src/battle/battle/formation.c
+@@ -3,6 +3,7 @@
+ // Part of battle.c.
+ 
+ #include "../battle_internal.h"
++#include "arena_config.h"
+ 
+ // Declared here without const, as Camelot's code read it: with const,
+ // alchemy-gcc compiles BattleFormation_SelectLevelMatchedCandidate differently.
+@@ -488,11 +489,17 @@ s32 BattleFormation_BuildEnemyList(s32 recordId) {
+   levelAdjustment = 0;
+   battle->enemyKindCount = 0;
+   enemyKinds = listBuffer;
++#if !ARENA_LADDER
+   if (GameFlag_GetFar(FLAG_MONSTER_BATTLE))
+     recordId = BattleFormation_SelectLevelMatchedCandidate(&levelAdjustment);
++#endif
+   if (recordId < 0 || recordId >= FORMATION_COUNT)
+     recordId = 1;
+   record = (struct Formation *)&gFormations[recordId];
++#if ARENA_LADDER
++  if (GameFlag_GetFar(FLAG_MONSTER_BATTLE))
++    record = (struct Formation *)ArenaLadder_Select(&levelAdjustment);
++#endif
+   for (memberIndex = 0;
+        memberIndex <= 4 && record->minimumCounts[memberIndex] == 0;
+        memberIndex++)
+-- 
+2.53.0
+
