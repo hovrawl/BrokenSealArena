@@ -1,0 +1,552 @@
+From ee9e2f1dfc2d203539e3ca47a8f8932750769e20 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 30 Oct 2026 11:10:26 +1100
+Subject: [PATCH] Arena: Djinn and Psynergy panels and paged icon purchase
+ grids
+
+The party strip picker takes a mode: the member's items, Djinn (element icon and
+name, three columns of eight rows) or Psynergy (icon and name, two columns of
+four), in a panel across the top. The Djinn and Psynergy shops are now grids of
+icon and name, two columns by six rows, with pages on L and R and the price
+and page number under them.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/module/shop/shop.h      |   7 +-
+ games/tbs/src/scene/battle_arena.c        | 261 ++++++++++++----------
+ games/tbs/src/scene/import/battle_arena.s |   2 +
+ games/tbs/src/shop/shop/item_picker.c     | 116 +++++++++-
+ games/tbs/src/system/overlay/imports.inc  |   1 +
+ games/tbs/text/en.po                      |   8 +
+ 6 files changed, 266 insertions(+), 129 deletions(-)
+
+diff --git a/games/tbs/include/module/shop/shop.h b/games/tbs/include/module/shop/shop.h
+index 36dd727541..25b744892f 100644
+--- a/games/tbs/include/module/shop/shop.h
++++ b/games/tbs/include/module/shop/shop.h
+@@ -97,8 +97,9 @@ s32 ItemPicker_Run(s32 *selectedUnit, s32 *selectedSlot);
+ s32 Shop_SelectUse(s32 unitId);
+ void Shop_DrawUseItem(struct Window *window, s32 unitId, s32 slot);
+ 
+-/// Arena romhack (item_picker.c): chooses a party member in the shop strip;
+-/// returns the unit id, or -1 for B.
+-s32 ItemPicker_ChooseMember(void);
++/// Arena romhack (item_picker.c): chooses a party member in the shop strip,
++/// showing the member's items (0), Djinn (1) or Psynergy (2); returns the unit
++/// id, or -1 for B.
++s32 ItemPicker_ChooseMember(s32 mode);
+ 
+ #endif
+diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
+index 42a73f9d94..5400394ba8 100644
+--- a/games/tbs/src/scene/battle_arena.c
++++ b/games/tbs/src/scene/battle_arena.c
+@@ -9,6 +9,7 @@
+ #include "module/import.h"
+ #include "djinn_ids.h"
+ #include "module/shop/shop.h"
++#include "render_input.h"
+ #include "module/scene/battle_arena.h"
+ #include "module/field/field_sequence.h"
+ #include "module/field/event_commands.h"
+@@ -1128,6 +1129,9 @@ const struct TrainingPsynergy gTraining_PsynergyShop[TRAINING_PSYNERGY_COUNT] =
+ #define TRAINING_DJINN_PER_ELEMENT 7
+ #define TRAINING_DJINN_COUNT (ELEMENT_COUNT * TRAINING_DJINN_PER_ELEMENT)
+ #define TRAINING_DJINN_COST 500
++/// The first of the four element icons among the window tiles, as the Djinn
++/// menu uses them (DJINN_ELEMENT_TILE).
++#define TRAINING_ELEMENT_TILE 0x5001
+ 
+ /// The item shops the manager opens: Xian's weapon, armor and item shops, the
+ /// last rows of the shop stock table.
+@@ -1350,140 +1354,163 @@ static void ArenaMenu_ShowWin(s32 reward) {
+   Party_RestoreHpPp(1);
+ }
+ 
+-/// The Psynergy shop for one character.
+-static void Training_RunPsynergy(s32 unitId) {
+-  struct Window *window = Training_OpenScreen();
+-  s32 cursor = 0;
+-  s32 top = 0;
+-  s32 redraw = 1;
+-  s32 notice = 0;
+-  s32 key;
+-  s32 row;
++/// What a purchase grid sells.
++enum TrainingGridKind {
++  TRAIN_GRID_PSYNERGY = 0,
++  TRAIN_GRID_DJINN = 1
++};
+ 
+-  for (;;) {
+-    if (redraw) {
+-      struct Unit *unit = Unit_Get(unitId);
++/// A purchase grid: two columns of six rows, 12 to a page, under a header row
++/// and over a line for the price and the page. A cell is an icon and a name.
++#define GRID_COLUMNS 2
++#define GRID_ROWS 6
++#define GRID_PAGE (GRID_COLUMNS * GRID_ROWS)
++#define GRID_CELL_WIDTH 112
++#define GRID_CELL_HEIGHT 16
++#define GRID_TOP 16
++#define GRID_FOOTER_Y (GRID_TOP + GRID_ROWS * GRID_CELL_HEIGHT + 8)
++
++static s32 Training_GridCount(s32 kind) {
++  return kind == TRAIN_GRID_DJINN ? TRAINING_DJINN_COUNT
++                                  : TRAINING_PSYNERGY_COUNT;
++}
+ 
+-      Training_Clear(window);
+-      Training_DrawHeader(window, unitId);
+-      for (row = 0; row < TRAINING_LIST_ROWS; row++) {
+-        const struct TrainingPsynergy *entry;
+-        s32 y = (row + 1) * TRAINING_ROW_HEIGHT;
+-
+-        if (top + row >= TRAINING_PSYNERGY_COUNT)
+-          break;
+-        entry = &gTraining_PsynergyShop[top + row];
+-        if (top + row == cursor)
+-          Training_DrawCursor(window, row + 1);
+-        Text_DrawMessageAsTiles(MsgAbilityName + entry->id, window,
+-                                TRAINING_LABEL_X, y);
+-        if (Training_KnowsPsynergy(unit, entry->id))
+-          Text_DrawMessageAsTiles(MsgArenaKnown, window, TRAINING_PRICE_X, y);
+-        else
+-          Training_DrawNumber(window, Training_PsynergyCost(entry),
+-                              TRAINING_PRICE_X, y);
+-      }
+-      if (notice != 0)
+-        Training_DrawNotice(window, notice);
+-      redraw = 0;
+-    }
+-    key = Training_Navigate(&cursor, TRAINING_PSYNERGY_COUNT);
+-    if (notice != 0)
+-      redraw = 1;
+-    notice = 0;
+-    if (key == -1)
+-      break;
+-    if (key == 2 || key == 1) {
+-      redraw = 1;
+-      if (cursor < top)
+-        top = cursor;
+-      if (cursor >= top + TRAINING_LIST_ROWS)
+-        top = cursor - TRAINING_LIST_ROWS + 1;
+-    }
+-    if (key == 1) {
+-      const struct TrainingPsynergy *entry = &gTraining_PsynergyShop[cursor];
+-      struct Unit *unit = Unit_Get(unitId);
+-      s32 cost = Training_PsynergyCost(entry);
++/// Draws entry `entry`'s icon and name with its cell at (x, y).
++static void Training_GridDrawCell(struct Window *window, s32 kind, s32 entry,
++                                  s32 x, s32 y) {
++  if (kind == TRAIN_GRID_DJINN) {
++    s32 element = entry / TRAINING_DJINN_PER_ELEMENT;
++    s32 index = entry % TRAINING_DJINN_PER_ELEMENT;
++
++    // The Djinn lists mark a Djinni with its element's icon tile.
++    Window_SetTilemapEntry(window, TRAINING_ELEMENT_TILE + element, x / 8,
++                           y / 8, 0);
++    Text_DrawMessageAsTiles(MsgDjinnName + element * DJINN_PER_ELEMENT + index,
++                            window, x + 12, y);
++  } else {
++    s32 id = gTraining_PsynergyShop[entry].id;
++    struct WindowSprite *icon =
++        WindowSprite_CreateFromResource(ICON_KIND_ABILITY, id, window, x, y);
+ 
+-      if (Training_KnowsPsynergy(unit, entry->id)) {
+-        // Nothing to buy.
+-      } else if (gMainRoutineWork.coins < cost) {
+-        notice = MsgArenaNoCoins;
+-      } else if (Unit_LearnPsynergy(unitId, entry->id) < 0) {
+-        notice = MsgArenaNoPsynergyRoom;
+-      } else {
+-        gMainRoutineWork.coins -= cost;
+-        Unit_Calculate(unitId);
+-      }
+-    }
++    if (icon != 0)
++      icon->sentinel = 252;
++    Text_DrawMessageAsTiles(MsgAbilityName + id, window, x + 20, y + 4);
+   }
+-  Window_Close(window, 2);
+ }
+ 
+-/// The Djinn shop: any of the 28 Djinn, given to one character and set at once.
+-static void Training_RunDjinn(s32 unitId) {
++/// Whether the character already has entry `entry`.
++static s32 Training_GridOwned(s32 kind, s32 unitId, s32 entry) {
++  if (kind == TRAIN_GRID_DJINN)
++    return Training_DjinnOwned(entry / TRAINING_DJINN_PER_ELEMENT,
++                               entry % TRAINING_DJINN_PER_ELEMENT);
++  return Training_KnowsPsynergy(Unit_Get(unitId),
++                                gTraining_PsynergyShop[entry].id);
++}
++
++static s32 Training_GridCost(s32 kind, s32 entry) {
++  if (kind == TRAIN_GRID_DJINN)
++    return TRAINING_DJINN_COST;
++  return Training_PsynergyCost(&gTraining_PsynergyShop[entry]);
++}
++
++/// Buys entry `entry` for the character. Returns 0, or the message that says
++/// why not.
++static s32 Training_GridBuy(s32 kind, s32 unitId, s32 entry) {
++  s32 cost = Training_GridCost(kind, entry);
++
++  if (Training_GridOwned(kind, unitId, entry))
++    return 0;
++  if (gMainRoutineWork.coins < cost)
++    return MsgArenaNoCoins;
++  if (kind == TRAIN_GRID_DJINN) {
++    s32 element = entry / TRAINING_DJINN_PER_ELEMENT;
++    s32 index = entry % TRAINING_DJINN_PER_ELEMENT;
++
++    if (Djinn_Give(unitId, element, index) < 0)
++      return MsgArenaNoDjinnRoom;
++    Djinn_Set(unitId, element, index);
++  } else if (Unit_LearnPsynergy(unitId, gTraining_PsynergyShop[entry].id) < 0) {
++    return MsgArenaNoPsynergyRoom;
++  }
++  gMainRoutineWork.coins -= cost;
++  Unit_Calculate(unitId);
++  return 0;
++}
++
++/// The purchase screen for Psynergy and for Djinn: icons and names in columns,
++/// rows and pages, one character's. The D-pad moves (Left and Right by one,
++/// Up and Down by a row), L and R turn the page, A buys, B leaves.
++static void Training_RunGrid(s32 unitId, s32 kind) {
+   struct Window *window = Training_OpenScreen();
++  s32 count = Training_GridCount(kind);
++  s32 pages = (count + GRID_PAGE - 1) / GRID_PAGE;
+   s32 cursor = 0;
+-  s32 top = 0;
+   s32 redraw = 1;
+   s32 notice = 0;
+-  s32 key;
+-  s32 row;
+ 
+   for (;;) {
+     if (redraw) {
+-      Training_Clear(window);
++      s32 first = (cursor / GRID_PAGE) * GRID_PAGE;
++      s32 i;
++
++      // Clears the window and the sprites of the last draw.
++      WindowSprite_PrepareForRedraw(window);
+       Training_DrawHeader(window, unitId);
+-      for (row = 0; row < TRAINING_LIST_ROWS; row++) {
+-        s32 n = top + row;
+-        s32 element = n / TRAINING_DJINN_PER_ELEMENT;
+-        s32 index = n % TRAINING_DJINN_PER_ELEMENT;
+-        s32 y = (row + 1) * TRAINING_ROW_HEIGHT;
+-
+-        if (n >= TRAINING_DJINN_COUNT)
+-          break;
+-        if (n == cursor)
+-          Training_DrawCursor(window, row + 1);
+-        Text_DrawMessageAsTiles(
+-            MsgDjinnName + element * DJINN_PER_ELEMENT + index, window,
+-            TRAINING_LABEL_X, y);
+-        if (Training_DjinnOwned(element, index))
+-          Text_DrawMessageAsTiles(MsgArenaOwned, window, TRAINING_PRICE_X, y);
+-        else
+-          Training_DrawNumber(window, TRAINING_DJINN_COST, TRAINING_PRICE_X, y);
++      for (i = 0; i < GRID_PAGE && first + i < count; i++) {
++        s32 x = (i % GRID_COLUMNS) * GRID_CELL_WIDTH;
++        s32 y = GRID_TOP + (i / GRID_COLUMNS) * GRID_CELL_HEIGHT;
++
++        if (first + i == cursor)
++          Text_DrawStringInWindow(gTraining_Cursor, window, x, y + 4);
++        Training_GridDrawCell(window, kind, first + i, x + 8, y);
+       }
+       if (notice != 0)
+-        Training_DrawNotice(window, notice);
++        Text_DrawMessageAsTiles(notice, window, 0, GRID_FOOTER_Y);
++      else if (Training_GridOwned(kind, unitId, cursor))
++        Text_DrawMessageAsTiles(kind == TRAIN_GRID_DJINN ? MsgArenaOwned
++                                                         : MsgArenaKnown,
++                                window, TRAINING_LABEL_X, GRID_FOOTER_Y);
++      else
++        Training_DrawNumber(window, Training_GridCost(kind, cursor),
++                            TRAINING_LABEL_X, GRID_FOOTER_Y);
++      MessageArgument_ClearAll();
++      MessageArgument_Push(cursor / GRID_PAGE + 1, MESSAGE_ARGUMENT_NUMBER);
++      MessageArgument_Push(pages, MESSAGE_ARGUMENT_NUMBER);
++      Text_DrawMessageAsTiles(MsgArenaPage, window, 160, GRID_FOOTER_Y);
+       redraw = 0;
+     }
+-    key = Training_Navigate(&cursor, TRAINING_DJINN_COUNT);
+-    if (notice != 0)
+-      redraw = 1;
+-    notice = 0;
+-    if (key == -1)
++    wait(1);
++    if (gKeysRepeat & KEY_B)
+       break;
+-    if (key == 2 || key == 1) {
++    if (notice != 0) {
++      notice = 0;
+       redraw = 1;
+-      if (cursor < top)
+-        top = cursor;
+-      if (cursor >= top + TRAINING_LIST_ROWS)
+-        top = cursor - TRAINING_LIST_ROWS + 1;
+     }
+-    if (key == 1) {
+-      s32 element = cursor / TRAINING_DJINN_PER_ELEMENT;
+-      s32 index = cursor % TRAINING_DJINN_PER_ELEMENT;
+-
+-      if (Training_DjinnOwned(element, index)) {
+-        // Nothing to buy.
+-      } else if (gMainRoutineWork.coins < TRAINING_DJINN_COST) {
+-        notice = MsgArenaNoCoins;
+-      } else if (Djinn_Give(unitId, element, index) < 0) {
+-        notice = MsgArenaNoDjinnRoom;
+-      } else {
+-        gMainRoutineWork.coins -= TRAINING_DJINN_COST;
+-        Djinn_Set(unitId, element, index);
+-        Unit_Calculate(unitId);
+-      }
++    if (gKeysRepeat & KEY_A) {
++      notice = Training_GridBuy(kind, unitId, cursor);
++      redraw = 1;
++    } else if ((gKeysRepeat & KEY_RIGHT) && cursor + 1 < count) {
++      cursor++;
++      redraw = 1;
++    } else if ((gKeysRepeat & KEY_LEFT) && cursor > 0) {
++      cursor--;
++      redraw = 1;
++    } else if ((gKeysRepeat & KEY_DOWN) && cursor + GRID_COLUMNS < count) {
++      cursor += GRID_COLUMNS;
++      redraw = 1;
++    } else if ((gKeysRepeat & KEY_UP) && cursor >= GRID_COLUMNS) {
++      cursor -= GRID_COLUMNS;
++      redraw = 1;
++    } else if (gKeysRepeat & KEY_R) {
++      cursor += GRID_PAGE;
++      if (cursor >= count)
++        cursor = count - 1;
++      redraw = 1;
++    } else if (gKeysRepeat & KEY_L) {
++      cursor -= GRID_PAGE;
++      if (cursor < 0)
++        cursor = 0;
++      redraw = 1;
+     }
+   }
+   Window_Close(window, 2);
+@@ -1575,15 +1602,15 @@ static s32 BattleArena_PartyManager(s32 actorId) {
+         Shop_Run(TRAINING_SHOP_FIRST_ROW + choice, actorId);
+       continue;
+     }
+-    member = ItemPicker_ChooseMember();
++    // The strip shows the character's items, Djinn or Psynergy to match.
++    member = ItemPicker_ChooseMember(choice);
+     if (member < 0)
+       continue;
+     if (choice == 0)
+       Training_RunStats(member);
+-    else if (choice == 1)
+-      Training_RunDjinn(member);
+     else
+-      Training_RunPsynergy(member);
++      Training_RunGrid(member, choice == 1 ? TRAIN_GRID_DJINN
++                                           : TRAIN_GRID_PSYNERGY);
+   }
+   Party_RestoreHpPp(1);
+   Event_End();
+diff --git a/games/tbs/src/scene/import/battle_arena.s b/games/tbs/src/scene/import/battle_arena.s
+index fe8b2d3939..e24709f4c3 100644
+--- a/games/tbs/src/scene/import/battle_arena.s
++++ b/games/tbs/src/scene/import/battle_arena.s
+@@ -40,6 +40,8 @@
+ 	.set import.Text_DrawMessageAsTiles, 1
+ 	.set import.ArenaMenu_IconChoose, 1
+ 	.set import.ItemPicker_ChooseMember, 1
++	.set import.WindowSprite_CreateFromResource, 1
++	.set import.Window_SetTilemapEntry, 1
+ 	.set import.MessageArgument_ClearAll, 1
+ 	.set import.MessageArgument_Push, 1
+ 	.set import.Save_ProcessSelectedFile, 1
+diff --git a/games/tbs/src/shop/shop/item_picker.c b/games/tbs/src/shop/shop/item_picker.c
+index d606680016..5fa4e743e9 100644
+--- a/games/tbs/src/shop/shop/item_picker.c
++++ b/games/tbs/src/shop/shop/item_picker.c
+@@ -3,6 +3,7 @@
+ // Part of shop.c.
+ 
+ #include "../shop_internal.h"
++#include "djinn_ids.h"
+ 
+ /// Lets the player choose a party member, then one of its items that may be
+ /// dropped. Writes the party member and inventory slot to `selectedUnit` and
+@@ -95,12 +96,98 @@ s32 ItemPicker_Run(s32 *selectedUnit, s32 *selectedSlot) {
+   return result;
+ }
+ 
++/// Arena romhack: what the member picker shows beside the party strip.
++enum ArenaPickerMode {
++  ARENA_PICKER_ITEMS = 0,    ///< the member's items, as the shops' Sell shows
++  ARENA_PICKER_DJINN = 1,    ///< the member's Djinn, an element icon and name
++  ARENA_PICKER_PSYNERGY = 2, ///< the member's Psynergy, an icon and name
++};
++
++/// The Djinn and Psynergy panels are a 30 by 10 tile window across the top of
++/// the screen, 224 by 64 pixels inside. Djinn run in three columns of eight
++/// pixel rows, Psynergy in two columns of sixteen pixel rows; what does not fit
++/// is not shown.
++#define ARENA_PANEL_DJINN_COLUMNS 3
++#define ARENA_PANEL_DJINN_ROWS 8
++#define ARENA_PANEL_DJINN_COLUMN_WIDTH 72
++#define ARENA_PANEL_PSYNERGY_COLUMNS 2
++#define ARENA_PANEL_PSYNERGY_ROWS 4
++#define ARENA_PANEL_PSYNERGY_COLUMN_WIDTH 112
++/// The first of the four element icons among the window tiles; the Djinn
++/// menu's list uses the same (DJINN_ELEMENT_TILE).
++#define ARENA_ELEMENT_TILE 0x5001
++/// The game has seven Djinn of each element.
++#define ARENA_DJINN_PER_ELEMENT 7
++
++/// Draws the member's Djinn as an element icon and a name each.
++static void ArenaPicker_DrawDjinn(struct Window *window, s32 unitId) {
++  struct Unit *unit = Unit_GetFar(unitId);
++  s32 shown = 0;
++  s32 element;
++  s32 index;
++
++  WindowSprite_PrepareForRedrawFar(window);
++  for (element = 0; element < ELEMENT_COUNT; element++) {
++    for (index = 0; index < ARENA_DJINN_PER_ELEMENT; index++) {
++      s32 x;
++      s32 y;
++
++      if (!(unit->djinnHeld[element] & (1 << index)))
++        continue;
++      if (shown >= ARENA_PANEL_DJINN_COLUMNS * ARENA_PANEL_DJINN_ROWS)
++        return;
++      x = (shown % ARENA_PANEL_DJINN_COLUMNS) * ARENA_PANEL_DJINN_COLUMN_WIDTH;
++      y = (shown / ARENA_PANEL_DJINN_COLUMNS) * 8;
++      Window_SetTilemapEntryFar(window, ARENA_ELEMENT_TILE + element, x / 8,
++                                y / 8, 0);
++      Text_DrawMessageAsTilesFar(MsgDjinnName + element * DJINN_PER_ELEMENT +
++                                     index,
++                                 window, x + 12, y);
++      shown++;
++    }
++  }
++  if (shown == 0)
++    Text_DrawMessageAsTilesFar(MsgArenaNone, window, 8, 0);
++}
++
++/// Draws the member's Psynergy as an icon and a name each.
++static void ArenaPicker_DrawPsynergy(struct Window *window, s32 unitId) {
++  struct Unit *unit = Unit_GetFar(unitId);
++  s32 shown = 0;
++  s32 i;
++
++  WindowSprite_PrepareForRedrawFar(window);
++  for (i = 0; i < 32; i++) {
++    s32 id = unit->psynergy[i].encodedAction & PSYNERGY_ABILITY_MASK;
++    struct WindowSprite *icon;
++    s32 x;
++    s32 y;
++
++    if (id == 0)
++      continue;
++    if (shown >= ARENA_PANEL_PSYNERGY_COLUMNS * ARENA_PANEL_PSYNERGY_ROWS)
++      return;
++    x = (shown % ARENA_PANEL_PSYNERGY_COLUMNS) *
++        ARENA_PANEL_PSYNERGY_COLUMN_WIDTH;
++    y = (shown / ARENA_PANEL_PSYNERGY_COLUMNS) * 16;
++    icon = WindowSprite_CreateFromResourceFar(ICON_KIND_ABILITY, id, window,
++                                              x + 4, y);
++    if (icon != 0)
++      icon->sentinel = 252;
++    Text_DrawMessageAsTilesFar(MsgAbilityName + id, window, x + 24, y + 4);
++    shown++;
++  }
++  if (shown == 0)
++    Text_DrawMessageAsTilesFar(MsgArenaNone, window, 8, 0);
++}
++
+ /// Arena romhack: chooses a party member in the shops' strip of walking
+-/// figures, with the coins window and the member's items beside it, as the
+-/// shops' Sell does, but without choosing an item. Returns the unit id of the
+-/// member chosen with A, or -1 for B. Holds the shop's work block while it
+-/// runs. Called from the Battle Arena overlay through SHOP.S.
+-s32 ItemPicker_ChooseMember(void) {
++/// figures, with the coins window beside it, as the shops' Sell does, but
++/// without choosing an item. `mode` (enum ArenaPickerMode) picks what is shown
++/// of the member: items, Djinn or Psynergy. Returns the unit id of the member
++/// chosen with A, or -1 for B. Holds the shop's work block while it runs.
++/// Called from the Battle Arena overlay through SHOP.S.
++s32 ItemPicker_ChooseMember(s32 mode) {
+   struct ShopWork *shop;
+   struct WindowSprite *cursorAnchor;
+   struct Window *partyWindow;
+@@ -111,10 +198,16 @@ s32 ItemPicker_ChooseMember(void) {
+ 
+   Shop_InitializeWork();
+   shop = gMenuWork;
+-  shop->moneyWindow =
+-      Window_CreateFar(0, 9, SHOP_MONEY_WINDOW_WIDTH, 4, WINDOW_FLAG_INSTANT);
++  if (mode == ARENA_PICKER_ITEMS) {
++    shop->moneyWindow =
++        Window_CreateFar(0, 9, SHOP_MONEY_WINDOW_WIDTH, 4, WINDOW_FLAG_INSTANT);
++    shop->itemWindow = Window_CreateFar(16, 12, 14, 8, WINDOW_FLAG_INSTANT);
++  } else {
++    shop->itemWindow = Window_CreateFar(0, 0, 30, 10, WINDOW_FLAG_INSTANT);
++    shop->moneyWindow = Window_CreateFar(0, 10, SHOP_MONEY_WINDOW_WIDTH, 4,
++                                         WINDOW_FLAG_INSTANT);
++  }
+   Shop_DrawMoney();
+-  shop->itemWindow = Window_CreateFar(16, 12, 14, 8, WINDOW_FLAG_INSTANT);
+   partyWindow = Window_CreateFar(0, 14, 13, 3, WINDOW_FLAG_INSTANT);
+   cursorAnchor = WindowSprite_CreateFar(shop->cursorIcon, OUTPUT_SIZE_16X16,
+                                         partyWindow, 0, result);
+@@ -134,7 +227,12 @@ s32 ItemPicker_ChooseMember(void) {
+       MenuCursor_Place(partyWindow, memberIndex * 24 - 12, 0);
+       shop->mode = 3;
+       Shop_DrawParty(partyWindow, memberIndex, 0);
+-      Shop_DrawMemberItems(shop->itemWindow, unitId);
++      if (mode == ARENA_PICKER_DJINN)
++        ArenaPicker_DrawDjinn(shop->itemWindow, unitId);
++      else if (mode == ARENA_PICKER_PSYNERGY)
++        ArenaPicker_DrawPsynergy(shop->itemWindow, unitId);
++      else
++        Shop_DrawMemberItems(shop->itemWindow, unitId);
+     }
+ 
+     wait(1);
+diff --git a/games/tbs/src/system/overlay/imports.inc b/games/tbs/src/system/overlay/imports.inc
+index bfc54bbe7c..643acb4eea 100644
+--- a/games/tbs/src/system/overlay/imports.inc
++++ b/games/tbs/src/system/overlay/imports.inc
+@@ -165,6 +165,7 @@
+ 	import Save_CountFilesExcludingSent, Save_CountFilesExcludingSentFar
+ 	import Link_DrawPageArrows, Link_DrawPageArrowsFar
+ 	import ArenaMenu_IconChoose, ArenaMenu_IconChooseFar
++	import WindowSprite_CreateFromResource, WindowSprite_CreateFromResourceFar
+ @ Game bank (far_call/GAME.S)
+ 	import Djinn_GetRecoveryTable, Djinn_GetRecoveryTableFar
+ 	import Unit_Get, Unit_GetFar
+diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
+index 4499a7a760..859d05c4bb 100644
+--- a/games/tbs/text/en.po
++++ b/games/tbs/text/en.po
+@@ -65125,3 +65125,11 @@ msgstr "Agility"
+ msgctxt "MsgArenaStatLuck"
+ msgid "10752"
+ msgstr "Luck"
++
++msgctxt "MsgArenaNone"
++msgid "10753"
++msgstr "None"
++
++msgctxt "MsgArenaPage"
++msgid "10754"
++msgstr "Page {argument_signed_number}/{argument_signed_number}"
+-- 
+2.53.0
+

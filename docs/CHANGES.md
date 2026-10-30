@@ -173,6 +173,29 @@ to look at when porting.
 - The list screens' cursor is still a tile `>` (no cursor glyph exists in any
   message), and the party strip has no custom text.
 
+### 7. Djinn and Psynergy panels, paged purchase grids
+- Patch: `0007-Arena-Djinn-and-Psynergy-panels-and-paged-icon-purcha.patch`
+- Files: `shop/shop/item_picker.c`, `include/module/shop/shop.h`,
+  `scene/battle_arena.c`, `scene/import/battle_arena.s`,
+  `system/overlay/imports.inc`, `text/en.po` (`MsgArenaNone`, `MsgArenaPage`).
+- `ItemPicker_ChooseMember(mode)`: 0 shows the member's items as before, 1 their
+  Djinn, 2 their Psynergy, in a 30 by 10 tile panel across the top (the coins
+  window moves to row 10 for those two). Djinn: element icon tile plus name, three
+  columns of eight-pixel rows (24 at most). Psynergy: 16-pixel icon plus name,
+  two columns of four rows (8 at most). The rest are not shown.
+- A Djinni's "sprite" is its element's icon tile (window tile `0x5001` plus the
+  element), which is what the game's Djinn lists use. Creature sprites are
+  battle and field actors and are not available in a window.
+- Psynergy icons: `WindowSprite_CreateFromResource(ICON_KIND_ABILITY, id, ...)`,
+  as the Psynergy menu does; its far stub existed, so the import row was added.
+  The icon's `sentinel` is set to 252 as the shops do for item icons.
+- `Training_RunGrid` (battle_arena.c) replaces the two list screens: icon and
+  name cells, two columns by six rows (12 a page), a `>` marker, price or
+  Known/Owned under the grid and "Page n/m". Left/Right move by one, Up/Down
+  by a row, L/R by a page. `WindowSprite_PrepareForRedraw` clears the window
+  and its sprites each redraw.
+- The Characters menu still uses the item strip and the stat list.
+
 ## Planned
 
 - Save and load the upgraded party.
