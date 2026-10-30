@@ -1,0 +1,27 @@
+# New Game, step through the greeter, Start, Save your quest, pick the first file.
+wait 900
+tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 40
+tap T
+wait 60
+tap A
+wait 90
+shot /tmp/shots/s0.png
+tap A
+wait 90
+shot /tmp/shots/s1.png
+tap A
+wait 120
+shot /tmp/shots/s2.png
+tap A
+wait 200
+shot /tmp/shots/s3.png
+tap A
+wait 120
+shot /tmp/shots/s4.png

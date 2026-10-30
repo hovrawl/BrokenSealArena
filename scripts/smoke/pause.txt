@@ -1,0 +1,18 @@
+# From New Game: step through the greeter's lines, then open the Pause menu.
+wait 900
+shot /tmp/shots/p0.png
+tap A
+wait 40
+shot /tmp/shots/p1.png
+tap A
+wait 40
+shot /tmp/shots/p2.png
+tap A
+wait 40
+shot /tmp/shots/p3.png
+tap A
+wait 40
+shot /tmp/shots/p4.png
+tap T
+wait 60
+shot /tmp/shots/p5.png

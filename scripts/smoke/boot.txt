@@ -1,0 +1,19 @@
+# Boot to the arena: logos, file screen, New Game. Calibration run: a shot every
+# 150 frames.
+wait 150
+shot /tmp/shots/boot_000.png
+wait 150
+shot /tmp/shots/boot_001.png
+wait 150
+shot /tmp/shots/boot_002.png
+tap A
+wait 150
+shot /tmp/shots/boot_003.png
+tap A
+wait 150
+shot /tmp/shots/boot_004.png
+tap A
+wait 300
+shot /tmp/shots/boot_005.png
+wait 300
+shot /tmp/shots/boot_006.png
