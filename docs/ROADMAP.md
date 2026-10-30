@@ -82,9 +82,10 @@ finished screens, a review checklist and a spec template.
 | Smoke-sheet every state | S | A script per interface that reaches every state, with a stock screen in the sheet to compare against. |
 | Review in the emulator | S | Your pass, on pictures that have already been through the checklist. |
 
-Open for this phase: whether Start closes arena screens as it does the stock
-menus; where progress (tournament and rung) is shown; whether giving up counts
-as a loss in the tallies.
+Decided for this phase (`docs/UI-SPECS.md`): Start stays as it is; progress is
+told in speech ("Round 4 of 12"); giving up is not a loss and keeps the best
+streak; rung 12 cleared is a win and ends the series; the heal after each win
+stays; after a loss the party is restored to full and the standard spawn is used.
 
 Exit: the catalogue in `docs/UI.md` covers every arena screen, each reviewed.
 
@@ -216,6 +217,31 @@ own files (so the port is "re-hook a handful of files"). When `games/tla` builds
    and different tables. A spike to load one game's characters in the other's
    arena is needed before this is more than an idea.
 
+## Later (ideas, not scheduled)
+
+Ideas from the user that the current design leaves room for. None blocks a phase
+above.
+
+- **Post-battle events.** Today every outcome is the attendant speaking a line
+  and the standard spawn. Wanted: a minor event for each win, a major one for
+  winning a whole tournament (rung 12 is a plain win for now), and a bespoke one
+  for a loss. Needs a hook where `BattleArena_RunRoundResult` picks the line, so
+  an event can be chosen by outcome and tournament.
+- **A proper tournament win.** Rung 12 ends the series as a win with one line and
+  no data. A real one shows what the run was: rewards, a summary, perhaps the
+  record.
+- **Fight data.** Record every action in a fight (who acted, the move, the
+  target, the damage or healing, the element and type), then derive the numbers
+  by replaying the log: damage by character, by move type, by element, turns.
+  Logging each action is the base; the breakdowns can be simulated later from it.
+  It would also feed the balance pass. Open: where the log lives in a game with
+  very little free memory (the battle work block and the save are both tight), and
+  whether it can be written by the headless driver's `peek` instead of in game.
+- **Difficulty modifiers.** Switch off the automatic heal after a win, probably
+  per tournament and maybe as a player option. Keep the heal one call a
+  tournament setting can skip.
+- **Djinn and levels** as balance variables are in Phase 1.
+
 ## Cross-cutting
 
 - **Tests:** the smoke suite checks pictures. Add `peek` assertions where a value
@@ -231,14 +257,9 @@ own files (so the port is "re-hook a handful of files"). When `games/tla` builds
 
 ## Still open
 
-1. **Does giving up count as a loss for the tallies?** (Phase 0.)
-2. **Does Start close arena screens, as it does the stock menus?** Ours do not
-   handle it today. (Phase 0.)
-3. **Where is progress shown?** Tournament and rung, for example in the
-   attendant's speech or the manager's prompt. (Phase 0.)
-4. **Is a four-unit link exchange feasible?** The Phase 4 spike answers it, since
+1. **Is a four-unit link exchange feasible?** The Phase 4 spike answers it, since
    the goal is 4v4.
-5. **Which Phase 2 item first?** I would take the second tournament; the
+2. **Which Phase 2 item first?** I would take the second tournament; the
    characters item should be investigated before it is promised.
 
 ## Order, in short

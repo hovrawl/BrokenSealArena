@@ -52,3 +52,11 @@
 - **Interfaces are finalised before Gauntlet design**, from written reusable rules
   in `docs/UI.md`: reuse existing screens and their parts first, text is always a
   message, fill in the spec template and review it before code.
+- **Series outcomes** (user, 2026-10-30): giving up is not a loss (the stock game
+  tallies losses in `gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_LOSSES]`;
+  keep that for real losses; giving up keeps the best streak). Rung 12 cleared is
+  a win and ends the series. The heal after each win stays (a future difficulty
+  modifier may skip it, probably per tournament). After a loss the party is
+  restored to full and the standard spawn is used. Roadmap later: post-battle
+  events (per win, tournament win, bespoke loss), a proper tournament win, and
+  fight data (log every action, derive damage by character, type and element).

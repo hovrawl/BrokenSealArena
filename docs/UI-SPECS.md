@@ -16,7 +16,7 @@ saves keep the tournament and rung.
 | # | Screen | Reuses | New messages |
 |---|---|---|---|
 | S1 | Attendant: give up? (series running) | the stock attendant Yes/No | 2 |
-| S2 | After a win: report, no question | `ArenaMenu_ShowWin` | 1 (+1 for a cleared tournament) |
+| S2 | After a win: report, no question (rung 12 is a win) | `ArenaMenu_ShowWin` | 2 |
 | S3 | After a loss: series over | stock loss message, stock entrance | 0 |
 | S4 | Progress: where the player is | the speech in S1 and S2 | 0 (blanks in S1, S2) |
 | S5 | Tournament choice with more than one | `ArenaMenu_IconChoose` | per tournament |
@@ -60,8 +60,11 @@ Shots:         smoke script give_up.txt: start a series, win one, talk to the
                attendant: the question and Yes/No; No: "Good luck!"; talk again,
                Yes: the closing line, then talk once more to show the normal menu
                is back.
-Open questions: Does giving up count as a loss in the tallies (it changes the
-               "losses" record)? Suggest no: it is a choice, not a defeat.
+Decided:       Giving up is not a loss: LINK_TALLY_MONSTER_LOSSES is not
+               incremented. The best streak is kept, as the stock "No" does (it
+               updates LINK_TALLY_MONSTER_BEST_STREAK), so retiring after a long
+               run does not lose the record. The stock record save writes a
+               16-byte stamp to the file and shows its own saving messages.
 ```
 
 ## S2. After a win: report, no question
@@ -74,13 +77,18 @@ Opened from:   Returning from a won monster battle
                (BATTLE_ARENA_AFTER_MONSTER_WIN), in BattleArena_RunRoundResult.
 States:        1. "Victory! You won 200 coins." (exists)
                2. The next-round line, and control returns. No Yes/No.
-               3. The last rung won: a tournament-cleared line instead (see open
-                  questions).
+               3. Rung 12 won: the tournament-cleared line instead of the
+                  next-round line. This counts as a WIN of the tournament: the
+                  series ends, the best streak is updated, the attendant's normal
+                  menu comes back. There is no proper win presentation yet
+                  (roadmap: post-battle events).
 Windows:       Field messages at the attendant, as now.
 Text:          MsgArenaVictory       (exists)
                  "Victory! You won\n{n} coins.{end_wait}"
                MsgArenaNextRound     (new, ends {end_wait})
                  "Round {n} of {m} won!\nStep into the circle\nwhen you are ready.{end_wait}"
+               MsgArenaGauntletCleared (new, ends {end_wait}; rung 12)
+                 "You cleared the\nMonster Gauntlet!\nCongratulations!{end_wait}"
 Icons/sprites: none.
 Input:         A to page, as every message.
 Sounds:        Stock.
@@ -91,14 +99,12 @@ Lives in:      Overlay: scene/arena_menu.c (ArenaMenu_ShowWin) and the hook in
                while it is set, so stepping back into the circle resumes.
 Shots:         win.txt extended: the two messages, then the player walking to the
                manager, buying, and stepping into the circle for the next round.
-Open questions: 1. What is "finished"? The ladder repeats the last rung a level
-                  stronger for ever. Propose: clearing rung 12 ends the series
-                  with a "Monster Gauntlet cleared!" line (new message) and a
-                  reward, and the attendant's normal menu comes back.
-               2. The party is healed automatically after every win
-                  (Party_RestoreHpPp). Keep it? If yes, "mid-run healing" is
-                  already free and the balance pass can ignore HP between
-                  rounds; if no, the manager's exit heal is the only one.
+Decided:       1. Rung 12 is the end: clearing it is a win and ends the series
+                  (the ladder no longer repeats the last rung).
+               2. The automatic heal after every win stays. A later difficulty
+                  modifier may turn it off, probably for specific tournaments
+                  (roadmap); build it so the heal is one call that a tournament
+                  setting can skip.
 ```
 
 ## S3. After a loss: series over
@@ -123,15 +129,13 @@ Lives in:      Overlay: no change to the flow except that the series state we ad
                for saving (tournament, rung) is cleared too.
 Shots:         lose.txt: a battle the party loses (poke HP low or fight an
                unwinnable rung), the line, and where the player stands.
-Open questions: 1. "Go to the counter": after a loss the player enters at the
-                  same spot as after a win (floor, facing west) and the stock
-                  loss reshuffles who stands where
-                  (gBattleArenaBattleActorPlacements). Check where that is
-                  relative to the attendant's counter and move the entrance if it
-                  is not beside it.
-               2. What state is the party in after a loss (HP 0, or restored)?
-                  Verify, because the manager's free heal on exit is how they
-                  recover; they must not be stuck.
+Decided:       1. The standard spawn is fine: the stock entrance (the floor, facing
+                  west) and its actor placements stay as they are.
+               2. The party is restored to full HP and PP after a loss
+                  (Party_RestoreHpPp(1), as after a win), since the only purpose
+                  is to play again. Verify in lose.txt that nobody is left down.
+               3. A loss is tallied (LINK_TALLY_MONSTER_LOSSES, stock). Later, a
+                  loss gets its own post-battle event (roadmap).
 ```
 
 ## S4. Progress: where the player is
@@ -178,14 +182,19 @@ rung with `peek`, talk to the attendant, see S1.
 
 ---
 
-## Questions for you
+## Decisions (2026-10-30)
 
-1. **S1:** does giving up count as a loss in the tallies? (I suggest no.)
-2. **S2:** does clearing the last rung end the series with a reward, rather than
-   repeating forever? (I suggest yes.)
-3. **S2:** keep the automatic heal after every win, or heal only at the manager?
-4. **S3:** after a loss, where should the player stand, and should the party be
-   restored?
-5. **Start:** should Start close arena screens, as it does the stock menus? (I
-   suggest leaving it out: the Pause menu is Start's job in the arena.)
-6. **Wording:** the draft lines above are mine; change any you want in your voice.
+1. **S1:** giving up is not a loss; the best streak is kept.
+2. **S2:** rung 12 is the end and counts as a win. No proper win presentation yet.
+3. **S2:** the automatic heal after each win stays; a later difficulty modifier may
+   turn it off for specific tournaments.
+4. **S3:** the party is restored to full HP and PP after a loss; the standard spawn
+   is fine.
+5. **Start:** current behaviour stays (arena screens do not handle Start; the Pause
+   menu is Start's job there).
+6. **Wording:** the drafts stand until the screenshots are reviewed; wording is the
+   cheapest thing to change then.
+
+The specs are agreed. Next: build S1 to S3 with their smoke scripts (`give_up.txt`,
+the extended `win.txt`, `lose.txt`), then review the sheets against `UI.md`
+section 6.
