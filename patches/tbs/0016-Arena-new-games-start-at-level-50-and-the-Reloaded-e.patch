@@ -1,0 +1,104 @@
+From 18b939db1e8bf89031f2fbe239f4dfcb558d1e4e Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sun, 1 Nov 2026 08:27:28 +1100
+Subject: [PATCH] Arena: new games start at level 50, and the Reloaded engine
+ rules are on
+
+ARENA_START_LEVEL (50) replaces the literal 30 in the New Game boot: Psynergy is learnt
+by class and level, so level 50 opens every class's pool and the Djinn alone decide
+the class. The three ARENA_RULES_* switches now default to on.
+
+A New Game's base stats at level 50 equal the closed form of the level-up rule with the
+game's own growth curves, for all four characters.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/arena_config.h | 12 ++++++------
+ games/tbs/include/module/arena.h |  6 ++++++
+ games/tbs/src/scene/arena_boot.c | 12 ++++++------
+ 3 files changed, 18 insertions(+), 12 deletions(-)
+
+diff --git a/games/tbs/include/arena_config.h b/games/tbs/include/arena_config.h
+index 91c209eaaa..fd018d95bb 100644
+--- a/games/tbs/include/arena_config.h
++++ b/games/tbs/include/arena_config.h
+@@ -28,17 +28,17 @@
+ /// opponent's Djinn recovery table is stored in an enemy unit, which the stock game
+ /// puts in the fourth place; with four a side it moves to the fifth.
+ /// Arena romhack: the engine rules of the Reloaded rebalance (docs/RELOADED.md),
+-/// one switch each. They are meant to run with its data (the ability, class, item
+-/// and enemy tables), which is ported separately, so they default to off until
+-/// that has landed.
++/// one switch each, on by default. They are tuned for its data (the ability, class,
++/// item and enemy tables), which is ported separately; until that lands the rules
++/// run over the stock tables.
+ #ifndef ARENA_RULES_LEVELUP
+-#define ARENA_RULES_LEVELUP 0 ///< level-ups gain a fixed amount, with no random part
++#define ARENA_RULES_LEVELUP 1 ///< level-ups gain a fixed amount, with no random part
+ #endif
+ #ifndef ARENA_RULES_AILMENTS
+-#define ARENA_RULES_AILMENTS 0 ///< the effect success roll and its base chance tables
++#define ARENA_RULES_AILMENTS 1 ///< the effect success roll and its base chance tables
+ #endif
+ #ifndef ARENA_RULES_DAMAGE
+-#define ARENA_RULES_DAMAGE 0 ///< the base damage formula, summon HP damage and class ward
++#define ARENA_RULES_DAMAGE 1 ///< the base damage formula, summon HP damage and class ward
+ #endif
+ 
+ #ifndef ARENA_LINK4
+diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
+index b03b978bdc..5b72481f1c 100644
+--- a/games/tbs/include/module/arena.h
++++ b/games/tbs/include/module/arena.h
+@@ -6,6 +6,12 @@
+ 
+ #include "types.h"
+ 
++/// The level of the party a New Game starts with (scene/arena_boot.c). 50 opens
++/// every class's Psynergy, which is learnt by class and level (the last at 54 in
++/// the stock table, 42 in the Reloaded rebalance); a party then needs only the
++/// right Djinn for the class.
++#define ARENA_START_LEVEL 50
++
+ // Tournaments. The player chooses one at the attendant; it is kept in a
+ // persistent byte flag, so a save remembers it. Flags 0x7f8 to 0x7ff are the byte
+ // at index 0xff of the game flags: no name in flags.h refers to them and no code
+diff --git a/games/tbs/src/scene/arena_boot.c b/games/tbs/src/scene/arena_boot.c
+index 8a6d268610..1bfa406210 100644
+--- a/games/tbs/src/scene/arena_boot.c
++++ b/games/tbs/src/scene/arena_boot.c
+@@ -1,6 +1,6 @@
+ /// @file
+ /// Arena romhack: New Game skips the prologue and enters the Battle Arena with
+-/// a ready-made level 30 party and 1500 coins to train with.
++/// a ready-made level 50 party and 1500 coins to train with.
+ 
+ #include "scene_ids.h"
+ #include "module/scene/file_screen.h"
+@@ -58,7 +58,7 @@ void ArenaBoot_NewGame(void) {
+   s32 slot;
+ 
+   // "New Game" skips the prologue and enters the Battle Arena with a
+-  // ready-made level 30 party and 1500 coins to train with.
++  // ready-made level 50 party and 1500 coins to train with.
+   gMainRoutineWork.coins = 1500;
+   Party_AddMember(GARET);
+   Party_AddMember(MIA);
+@@ -78,10 +78,10 @@ void ArenaBoot_NewGame(void) {
+       }
+     }
+   }
+-  Unit_LevelUpTo(ISAAC, 30);
+-  Unit_LevelUpTo(GARET, 30);
+-  Unit_LevelUpTo(MIA, 30);
+-  Unit_LevelUpTo(IVAN, 30);
++  Unit_LevelUpTo(ISAAC, ARENA_START_LEVEL);
++  Unit_LevelUpTo(GARET, ARENA_START_LEVEL);
++  Unit_LevelUpTo(MIA, ARENA_START_LEVEL);
++  Unit_LevelUpTo(IVAN, ARENA_START_LEVEL);
+   Unit_Calculate(ISAAC);
+   Unit_Calculate(GARET);
+   Unit_Calculate(MIA);
+-- 
+2.53.0
+

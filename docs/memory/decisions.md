@@ -103,3 +103,8 @@
   credit them. Their files stay in `reloaded/` (git-ignored). Order: rules, ailments,
   abilities and classes together, items, then enemies, Djinn, characters, text. See
   `docs/RELOADED.md`.
+- **Reloaded engine rules on by default; new games start at level 50** (2026-11-01): the
+  `ARENA_RULES_*` switches default to on (they run over the stock tables until the data is
+  ported). A New Game levels the party to 50 (`ARENA_START_LEVEL`) so every class's Psynergy
+  is open and only the set Djinn limit the pool. Balance against the ladders (rungs top out
+  at level 45) is deferred.

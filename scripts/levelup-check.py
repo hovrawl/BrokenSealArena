@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Checks the deterministic level-up rule against a patch's own growth curves.
 
-Usage: levelup-check.py PATCH.ips ROM.gba ELF [LEVEL]
+Usage: levelup-check.py PATCH.ips|- ROM.gba ELF [LEVEL]   (- reads the game's own curves)
 
 Applies the patch in memory, reads each character's growth curves, runs the rule
 written in arena_rules.c (ArenaRules_LevelGain) from level 1 to LEVEL (default 99) and
@@ -54,7 +54,9 @@ def gain(diff, level):
 def main():
     patch, rom_path, elf = sys.argv[1:4]
     top = int(sys.argv[4]) if len(sys.argv) > 4 else 99
-    rom = apply_ips(open(rom_path, "rb").read(), patch)
+    rom = open(rom_path, "rb").read()
+    if patch != "-":
+        rom = apply_ips(rom, patch)
     base = table(elf)
     names = ["Isaac", "Garet", "Ivan", "Mia", "Felix", "Jenna", "Sheba", "Piers"]
     print("%-6s %5s %5s %5s %5s %5s %5s   (base stats at level %d)" % ("", "HP", "PP", "ATK", "DEF", "AGI", "LCK", top))

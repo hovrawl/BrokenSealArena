@@ -1,0 +1,26 @@
+# New Game: each party member's base stats (units at 0x02000500, 0x14c apart): HP, PP, ATK, DEF, AGI, LCK.
+wait 900
+peek 0x02000510 2
+peek 0x02000512 2
+peek 0x02000518 2
+peek 0x0200051A 2
+peek 0x0200051C 2
+peek 0x0200051E 1
+peek 0x0200065C 2
+peek 0x0200065E 2
+peek 0x02000664 2
+peek 0x02000666 2
+peek 0x02000668 2
+peek 0x0200066A 1
+peek 0x020007A8 2
+peek 0x020007AA 2
+peek 0x020007B0 2
+peek 0x020007B2 2
+peek 0x020007B4 2
+peek 0x020007B6 1
+peek 0x020008F4 2
+peek 0x020008F6 2
+peek 0x020008FC 2
+peek 0x020008FE 2
+peek 0x02000900 2
+peek 0x02000902 1

@@ -3,14 +3,14 @@
 The code changes of the Golden Sun Reloaded TBS patch (v1.83a) and where each stands in
 our source. Read from the patch with `scripts/ips-code-diff.py`, `ips-disasm.py` and
 `ips-bytes.py` against an unmodified build; written again in C, behind the switches
-`ARENA_RULES_*` in `arena_config.h`. See `RELOADED.md` for the decision and the plan.
+`ARENA_RULES_*` in `arena_config.h`, on by default. See `RELOADED.md` for the decision and the plan.
 Addresses are those of the unmodified English ROM.
 
 The authors fitted small routines into free space (code caves): freed jump-table room in
 `Battle_GetEffectBaseSuccessRate`, spare bytes between functions, the last 208 bytes of
 the ROM for data. That is why some "changes" read as odd jumps.
 
-## Done (patch 15), all behind switches, default off until the data lands
+## Done (patches 15 and 16), behind switches that default to on
 
 | Switch | Change | Verified |
 |---|---|---|

@@ -137,7 +137,7 @@ Verified by disassembling the changed functions against the stock build:
    ail a player in 4v4**, which is balance we have not thought about.
 4. **The class tables are our progression design.** `Class Setup` is exactly the "Djinn
    set decide the class" mapping, and their Psynergy levels (1 to 42) matter because all
-   our characters start at level 30, so most of every pool is open from the start.
+   our characters start at level 50, so every pool is open from the start.
 5. **Linked battles need identical rules.** Both consoles run the same battle code; if
    damage or ailment rules differ between builds the two will desync. The lobby signature
    (patch 14) must change whenever the rules or tables do.
@@ -183,7 +183,7 @@ make sense once the damage formula is fixed. Suggested changes:
    power and PP (the ability table) stay a separate pass, as they depend only on the
    damage formula. Items last, since they depend on the Ailment attribute and the
    unleash multipliers.
-6. **Keep the arena's own constraints in the loop.** Start level 30; coins and the stat
+6. **Keep the arena's own constraints in the loop.** Start level 50; coins and the stat
    and Djinn shops; the ladders; 4v4 symmetric play. Reloaded's numbers assume a levelling
    curve we do not have, so the balance pass in the roadmap becomes "their rules, our
    progression".

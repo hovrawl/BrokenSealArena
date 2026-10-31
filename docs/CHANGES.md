@@ -393,7 +393,8 @@ Each is one layer, in order; each builds on its own.
 ### 15. The Reloaded engine rules: level-up, ailments, damage
 - Patch: `0015-Arena-the-Reloaded-engine-rules-level-up-ailments-an.patch`
 - Switches: `ARENA_RULES_LEVELUP`, `ARENA_RULES_AILMENTS`, `ARENA_RULES_DAMAGE`
-  (`arena_config.h`), **off by default** until the rebalance's data is ported.
+  (`arena_config.h`), **on by default** (patch 16); they run over the stock tables until the
+  rebalance's data is ported.
 - Files: `game/game/arena_rules.c` (new part of game.c: the level gain and the effect
   rate tables), hooks in `levels.c`, `battle_arithmetic.c` and `battle/battle/ability.c`.
 - See `RELOADED.md` (the decision) and `RELOADED-ENGINE.md` (each rule, how it was
@@ -402,6 +403,17 @@ Each is one layer, in order; each builds on its own.
   in its table, which we can edit.
 - Port notes: the Lost Age has its own patch (v1.83) and eight characters; the same rules
   apply, with different addresses.
+
+### 16. New games start at level 50, the Reloaded rules on
+- Patch: `0016-Arena-new-games-start-at-level-50-and-the-Reloaded-e.patch`
+- `ARENA_START_LEVEL` 50 (`module/arena.h`, was a literal 30 in `scene/arena_boot.c`), and
+  the three `ARENA_RULES_*` switches default to on.
+- Psynergy is learnt by class and level (the last at 54 in the stock table), so level 50
+  opens every pool and the Djinn alone decide the class.
+- Checked: a New Game's base stats at level 50 equal the closed form of the level-up rule
+  with the game's own growth curves, for all four characters (HP, PP, attack, defense,
+  agility, luck); a Gauntlet battle runs to victory.
+- Existing saves keep their stats; only a New Game levels up.
 
 ## Dropped on the way
 
