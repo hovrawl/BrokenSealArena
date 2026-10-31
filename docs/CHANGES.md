@@ -415,6 +415,67 @@ Each is one layer, in order; each builds on its own.
   agility, luck); a Gauntlet battle runs to victory.
 - Existing saves keep their stats; only a New Game levels up.
 
+### 17. More Reloaded engine rules: guard, heal, revive, effect ids, stages, recovery
+- Patch: `0017-Arena-more-Reloaded-engine-rules-guard-heal-revive-e.patch`
+- Switches (`arena_config.h`, all on): `ARENA_RULES_GUARD`, `_HEAL`, `_REVIVE`,
+  `_EFFECT_IDS`, `_DURATIONS`, `_STAGES`, `_RECOVERY`, `_STATUS`, `_CLASS20`, `_CAPS`,
+  `_ITEMS`, `_SUMMON_TURNS`; `ARENA_RULES_AILMENTS` also sums the Ailment attribute.
+- Files: short hooks in `battle/battle/ability.c`, `action.c`, `setup.c`, `turn_end.c`,
+  `game/game/units.c`, `battle_arithmetic.c`, `menu/menu/use.c`,
+  `window/screens/battle_status.c`; `BattleWork.arenaTurn` (the byte no stock code named).
+- Each rule, its address in the original and how it was checked: `RELOADED-ENGINE.md`.
+  What is deliberately not ported (UI layout, graphics resources) is listed there too.
+- **Needs the data port**: `_EFFECT_IDS` (ability and enemy effect ids) and `_CLASS20`
+  (class multipliers doubled) change the meaning of data; on stock data Confuse acts as
+  Delude and class stats halve. `_REVIVE` keeps stock amounts for an ability of power 0.
+- **Design changes the rules make**: summons wait for turn 2 or 3 (`_SUMMON_TURNS`), a
+  deluded unit cannot unleash, Total Defense takes a third, Defense stages are stronger.
+- Checked: built with every switch 0 and every switch 1, a Gauntlet battle fought both
+  ways, the turn counter read in a battle (`scripts/smoke/rules_turn.txt`), and several
+  rebuilt functions compared with the patched original.
+
+### 18 to 26. The Reloaded data port
+The data of the Golden Sun Reloaded rebalance (v1.83a; credit: its authors, forum topic
+2779, in each table's header) written into our tables, so the engine rules of patches 15
+to 17 have the data they were made for. One converter, `scripts/port-reloaded-tables.py`,
+read the IPS and an unmodified build and rewrote the fields that differ (rows, comments and
+layout kept, named constants where our headers have them); **the source no longer depends
+on the patch**. Switches stay as they were (`ARENA_RULES_*`); with the data in, the
+stock-data caveats of patch 17 (Isaac's HP halved, Confuse as Delude) are gone.
+
+| Patch | Layer | What changed |
+|---|---|---|
+| 18 `Reloaded-ability-data` | `ability_table.c`, `arena_config.h` | 292 of 519 rows: power, PP cost, ranges, effects; abilities 23 and 81 to 83 are new (Jupiter damage); `ARENA_EFFECT_*` names for the effect ids (36 to 41, 43, 54) that the stock enum names badly |
+| 19 `Reloaded-class-data` | `class_table.c`, `character.h`, `ability.c` | 96 of 203 rows: the six multipliers in twentieths (CLASS20), Psynergy and learning levels, vulnerabilities; **`ClassDefinition.weakEffects[3]` is now the field `ward`** (struct size unchanged) |
+| 20 `Reloaded-item-data` | `item_table.c` | 133 of 324 rows: weapons, armour, accessories, prices, unleashes, healing items, effect 24 (Ailment) |
+| 21 `Reloaded-enemy-data` | `enemy_table.c`, `element_table.c` | 159 of 165 enemy rows (stats, Psynergy sets, weaknesses by the aliased ids, drops) and 41 of 44 element presets |
+| 22 `Reloaded-growth-curves` | `character_table.c`, `djinn_table.c` | the 5 characters with curves (level 99 stats equal the workbook's) and 28 of 80 Djinn |
+| 23 `Reloaded-battle-animations` | `ability_staging.c` | 33 of 519 entries of `gAbilityBattleEffects`: the new abilities and the variants |
+| 24 `Reloaded-text` | `text/en.po`, table comments | 227 messages decoded from the patch's message archive (names, descriptions with the new numbers); the tables' `// Name` comments follow |
+| 25 `Psynergy shop prices` | `arena_shop.c` | the shop kept a copy of each spell's PP cost; it now asks the ability table |
+| 26 `lobby signature` | `battle_arena.c` | the signature word is `BSR4` when the Reloaded rules are on (`BSA4` before): consoles with different rules do not link |
+
+- **How it was checked**: `scripts/table-check.py` compares every table of our built ROM
+  with the stock ROM with the IPS applied in memory: **0 of 519 abilities, 203 classes, 324
+  items, 165 enemies (bytes 30 to 39 aside, see below), 44 presets, 8 characters, 80 Djinn
+  and 519 battle effects differ**. The message archive of our ROM equals the patched stock's
+  in all 10,723 stock messages. Spot checks against the workbooks (`workbook-check.py`):
+  96 spells (PP and power) all but the nine explained ones, 39 weapons and 53 armours
+  (price and bonus) all but four that are The Lost Age's, 93 class rows (88 equal; five differ by one twentieth in one stat, the sheet's rounding or an edit after it); level 99 stats for
+  Isaac, Garet, Ivan and Mia equal the "Lv99 Character Stats" sheet. Built, and the
+  smokes `stats`, `battle`, `win`, `psynergy`, `manager`, `items`, `djinn`, `rungs`, `rules_turn`
+  looked at.
+- **Not ported (listed so nobody looks for it)**: enemy bytes 30 to 39 of 11 rows (bosses
+  and Mimics: the patch writes small numbers there, which no code of the patched game
+  reads that we found); graphics (the Psynergy icons it redraws, menu panels); `gFormations`
+  (8 bytes), `gBattleSprites` (one entry), shop stock (`sStockTable`), inn prices,
+  `gItem_ArtifactSlotTable`. The changelog's "non-overworld Djinn can't escape" is probably
+  in `gFormations` (not confirmed) and is not ported.
+- **Arena code that reads these tables**: `arena_shop.c` (fixed, patch 25); `arena_ladder.c`
+  keys on enemy rows, which the patch does not reorder, so every rung still shows the same
+  monsters, but their stats are the story game's retune: at level 50 the party is far ahead
+  of the early rungs (a Skeleton hits for about 10), a balance pass for later.
+
 ## Dropped on the way
 
 - The first training menu was a full-screen canvas-text window with its own list

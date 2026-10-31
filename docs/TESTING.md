@@ -108,8 +108,37 @@ Tests (each ends in shots; `build\smoke\shots\sheet.png` shows them all):
   **Turns:** a turn's messages wait for a button, so step them with `tap B` (30 taps of
   100 frames); B does nothing at the command menu, so extra taps are harmless, unlike A.
   A unit that dies changes the order of the command menus, so keep the scripts short.
+- `rules_turn.txt`: fight a few rounds and `peek` `BattleWork.arenaTurn` (0x47 into the
+  battle work, which `gBattleWork`, 0x03001e74, points to): 0 in the first turn, 1 after it.
 - `pause.txt`, `save.txt`: the Pause menu and Save your quest.
 - `boot.txt`, `walk.txt`: calibration runs.
+## Checking the Reloaded data port (no emulator)
+
+These read the built ROM, an unmodified upstream build (`~/alchemy-stock`) and the
+git-ignored `reloaded/` folder; they print counts and differences, never the numbers
+themselves, and write nothing in the repository. Run them in WSL with `python3` (they call
+`arm-none-eabi-nm`); `workbook-check.py` also runs on Windows.
+
+- `scripts/port-reloaded-tables.py --check` renders every row of each stock table with the
+  converter's formatter and compares it with our C source (must say 0 mismatches), then says
+  how many rows the patch changes. Without `--check` it rewrites the source (the port itself;
+  run once on pristine tables).
+- `scripts/table-check.py` compares each table of our built ROM with the stock ROM with the
+  IPS applied in memory, record by record. After the port it must say 0 records differ for
+  every table (`--ignore-reserved` leaves out the enemy bytes 30 to 39 the port skips).
+- `scripts/ips-text-diff.py ... --ours OURROM OURELF` decodes the message archive of the
+  stock, patched and our ROMs (the decoder reads all 10,723 stock messages back identically to
+  `en.po`), lists the messages the patch changes and checks ours match the patched stock.
+- `scripts/workbook-check.py` spot-checks our tables against the authors' Excel documentation:
+  spell PP and power by name, weapon attack and price, armour defense and price, class
+  multipliers. The workbooks also document The Lost Age, so a few names (Masamune, Dragon
+  Shield, the Gale family) are listed that differ for that reason; renamed classes are matched
+  by their numbers.
+- `scripts/levelup-check.py - OURROM OURELF 99` prints the base stats at a level from OUR
+  curves with the deterministic rule: level 99 equals the workbook's "Lv99 Character Stats".
+  `scripts/smoke/stats.txt` prints the in-game base stats; at level 50 they match
+  `levelup-check.py ... 50`.
+
 ## Tips
 
 - New Game starts a fresh arena with the greeter talking at once; each `tap A`

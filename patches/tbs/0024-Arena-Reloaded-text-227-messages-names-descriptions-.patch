@@ -1,0 +1,2809 @@
+From 9ef19dff59cfd682b8929d716533d08dc772bd9f Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sun, 1 Nov 2026 09:16:32 +1100
+Subject: [PATCH] Arena: Reloaded text (227 messages: names, descriptions,
+ class and ability names)
+
+Decoded from the Reloaded v1.83a patch's message archive by scripts/ips-text-diff.py (the decoder reads all 10723 stock messages back identically before it is trusted) and written into en.po; the table rows' name comments follow the new names.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/game/ability_table.c | 108 +++----
+ games/tbs/src/game/class_table.c   | 128 ++++----
+ games/tbs/src/game/enemy_table.c   |  14 +-
+ games/tbs/src/game/item_table.c    |   4 +-
+ games/tbs/text/en.po               | 464 ++++++++++++++---------------
+ 5 files changed, 358 insertions(+), 360 deletions(-)
+
+diff --git a/games/tbs/src/game/ability_table.c b/games/tbs/src/game/ability_table.c
+index 8ca3f5023d..71326f25c6 100644
+--- a/games/tbs/src/game/ability_table.c
++++ b/games/tbs/src/game/ability_table.c
+@@ -212,7 +212,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .targetMode = ABILITY_TARGET_ONE,
+         .element = ELEMENT_VENUS,
+     },
+-    // ?
++    // Remedy
+     {
+         .targetMode = ABILITY_TARGET_ALLIES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
+@@ -523,7 +523,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .ppCost = 22,
+         .power = 100,
+     },
+-    // Blast
++    // Starburst
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -734,7 +734,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .ppCost = 32,
+         .power = 145,
+     },
+-    // ?
++    // Punishment
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -744,7 +744,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .ppCost = 8,
+         .power = 45,
+     },
+-    // ?
++    // Retribution
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -754,7 +754,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .ppCost = 22,
+         .power = 115,
+     },
+-    // ?
++    // Scourge
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -1036,7 +1036,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 3,
+         .ppCost = 16,
+     },
+-    // Taint
++    // Poison
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
+@@ -1046,7 +1046,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .ppCost = 6,
+     },
+-    // Poison
++    // Toxic
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
+@@ -1193,7 +1193,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .ppCost = 5,
+     },
+-    // ?
++    // Psy Drain
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
+@@ -1204,7 +1204,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .ppCost = 1,
+         .power = 15,
+     },
+-    // ?
++    // Raise
+     {
+         .targetMode = ABILITY_TARGET_ALLIES,
+         .flags = ABILITY_USABLE_IN_FIELD | ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
+@@ -1215,7 +1215,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .ppCost = 22,
+         .power = 500,
+     },
+-    // ?
++    // Sweep
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
+@@ -1516,7 +1516,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .ppCost = 26,
+         .power = 120,
+     },
+-    // Demon Spear
++    // Bravery
+     {
+         .targetMode = ABILITY_TARGET_ALLIES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
+@@ -1526,7 +1526,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .ppCost = 8,
+     },
+-    // Angel Spear
++    // Courage
+     {
+         .targetMode = ABILITY_TARGET_ALLIES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
+@@ -1717,7 +1717,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .ppCost = 19,
+         .power = 90,
+     },
+-    // Thunderstorm
++    // Thunderhead
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -1842,7 +1842,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .targetMode = ABILITY_TARGET_ONE,
+         .element = ELEMENT_VENUS,
+     },
+-    // ?
++    // Tyrfing
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
+@@ -1910,7 +1910,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 17,
+     },
+-    // Aqua Sock
++    // Aqua Strike
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
+@@ -1927,7 +1927,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 17,
+     },
+-    // Frost Bite
++    // Frostbite
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -1954,7 +1954,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 95,
+     },
+-    // Psy Leech
++    // Psynergy Leech
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -1963,7 +1963,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 60,
+     },
+-    // Broil
++    // Fire Attack
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
+@@ -1989,7 +1989,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 17,
+     },
+-    // Barrage
++    // Explosion
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
+@@ -1998,7 +1998,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 17,
+     },
+-    // Demon Fire
++    // Demonfire
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
+@@ -2042,7 +2042,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 18,
+     },
+-    // Murk
++    // Milky Cloud
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -2294,7 +2294,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 1,
+     },
+-    // ?
++    // Mountain Water
+     {
+         .targetMode = ABILITY_TARGET_ALLIES,
+         .flags = ABILITY_USABLE_IN_FIELD | ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_HEAL_PP,
+@@ -2334,7 +2334,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 100,
+     },
+-    // ?
++    // {article_class:3}Fairy Ring
+     {
+         .targetMode = ABILITY_TARGET_ALLIES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
+@@ -3313,7 +3313,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .targetMode = ABILITY_TARGET_ONE,
+         .element = ELEMENT_VENUS,
+     },
+-    // ?
++    // Break
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
+@@ -3323,7 +3323,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = ABILITY_RANGE_ALL,
+         .ppCost = 1,
+     },
+-    // ?
++    // Freeze Prism
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -3333,7 +3333,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .ppCost = 1,
+         .power = 160,
+     },
+-    // ?
++    // Spark Plasma
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -3343,7 +3343,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .ppCost = 1,
+         .power = 175,
+     },
+-    // ?
++    // Inferno
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -3358,7 +3358,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .targetMode = ABILITY_TARGET_ONE,
+         .element = ELEMENT_VENUS,
+     },
+-    // ?
++    // Mystic Flame
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -3366,7 +3366,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 50,
+     },
+-    // ?
++    // Cutting Edge
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
+@@ -3374,7 +3374,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 17,
+     },
+-    // Fire Blessing
++    // Fire Breath
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
+@@ -3382,7 +3382,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 55,
+     },
+-    // Fire Blessing
++    // Fire Breath
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
+@@ -3390,7 +3390,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 75,
+     },
+-    // Fire Blessing
++    // Fire Breath
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
+@@ -3398,7 +3398,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 105,
+     },
+-    // Water Blessing
++    // Water Breath
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
+@@ -3406,7 +3406,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 35,
+     },
+-    // Water Blessing
++    // Water Breath
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
+@@ -3414,7 +3414,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 60,
+     },
+-    // Water Blessing
++    // Water Breath
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
+@@ -3422,7 +3422,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 80,
+     },
+-    // Ice Blessing
++    // Blizzard Breath
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
+@@ -3430,7 +3430,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 60,
+     },
+-    // Ice Blessing
++    // Blizzard Breath
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
+@@ -3438,7 +3438,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 90,
+     },
+-    // Ice Blessing
++    // Blizzard Breath
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
+@@ -3446,7 +3446,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 120,
+     },
+-    // Dark Blessing
++    // Black Breath
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
+@@ -3455,7 +3455,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 70,
+     },
+-    // Dark Blessing
++    // Black Breath
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
+@@ -3464,7 +3464,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 110,
+     },
+-    // Dark Blessing
++    // Acid Breath
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
+@@ -3473,7 +3473,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 120,
+     },
+-    // Acid Blessing
++    // Acid Breath
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
+@@ -3482,7 +3482,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 160,
+     },
+-    // Storm Blessing
++    // Thunder Breath
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
+@@ -3490,7 +3490,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 120,
+     },
+-    // Storm Blessing
++    // Thunder Breath
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
+@@ -3582,7 +3582,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 120,
+     },
+-    // Evil Blessing
++    // Demon Breath
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
+@@ -3600,7 +3600,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 100,
+     },
+-    // ?
++    // War Cry
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -3609,7 +3609,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 45,
+     },
+-    // ?
++    // Ghostly Rumble
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -3617,7 +3617,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 2,
+         .power = 35,
+     },
+-    // ?
++    // Ghostly Rumble
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -3625,7 +3625,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 15,
+     },
+-    // Rumble
++    // Ghostly Rumble
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -3840,7 +3840,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 12,
+     },
+-    // Mortal Blow
++    // Suicide Sting
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
+@@ -3936,7 +3936,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 17,
+     },
+-    // Soothing Star
++    // Healing Spores
+     {
+         .targetMode = ABILITY_TARGET_ALLIES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_HEAL_HP,
+@@ -3960,7 +3960,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .effect = ABILITY_EFFECT_ATTACK_DOWN,
+         .range = 3,
+     },
+-    // Mad Spatter
++    // Mud Spatter
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
+@@ -4156,7 +4156,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 18,
+     },
+-    // Death Size
++    // Death Scythe
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
+@@ -4199,7 +4199,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
+         .range = 1,
+         .power = 18,
+     },
+-    // Thrash
++    // Ribbit Stomp
+     {
+         .targetMode = ABILITY_TARGET_FOES,
+         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
+diff --git a/games/tbs/src/game/class_table.c b/games/tbs/src/game/class_table.c
+index e05bbd6044..eef526c3a4 100644
+--- a/games/tbs/src/game/class_table.c
++++ b/games/tbs/src/game/class_table.c
+@@ -143,7 +143,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_DELUSION, ABILITY_EFFECT_CONFUSION},
+         .ward = 105,
+     },
+-    // Slayer
++    // Sovereign
+     {
+         .series = 1,
+         .required = {13},
+@@ -259,7 +259,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
+         .ward = 105,
+     },
+-    // Champion
++    // Baron
+     {
+         .series = 2,
+         .required = {0, 0, 11},
+@@ -287,7 +287,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
+         .ward = 105,
+     },
+-    // Hero
++    // Phalanx
+     {
+         .series = 2,
+         .required = {0, 0, 13},
+@@ -325,7 +325,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+     {0},
+     // ?
+     {0},
+-    // Wind Seer
++    // Bolt User
+     {
+         .series = 7,
+         .required = {0, 0, 0, 5},
+@@ -380,7 +380,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_HAUNT, ABILITY_EFFECT_REFLECT},
+         .ward = 90,
+     },
+-    // Mage
++    // Illusionist
+     {
+         .series = 7,
+         .required = {0, 0, 0, 9},
+@@ -411,7 +411,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_HAUNT, ABILITY_EFFECT_REFLECT},
+         .ward = 90,
+     },
+-    // Magister
++    // Archmage
+     {
+         .series = 7,
+         .required = {0, 0, 0, 11},
+@@ -483,7 +483,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+     {0},
+     // ?
+     {0},
+-    // Water Seer
++    // Water User
+     {
+         .series = 6,
+         .required = {0, 5},
+@@ -511,7 +511,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         },
+         .ward = 90,
+     },
+-    // Scribe
++    // Officiant
+     {
+         .series = 6,
+         .required = {0, 7},
+@@ -568,7 +568,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         },
+         .ward = 90,
+     },
+-    // Paragon
++    // Saint
+     {
+         .series = 6,
+         .required = {0, 11},
+@@ -694,7 +694,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
+         .ward = 100,
+     },
+-    // Cavalier
++    // Valiant
+     {
+         .series = 3,
+         .required = {5, 4},
+@@ -724,7 +724,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
+         .ward = 100,
+     },
+-    // Guardian
++    // Fearless
+     {
+         .series = 3,
+         .required = {5, 5},
+@@ -754,7 +754,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
+         .ward = 100,
+     },
+-    // Protector
++    // Paragon
+     {
+         .series = 3,
+         .required = {6, 6},
+@@ -794,7 +794,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+     {0},
+     // ?
+     {0},
+-    // Swordsman
++    // Armed
+     {
+         .series = 3,
+         .required = {0, 0, 5},
+@@ -820,7 +820,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
+         .ward = 105,
+     },
+-    // Defender
++    // Fair
+     {
+         .series = 3,
+         .required = {0, 2, 5},
+@@ -848,7 +848,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
+         .ward = 105,
+     },
+-    // Cavalier
++    // Virtuous
+     {
+         .series = 3,
+         .required = {0, 4, 5},
+@@ -878,7 +878,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
+         .ward = 105,
+     },
+-    // Luminier
++    // Righteous
+     {
+         .series = 3,
+         .required = {0, 5, 5},
+@@ -908,7 +908,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
+         .ward = 105,
+     },
+-    // Radiant
++    // Luminier
+     {
+         .series = 3,
+         .required = {0, 6, 6},
+@@ -948,7 +948,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+     {0},
+     // ?
+     {0},
+-    // Dragoon
++    // White Knight
+     {
+         .series = 3,
+         .required = {3, 3, 3},
+@@ -1081,7 +1081,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
+         .ward = 105,
+     },
+-    // Illusionist
++    // Practicant
+     {
+         .series = 5,
+         .required = {5, 0, 0, 2},
+@@ -1112,7 +1112,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
+         .ward = 105,
+     },
+-    // Enchanter
++    // Psionicist
+     {
+         .series = 5,
+         .required = {5, 0, 0, 4},
+@@ -1143,7 +1143,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
+         .ward = 105,
+     },
+-    // Conjurer
++    // Spellblade
+     {
+         .series = 5,
+         .required = {5, 0, 0, 5},
+@@ -1174,7 +1174,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
+         .ward = 105,
+     },
+-    // War Adept
++    // Psy Knight
+     {
+         .series = 5,
+         .required = {6, 0, 0, 6},
+@@ -1245,7 +1245,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
+         .ward = 100,
+     },
+-    // Illusionist
++    // Pupil
+     {
+         .series = 5,
+         .required = {0, 0, 5, 2},
+@@ -1275,7 +1275,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
+         .ward = 100,
+     },
+-    // Enchanter
++    // Fated
+     {
+         .series = 5,
+         .required = {0, 0, 5, 4},
+@@ -1305,7 +1305,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
+         .ward = 100,
+     },
+-    // Conjurer
++    // Mystic Knight
+     {
+         .series = 5,
+         .required = {0, 0, 5, 5},
+@@ -1335,7 +1335,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
+         .ward = 100,
+     },
+-    // War Adept
++    // Star Knight
+     {
+         .series = 5,
+         .required = {0, 0, 6, 6},
+@@ -1375,7 +1375,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+     {0},
+     // ?
+     {0},
+-    // Ninja
++    // Shinobi
+     {
+         .series = 5,
+         .required = {3, 0, 3, 3},
+@@ -1405,7 +1405,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
+         .ward = 105,
+     },
+-    // Disciple
++    // Ninja
+     {
+         .series = 5,
+         .required = {4, 0, 4, 4},
+@@ -1435,7 +1435,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
+         .ward = 105,
+     },
+-    // Master
++    // Jonin
+     {
+         .series = 5,
+         .required = {4, 0, 4, 5},
+@@ -1479,7 +1479,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+     {0},
+     // ?
+     {0},
+-    // Seer
++    // Herbalist
+     {
+         .series = 8,
+         .required = {1, 5},
+@@ -1508,7 +1508,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         },
+         .ward = 90,
+     },
+-    // Diviner
++    // Naturalist
+     {
+         .series = 8,
+         .required = {2, 5},
+@@ -1537,7 +1537,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         },
+         .ward = 90,
+     },
+-    // Shaman
++    // Therapist
+     {
+         .series = 8,
+         .required = {4, 5},
+@@ -1567,7 +1567,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         },
+         .ward = 90,
+     },
+-    // Druid
++    // Healer
+     {
+         .series = 8,
+         .required = {5, 5},
+@@ -1597,7 +1597,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         },
+         .ward = 90,
+     },
+-    // Oracle
++    // Thaumaturge
+     {
+         .series = 8,
+         .required = {6, 6},
+@@ -1667,7 +1667,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SLEEP},
+         .ward = 90,
+     },
+-    // Diviner
++    // Haruspex
+     {
+         .series = 8,
+         .required = {2, 0, 0, 5},
+@@ -1698,7 +1698,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SLEEP},
+         .ward = 90,
+     },
+-    // Shaman
++    // Diviner
+     {
+         .series = 8,
+         .required = {4, 0, 0, 5},
+@@ -1729,7 +1729,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SLEEP},
+         .ward = 90,
+     },
+-    // Druid
++    // Clairvoyant
+     {
+         .series = 8,
+         .required = {5, 0, 0, 5},
+@@ -1760,7 +1760,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SLEEP},
+         .ward = 90,
+     },
+-    // Oracle
++    // Augur
+     {
+         .series = 8,
+         .required = {6, 0, 0, 6},
+@@ -1801,7 +1801,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+     {0},
+     // ?
+     {0},
+-    // Medium
++    // Elementalist
+     {
+         .series = 8,
+         .required = {3, 3, 0, 3},
+@@ -1832,7 +1832,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SLEEP},
+         .ward = 90,
+     },
+-    // Dark Mage
++    // Planar Mage
+     {
+         .series = 8,
+         .required = {4, 4, 0, 4},
+@@ -1863,7 +1863,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SLEEP},
+         .ward = 90,
+     },
+-    // Death Mage
++    // Worldwaker
+     {
+         .series = 8,
+         .required = {5, 4, 0, 4},
+@@ -1908,7 +1908,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+     {0},
+     // ?
+     {0},
+-    // Pilgrim
++    // Monk
+     {
+         .series = 9,
+         .required = {0, 5},
+@@ -1935,7 +1935,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_HAUNT, ABILITY_EFFECT_REFLECT},
+         .ward = 95,
+     },
+-    // Wanderer
++    // Yamabushi
+     {
+         .series = 9,
+         .required = {0, 5, 2},
+@@ -1995,7 +1995,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_HAUNT, ABILITY_EFFECT_REFLECT},
+         .ward = 95,
+     },
+-    // Water Monk
++    // Shugenja
+     {
+         .series = 9,
+         .required = {0, 5, 5},
+@@ -2026,7 +2026,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_HAUNT, ABILITY_EFFECT_REFLECT},
+         .ward = 95,
+     },
+-    // Guru
++    // Enlightened
+     {
+         .series = 9,
+         .required = {0, 6, 6},
+@@ -2067,7 +2067,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+     {0},
+     // ?
+     {0},
+-    // Pilgrim
++    // Disciple
+     {
+         .series = 9,
+         .required = {0, 0, 0, 5},
+@@ -2091,7 +2091,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_STUN, ABILITY_EFFECT_CHARM},
+         .ward = 90,
+     },
+-    // Wanderer
++    // Acolyte
+     {
+         .series = 9,
+         .required = {0, 0, 2, 5},
+@@ -2122,7 +2122,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_STUN, ABILITY_EFFECT_CHARM},
+         .ward = 90,
+     },
+-    // Ascetic
++    // Cultist
+     {
+         .series = 9,
+         .required = {0, 0, 4, 5},
+@@ -2153,7 +2153,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_STUN, ABILITY_EFFECT_CHARM},
+         .ward = 90,
+     },
+-    // Fire Monk
++    // Zealot
+     {
+         .series = 9,
+         .required = {0, 0, 5, 5},
+@@ -2184,7 +2184,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_STUN, ABILITY_EFFECT_CHARM},
+         .ward = 90,
+     },
+-    // Guru
++    // Fanatic
+     {
+         .series = 9,
+         .required = {0, 0, 6, 6},
+@@ -2225,7 +2225,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+     {0},
+     // ?
+     {0},
+-    // Ranger
++    // Wild Mage
+     {
+         .series = 9,
+         .required = {0, 3, 3, 3},
+@@ -2256,7 +2256,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_STUN, ABILITY_EFFECT_CHARM},
+         .ward = 105,
+     },
+-    // Bard
++    // Channeler
+     {
+         .series = 9,
+         .required = {0, 4, 4, 4},
+@@ -2287,7 +2287,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_STUN, ABILITY_EFFECT_CHARM},
+         .ward = 105,
+     },
+-    // Warlock
++    // Fury
+     {
+         .series = 9,
+         .required = {0, 4, 5, 4},
+@@ -2420,7 +2420,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_DELUSION, ABILITY_EFFECT_CONFUSION},
+         .ward = 110,
+     },
+-    // Barbarian
++    // Berserker
+     {
+         .series = 4,
+         .required = {5, 0, 5},
+@@ -2451,7 +2451,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_DELUSION, ABILITY_EFFECT_CONFUSION},
+         .ward = 110,
+     },
+-    // Berserker
++    // Black Knight
+     {
+         .series = 4,
+         .required = {6, 0, 6},
+@@ -2551,7 +2551,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_DELUSION, ABILITY_EFFECT_CONFUSION},
+         .ward = 110,
+     },
+-    // Ronin
++    // Shogun
+     {
+         .series = 4,
+         .required = {5, 0, 5, 4},
+@@ -2581,7 +2581,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_DELUSION, ABILITY_EFFECT_CONFUSION},
+         .ward = 110,
+     },
+-    // ?
++    // Leader
+     {
+         .series = 4,
+         .required = {4, 3, 4},
+@@ -2612,7 +2612,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
+         .ward = 105,
+     },
+-    // ?
++    // Warlord
+     {
+         .series = 4,
+         .required = {5, 4, 5},
+@@ -2655,7 +2655,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+     {0},
+     // ?
+     {0},
+-    // Hermit
++    // Student
+     {
+         .series = 10,
+         .required = {0, 1, 0, 1},
+@@ -2681,7 +2681,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SLEEP},
+         .ward = 85,
+     },
+-    // Elder
++    // Researcher
+     {
+         .series = 10,
+         .required = {0, 2, 0, 2},
+@@ -2774,7 +2774,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SLEEP},
+         .ward = 85,
+     },
+-    // Sage
++    // Wise
+     {
+         .series = 10,
+         .required = {0, 6, 0, 6},
+@@ -2805,7 +2805,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_SLEEP},
+         .ward = 85,
+     },
+-    // Wizard
++    // Arcanist
+     {
+         .series = 10,
+         .required = {0, 7, 0, 7},
+@@ -2904,7 +2904,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         },
+         .ward = 85,
+     },
+-    // ?
++    // Divine Mage
+     {
+         .series = 10,
+         .required = {0, 4, 3, 4},
+@@ -2935,7 +2935,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+         .weakEffects = {ABILITY_EFFECT_HAUNT, ABILITY_EFFECT_REFLECT},
+         .ward = 85,
+     },
+-    // ?
++    // Fateweaver
+     {
+         .series = 10,
+         .required = {0, 5, 4, 5},
+diff --git a/games/tbs/src/game/enemy_table.c b/games/tbs/src/game/enemy_table.c
+index f8dde6528b..f2ca036532 100644
+--- a/games/tbs/src/game/enemy_table.c
++++ b/games/tbs/src/game/enemy_table.c
+@@ -334,7 +334,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
+         .itemChance = 6,
+         .experience = 199,
+     },
+-    // Lich
++    // Lich Ghost
+     {
+         .name = "              ",
+         .level = 23,
+@@ -984,7 +984,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
+         .itemChance = 5,
+         .experience = 194,
+     },
+-    // Mauler
++    // Grizzly
+     {
+         .name = "              ",
+         .level = 9,
+@@ -1002,7 +1002,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
+         .itemChance = 6,
+         .experience = 37,
+     },
+-    // Ravager
++    // Brown Bear
+     {
+         .name = "              ",
+         .level = 15,
+@@ -1020,7 +1020,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
+         .itemChance = 5,
+         .experience = 90,
+     },
+-    // Grisly
++    // Savage Bear
+     {
+         .name = "              ",
+         .level = 23,
+@@ -1403,7 +1403,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
+         .itemChance = 6,
+         .experience = 62,
+     },
+-    // Worm
++    // Spear Grub
+     {
+         .name = "              ",
+         .level = 18,
+@@ -1871,7 +1871,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
+         .itemChance = 8,
+         .experience = 412,
+     },
+-    // Dread Hound
++    // Cerberus
+     {
+         .name = "              ",
+         .level = 18,
+@@ -1890,7 +1890,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
+         .itemChance = 7,
+         .experience = 116,
+     },
+-    // Cerebus
++    // Hell Hound
+     {
+         .name = "              ",
+         .level = 33,
+diff --git a/games/tbs/src/game/item_table.c b/games/tbs/src/game/item_table.c
+index d7bc54324d..cb5a2d518e 100644
+--- a/games/tbs/src/game/item_table.c
++++ b/games/tbs/src/game/item_table.c
+@@ -1110,7 +1110,7 @@ const struct ItemDefinition gItem_DefinitionTable[] = {
+         .secondaryBonus = 28,
+         .element = ELEMENT_NONE,
+     },
+-    // Mirrored Shield
++    // Mirror Shield
+     {
+         .price = 10000,
+         .type = ITEM_TYPE_SHIELD,
+@@ -1736,7 +1736,7 @@ const struct ItemDefinition gItem_DefinitionTable[] = {
+         .element = ELEMENT_NONE,
+         .abilityId = ABILITY_LUCKY_PEPPER,
+     },
+-    // ?
++    // Mountain Water
+     {
+         .price = 100,
+         .flags = ITEM_RARE | ITEM_STACKABLE,
+diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
+index f75d66189b..3194858b15 100644
+--- a/games/tbs/text/en.po
++++ b/games/tbs/text/en.po
+@@ -526,7 +526,7 @@ msgstr "Long Sword: Unleashes Acid Bath"
+ 
+ msgctxt "message"
+ msgid "00123"
+-msgstr "Long Sword: Unleashes Aqua Sock"
++msgstr "Long Sword: Unleashes Aqua Strike"
+ 
+ msgctxt "message"
+ msgid "00124"
+@@ -546,7 +546,7 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "00128"
+-msgstr "Long Sword: Unleashes Demon Fire"
++msgstr "Long Sword: Unleashes Demonfire"
+ 
+ msgctxt "message"
+ msgid "00129"
+@@ -582,7 +582,7 @@ msgstr "Light Blade"
+ 
+ msgctxt "message"
+ msgid "00137"
+-msgstr "Light Blade: Unleashes Cyclone Attack"
++msgstr "Light Blade: Unleashes Cyclone Slash"
+ 
+ msgctxt "message"
+ msgid "00138"
+@@ -646,15 +646,15 @@ msgstr "Axe: Unleashes Meltdown"
+ 
+ msgctxt "message"
+ msgid "00153"
+-msgstr "Axe: Unleashes Barrage"
++msgstr "Axe: Unleashes Explosion"
+ 
+ msgctxt "message"
+ msgid "00154"
+-msgstr "Axe: Unleashes Broil"
++msgstr "Axe: Unleashes Fire Attack"
+ 
+ msgctxt "message"
+ msgid "00155"
+-msgstr "Axe: Unleashes Poison Cloud"
++msgstr "Cursed Axe: Unleashes Poison Cloud"
+ 
+ msgctxt "message"
+ msgid "00156"
+@@ -702,7 +702,7 @@ msgstr "Mace: Replenishes 200 HP"
+ 
+ msgctxt "message"
+ msgid "00167"
+-msgstr "Mace: Unleashes Poison Death (cursed)"
++msgstr "Cursed Mace: Unleashes Deadly Poison"
+ 
+ msgctxt "message"
+ msgid "00168"
+@@ -726,7 +726,7 @@ msgstr "Staff"
+ 
+ msgctxt "message"
+ msgid "00173"
+-msgstr "Staff: Unleashes Murk"
++msgstr "Staff: Unleashes Milky Cloud"
+ 
+ msgctxt "message"
+ msgid "00174"
+@@ -734,23 +734,23 @@ msgstr "Staff: Unleashes Stun Voltage"
+ 
+ msgctxt "message"
+ msgid "00175"
+-msgstr "Staff: Unleashes Psyphon Seal"
++msgstr "Ankh: Unleashes Psynergy Leech"
+ 
+ msgctxt "message"
+ msgid "00176"
+-msgstr "Staff: Unleashes Psynergy Leech"
++msgstr "Staff: Unleashes Psyphon Seal"
+ 
+ msgctxt "message"
+ msgid "00177"
+-msgstr "Staff: Unleashes Frost Bite"
++msgstr "Staff: Unleashes Frostbite"
+ 
+ msgctxt "message"
+ msgid "00178"
+-msgstr "Staff: Unleashes Life Leech"
++msgstr "Ankh: Unleashes Life Leech"
+ 
+ msgctxt "message"
+ msgid "00179"
+-msgstr "Staff: Unleashes Bad Omen"
++msgstr "Cursed Staff: Unleashes Bad Omen"
+ 
+ msgctxt "message"
+ msgid "00180"
+@@ -830,11 +830,11 @@ msgstr "Armor: Resists all elements"
+ 
+ msgctxt "message"
+ msgid "00199"
+-msgstr "Armor: Resists Water & Fire"
++msgstr "Armor: Resists Fire & Water"
+ 
+ msgctxt "message"
+ msgid "00200"
+-msgstr "Armor: Drops Wind Resistance (cursed)"
++msgstr "Armor: Boosts HP, Criticals & Ailments"
+ 
+ msgctxt "message"
+ msgid "00201"
+@@ -842,7 +842,7 @@ msgstr "Armor: Boosts Attack; replenishes HP"
+ 
+ msgctxt "message"
+ msgid "00202"
+-msgstr "Armor: Boosts Attack"
++msgstr "Armor: Boosts Attack & Critical Hits"
+ 
+ msgctxt "message"
+ msgid "00203"
+@@ -870,7 +870,7 @@ msgstr "Clothing: Resists Water"
+ 
+ msgctxt "message"
+ msgid "00209"
+-msgstr "Clothing: Boosts PP"
++msgstr "Clothing"
+ 
+ msgctxt "message"
+ msgid "00210"
+@@ -894,7 +894,7 @@ msgstr "Clothing: Boosts Agility; resists Fire"
+ 
+ msgctxt "message"
+ msgid "00215"
+-msgstr "Clothing: Boosts Agility; resists Wind"
++msgstr "Clothing: Boosts Agility & Ailments"
+ 
+ msgctxt "message"
+ msgid "00216"
+@@ -950,11 +950,11 @@ msgstr "Robe"
+ 
+ msgctxt "message"
+ msgid "00229"
+-msgstr "Robe: Resists Wind"
++msgstr "Robe: Boosts Agility & Wind"
+ 
+ msgctxt "message"
+ msgid "00230"
+-msgstr "Robe: Resists Water; boosts HP recovery"
++msgstr "Robe: Boosts Water, replenishes HP"
+ 
+ msgctxt "message"
+ msgid "00231"
+@@ -1018,27 +1018,27 @@ msgstr "Gloves"
+ 
+ msgctxt "message"
+ msgid "00246"
+-msgstr "Gloves"
++msgstr "Gloves: Boost Attack"
+ 
+ msgctxt "message"
+ msgid "00247"
+-msgstr "Gloves: Boosts Attack"
++msgstr "Gloves: Boost Attack"
+ 
+ msgctxt "message"
+ msgid "00248"
+-msgstr "Gloves: Boosts Attack"
++msgstr "Gloves: Boost Attack & Critical Hits"
+ 
+ msgctxt "message"
+ msgid "00249"
+-msgstr "Gloves: Boosts Elemental power"
++msgstr "Gloves: Boost elemental Power"
+ 
+ msgctxt "message"
+ msgid "00250"
+-msgstr "Gloves: Boosts Attack"
++msgstr "Gloves: Boost Attack & Critical Hits"
+ 
+ msgctxt "message"
+ msgid "00251"
+-msgstr "Gloves: Use to resist elements"
++msgstr "Gloves: Boost Attack & Critical Hits"
+ 
+ msgctxt "message"
+ msgid "00252"
+@@ -1062,11 +1062,11 @@ msgstr "Bracelet"
+ 
+ msgctxt "message"
+ msgid "00257"
+-msgstr "Bracelet: Use to cure ailments"
++msgstr "Bracelet: Boosts Earth & Water Power"
+ 
+ msgctxt "message"
+ msgid "00258"
+-msgstr "Bracelet: Use to restore 100 HP"
++msgstr "Bracelet: Boosts Fire & Wind Power"
+ 
+ msgctxt "message"
+ msgid "00259"
+@@ -1106,7 +1106,7 @@ msgstr "Helm"
+ 
+ msgctxt "message"
+ msgid "00268"
+-msgstr "Helm: Boosts Earth power, Critical Hits"
++msgstr "Helm: Boosts Earth Power & Criticals"
+ 
+ msgctxt "message"
+ msgid "00269"
+@@ -1138,7 +1138,7 @@ msgstr "Hat"
+ 
+ msgctxt "message"
+ msgid "00276"
+-msgstr "Crown: Boosts Luck"
++msgstr "Hat: Boosts Luck"
+ 
+ msgctxt "message"
+ msgid "00277"
+@@ -1146,11 +1146,11 @@ msgstr "Hat: Boosts Agility"
+ 
+ msgctxt "message"
+ msgid "00278"
+-msgstr "Crown: Boosts Critical Hits; restores PP"
++msgstr "Hat: Boosts Criticals & PP"
+ 
+ msgctxt "message"
+ msgid "00279"
+-msgstr "Crown: Replenishes PP (cursed)"
++msgstr "Cursed Hat: Boosts PP & Ailments"
+ 
+ msgctxt "message"
+ msgid "00280"
+@@ -1158,7 +1158,7 @@ msgstr "Hat: Predicts being downed"
+ 
+ msgctxt "message"
+ msgid "00281"
+-msgstr "Increases random battles when equipped"
++msgstr "Hat: Increases random battles"
+ 
+ msgctxt "message"
+ msgid "00282"
+@@ -1186,7 +1186,7 @@ msgstr "Circlet: Replenishes PP"
+ 
+ msgctxt "message"
+ msgid "00288"
+-msgstr "Circlet: Prevents delusions"
++msgstr "Circlet: Deludes enemies"
+ 
+ msgctxt "message"
+ msgid "00289"
+@@ -1230,11 +1230,11 @@ msgstr "Replenishes 200 HP"
+ 
+ msgctxt "message"
+ msgid "00299"
+-msgstr "Replenishes 500 HP"
++msgstr "Replenishes 350 HP"
+ 
+ msgctxt "message"
+ msgid "00300"
+-msgstr "Replenishes all HP"
++msgstr "Replenishes 600 HP"
+ 
+ msgctxt "message"
+ msgid "00301"
+@@ -1246,7 +1246,7 @@ msgstr "Extracts water from a magic spring"
+ 
+ msgctxt "message"
+ msgid "00303"
+-msgstr "Replenishes all PP"
++msgstr "Replenishes 200 PP"
+ 
+ msgctxt "message"
+ msgid "00304"
+@@ -1290,7 +1290,7 @@ msgstr "Boosts Luck"
+ 
+ msgctxt "message"
+ msgid "00314"
+-msgstr "?"
++msgstr "Replenishes 20 PP"
+ 
+ msgctxt "message"
+ msgid "00315"
+@@ -1502,11 +1502,11 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "00367"
+-msgstr "Shirt: Boosts Defense & HP"
++msgstr "Shirt: Boosts HP"
+ 
+ msgctxt "message"
+ msgid "00368"
+-msgstr "Shirt: Boosts Defense & Luck"
++msgstr "Shirt: Boosts PP"
+ 
+ msgctxt "message"
+ msgid "00369"
+@@ -1526,19 +1526,19 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "00373"
+-msgstr "Boots: Boosts Defense & Critical Hits"
++msgstr "Boots: Boost Critical Hits"
+ 
+ msgctxt "message"
+ msgid "00374"
+-msgstr "Boots: Boosts Defense & Agility"
++msgstr "Boots: Boost Agility"
+ 
+ msgctxt "message"
+ msgid "00375"
+-msgstr "Boots: Boosts Defense; resists Water"
++msgstr "Boots: Boosts HP"
+ 
+ msgctxt "message"
+ msgid "00376"
+-msgstr "Boots: Boosts Defense; decreases Agility"
++msgstr "Boots: Decrease Agility"
+ 
+ msgctxt "message"
+ msgid "00377"
+@@ -1550,19 +1550,19 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "00379"
+-msgstr "Ring: Use to restore 7 PP"
++msgstr "Ring: Boosts PP"
+ 
+ msgctxt "message"
+ msgid "00380"
+-msgstr "Ring: Use to boost Attack"
++msgstr "Ring: Boosts Critical Hits"
+ 
+ msgctxt "message"
+ msgid "00381"
+-msgstr "Ring: Use to Lull enemies to sleep"
++msgstr "Ring: Boosts Agility"
+ 
+ msgctxt "message"
+ msgid "00382"
+-msgstr "Ring: Use to restore 70 HP"
++msgstr "Ring: Use to restore 100 HP"
+ 
+ msgctxt "message"
+ msgid "00383"
+@@ -1570,7 +1570,7 @@ msgstr "Ring: Use to remove poison"
+ 
+ msgctxt "message"
+ msgid "00384"
+-msgstr "Ring: Acts like an Elixir in battle"
++msgstr "Ring: Cures Delusion, Stun, & Sleep"
+ 
+ msgctxt "message"
+ msgid "00385"
+@@ -1718,7 +1718,7 @@ msgstr "{article_class:2}Dragon Axe"
+ 
+ msgctxt "message"
+ msgid "00421"
+-msgstr "{article_class:2}Giant Axe"
++msgstr "{article_class:2}Gigant Axe"
+ 
+ msgctxt "message"
+ msgid "00422"
+@@ -1814,7 +1814,7 @@ msgstr "{article_class:2}Blessed Ankh"
+ 
+ msgctxt "message"
+ msgid "00445"
+-msgstr "{article_class:2}Psynergy Rod"
++msgstr "{article_class:2}Psychic Rod"
+ 
+ msgctxt "message"
+ msgid "00446"
+@@ -1962,7 +1962,7 @@ msgstr "{article_class:2}Water Jacket"
+ 
+ msgctxt "message"
+ msgid "00482"
+-msgstr "{article_class:4}Storm Gear"
++msgstr "{article_class:5}Storm Gear"
+ 
+ msgctxt "message"
+ msgid "00483"
+@@ -1970,7 +1970,7 @@ msgstr "{article_class:2}Kimono"
+ 
+ msgctxt "message"
+ msgid "00484"
+-msgstr "{article_class:5}Ninja Garb"
++msgstr "{article_class:4}Black Garb"
+ 
+ msgctxt "message"
+ msgid "00485"
+@@ -2002,7 +2002,7 @@ msgstr "{article_class:2}Silk Robe"
+ 
+ msgctxt "message"
+ msgid "00492"
+-msgstr "{article_class:2}China Dress"
++msgstr "{article_class:2}Cheongsam"
+ 
+ msgctxt "message"
+ msgid "00493"
+@@ -2030,7 +2030,7 @@ msgstr "{article_class:2}Feathered Robe"
+ 
+ msgctxt "message"
+ msgid "00499"
+-msgstr "{article_class:3}Oracle's Robe"
++msgstr "{article_class:3}Princess Robe"
+ 
+ msgctxt "message"
+ msgid "00500"
+@@ -2066,7 +2066,7 @@ msgstr "Knight's Shield"
+ 
+ msgctxt "message"
+ msgid "00508"
+-msgstr "Mirrored Shield"
++msgstr "Mirror Shield"
+ 
+ msgctxt "message"
+ msgid "00509"
+@@ -2106,7 +2106,7 @@ msgstr "{article_class:5}War Gloves"
+ 
+ msgctxt "message"
+ msgid "00518"
+-msgstr "{article_class:5}Spirit Gloves"
++msgstr "{article_class:5}Mystery Gloves"
+ 
+ msgctxt "message"
+ msgid "00519"
+@@ -2186,7 +2186,7 @@ msgstr "{article_class:2}Warrior's Helm"
+ 
+ msgctxt "message"
+ msgid "00538"
+-msgstr "{article_class:3}Adept's Helm"
++msgstr "{article_class:3}Ceres' Helm"
+ 
+ msgctxt "message"
+ msgid "00539"
+@@ -2210,7 +2210,7 @@ msgstr "{article_class:2}Wooden Cap"
+ 
+ msgctxt "message"
+ msgid "00544"
+-msgstr "{article_class:2}Mail Cap"
++msgstr "{article_class:2}Chain Hood"
+ 
+ msgctxt "message"
+ msgid "00545"
+@@ -2218,15 +2218,15 @@ msgstr "{article_class:2}Jeweled Crown"
+ 
+ msgctxt "message"
+ msgid "00546"
+-msgstr "{article_class:2}Ninja Hood"
++msgstr "{article_class:2}Black Hood"
+ 
+ msgctxt "message"
+ msgid "00547"
+-msgstr "{article_class:2}Lucky Cap"
++msgstr "{article_class:2}Ninja Headband"
+ 
+ msgctxt "message"
+ msgid "00548"
+-msgstr "{article_class:6}Thunder Crown"
++msgstr "{article_class:6}Devil's Crown"
+ 
+ msgctxt "message"
+ msgid "00549"
+@@ -2234,7 +2234,7 @@ msgstr "{article_class:2}Prophet's Hat"
+ 
+ msgctxt "message"
+ msgid "00550"
+-msgstr "{article_class:6}Lure Cap"
++msgstr "{article_class:6}Lure Hat"
+ 
+ msgctxt "message"
+ msgid "00551"
+@@ -2366,7 +2366,7 @@ msgstr "{article_class:4}Lucky Pepper"
+ 
+ msgctxt "message"
+ msgid "00583"
+-msgstr "?"
++msgstr "Mountain Water"
+ 
+ msgctxt "message"
+ msgid "00584"
+@@ -2582,7 +2582,7 @@ msgstr "{article_class:2}Mythril Shirt"
+ 
+ msgctxt "message"
+ msgid "00637"
+-msgstr "{article_class:2}Silk Shirt"
++msgstr "{article_class:2}Silk Bustier"
+ 
+ msgctxt "message"
+ msgid "00638"
+@@ -2634,7 +2634,7 @@ msgstr "{article_class:2}War Ring"
+ 
+ msgctxt "message"
+ msgid "00650"
+-msgstr "{article_class:2}Sleep Ring"
++msgstr "{article_class:2}Wind Ring"
+ 
+ msgctxt "message"
+ msgid "00651"
+@@ -2650,7 +2650,7 @@ msgstr "{article_class:2}Fairy Ring"
+ 
+ msgctxt "message"
+ msgid "00654"
+-msgstr "{article_class:2}Cleric's Ring"
++msgstr "{article_class:2}Angel's Ring"
+ 
+ msgctxt "MsgEnemyName"
+ msgid "00655"
+@@ -2722,7 +2722,7 @@ msgstr "Horned Ghost"
+ 
+ msgctxt "message"
+ msgid "00672"
+-msgstr "Lich"
++msgstr "Lich Ghost"
+ 
+ msgctxt "message"
+ msgid "00673"
+@@ -2858,15 +2858,15 @@ msgstr "Cannibal Ghoul"
+ 
+ msgctxt "message"
+ msgid "00706"
+-msgstr "Mauler"
++msgstr "Grizzly"
+ 
+ msgctxt "message"
+ msgid "00707"
+-msgstr "Ravager"
++msgstr "Brown Bear"
+ 
+ msgctxt "message"
+ msgid "00708"
+-msgstr "Grisly"
++msgstr "Savage Bear"
+ 
+ msgctxt "message"
+ msgid "00709"
+@@ -2946,7 +2946,7 @@ msgstr "Grub"
+ 
+ msgctxt "message"
+ msgid "00728"
+-msgstr "Worm"
++msgstr "Spear Grub"
+ 
+ msgctxt "message"
+ msgid "00729"
+@@ -3038,11 +3038,11 @@ msgstr "Grand Golem"
+ 
+ msgctxt "message"
+ msgid "00751"
+-msgstr "Dread Hound"
++msgstr "Cerberus"
+ 
+ msgctxt "message"
+ msgid "00752"
+-msgstr "Cerebus"
++msgstr "Hell Hound"
+ 
+ msgctxt "message"
+ msgid "00753"
+@@ -3402,7 +3402,7 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "00842"
+-msgstr "?"
++msgstr "Remedy"
+ 
+ msgctxt "message"
+ msgid "00843"
+@@ -3538,7 +3538,7 @@ msgstr "Fiery Blast"
+ 
+ msgctxt "message"
+ msgid "00876"
+-msgstr "Blast"
++msgstr "Starburst"
+ 
+ msgctxt "message"
+ msgid "00877"
+@@ -3634,15 +3634,15 @@ msgstr "Tempest"
+ 
+ msgctxt "message"
+ msgid "00900"
+-msgstr "?"
++msgstr "Punishment"
+ 
+ msgctxt "message"
+ msgid "00901"
+-msgstr "?"
++msgstr "Retribution"
+ 
+ msgctxt "message"
+ msgid "00902"
+-msgstr "?"
++msgstr "Scourge"
+ 
+ msgctxt "message"
+ msgid "00903"
+@@ -3766,11 +3766,11 @@ msgstr "Enfeeble"
+ 
+ msgctxt "message"
+ msgid "00933"
+-msgstr "Taint"
++msgstr "Poison"
+ 
+ msgctxt "message"
+ msgid "00934"
+-msgstr "Poison"
++msgstr "Toxic"
+ 
+ msgctxt "message"
+ msgid "00935"
+@@ -3830,15 +3830,15 @@ msgstr "Reflect"
+ 
+ msgctxt "message"
+ msgid "00949"
+-msgstr "?"
++msgstr "Psy Drain"
+ 
+ msgctxt "message"
+ msgid "00950"
+-msgstr "?"
++msgstr "Raise"
+ 
+ msgctxt "message"
+ msgid "00951"
+-msgstr "?"
++msgstr "Sweep"
+ 
+ msgctxt "message"
+ msgid "00952"
+@@ -3990,11 +3990,11 @@ msgstr "Magma Storm"
+ 
+ msgctxt "message"
+ msgid "00989"
+-msgstr "Demon Spear"
++msgstr "Bravery"
+ 
+ msgctxt "message"
+ msgid "00990"
+-msgstr "Angel Spear"
++msgstr "Courage"
+ 
+ msgctxt "message"
+ msgid "00991"
+@@ -4070,7 +4070,7 @@ msgstr "Thunderbolt"
+ 
+ msgctxt "message"
+ msgid "01009"
+-msgstr "Thunderstorm"
++msgstr "Thunderhead"
+ 
+ msgctxt "message"
+ msgid "01010"
+@@ -4142,7 +4142,7 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "01027"
+-msgstr "?"
++msgstr "Tyrfing"
+ 
+ msgctxt "message"
+ msgid "01028"
+@@ -4174,7 +4174,7 @@ msgstr "Life Nourish"
+ 
+ msgctxt "message"
+ msgid "01035"
+-msgstr "Aqua Sock"
++msgstr "Aqua Strike"
+ 
+ msgctxt "message"
+ msgid "01036"
+@@ -4182,7 +4182,7 @@ msgstr "Blizzard"
+ 
+ msgctxt "message"
+ msgid "01037"
+-msgstr "Frost Bite"
++msgstr "Frostbite"
+ 
+ msgctxt "message"
+ msgid "01038"
+@@ -4194,11 +4194,11 @@ msgstr "Life Leech"
+ 
+ msgctxt "message"
+ msgid "01040"
+-msgstr "Psy Leech"
++msgstr "Psynergy Leech"
+ 
+ msgctxt "message"
+ msgid "01041"
+-msgstr "Broil"
++msgstr "Fire Attack"
+ 
+ msgctxt "message"
+ msgid "01042"
+@@ -4210,11 +4210,11 @@ msgstr "Heat Mirage"
+ 
+ msgctxt "message"
+ msgid "01044"
+-msgstr "Barrage"
++msgstr "Explosion"
+ 
+ msgctxt "message"
+ msgid "01045"
+-msgstr "Demon Fire"
++msgstr "Demonfire"
+ 
+ msgctxt "message"
+ msgid "01046"
+@@ -4234,7 +4234,7 @@ msgstr "Blinding Smog"
+ 
+ msgctxt "message"
+ msgid "01050"
+-msgstr "Murk"
++msgstr "Milky Cloud"
+ 
+ msgctxt "message"
+ msgid "01051"
+@@ -4374,7 +4374,7 @@ msgstr "{article_class:4}Lucky Pepper"
+ 
+ msgctxt "message"
+ msgid "01085"
+-msgstr "?"
++msgstr "Mountain Water"
+ 
+ msgctxt "message"
+ msgid "01086"
+@@ -4386,7 +4386,7 @@ msgstr "{article_class:2}Sleep Bomb"
+ 
+ msgctxt "message"
+ msgid "01088"
+-msgstr "{article_class:3}Adept Ring"
++msgstr "{article_class:3}Unicorn Ring"
+ 
+ msgctxt "message"
+ msgid "01089"
+@@ -4394,7 +4394,7 @@ msgstr "{article_class:4}Corn"
+ 
+ msgctxt "message"
+ msgid "01090"
+-msgstr "?"
++msgstr "{article_class:3}Fairy Ring"
+ 
+ msgctxt "message"
+ msgid "01091"
+@@ -4962,19 +4962,19 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "01232"
+-msgstr "?"
++msgstr "Break"
+ 
+ msgctxt "message"
+ msgid "01233"
+-msgstr "?"
++msgstr "Freeze Prism"
+ 
+ msgctxt "message"
+ msgid "01234"
+-msgstr "?"
++msgstr "Spark Plasma"
+ 
+ msgctxt "message"
+ msgid "01235"
+-msgstr "?"
++msgstr "Inferno"
+ 
+ msgctxt "message"
+ msgid "01236"
+@@ -4982,71 +4982,71 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "01237"
+-msgstr "?"
++msgstr "Mystic Flame"
+ 
+ msgctxt "message"
+ msgid "01238"
+-msgstr "?"
++msgstr "Cutting Edge"
+ 
+ msgctxt "message"
+ msgid "01239"
+-msgstr "Fire Blessing"
++msgstr "Fire Breath"
+ 
+ msgctxt "message"
+ msgid "01240"
+-msgstr "Fire Blessing"
++msgstr "Fire Breath"
+ 
+ msgctxt "message"
+ msgid "01241"
+-msgstr "Fire Blessing"
++msgstr "Fire Breath"
+ 
+ msgctxt "message"
+ msgid "01242"
+-msgstr "Water Blessing"
++msgstr "Water Breath"
+ 
+ msgctxt "message"
+ msgid "01243"
+-msgstr "Water Blessing"
++msgstr "Water Breath"
+ 
+ msgctxt "message"
+ msgid "01244"
+-msgstr "Water Blessing"
++msgstr "Water Breath"
+ 
+ msgctxt "message"
+ msgid "01245"
+-msgstr "Ice Blessing"
++msgstr "Blizzard Breath"
+ 
+ msgctxt "message"
+ msgid "01246"
+-msgstr "Ice Blessing"
++msgstr "Blizzard Breath"
+ 
+ msgctxt "message"
+ msgid "01247"
+-msgstr "Ice Blessing"
++msgstr "Blizzard Breath"
+ 
+ msgctxt "message"
+ msgid "01248"
+-msgstr "Dark Blessing"
++msgstr "Black Breath"
+ 
+ msgctxt "message"
+ msgid "01249"
+-msgstr "Dark Blessing"
++msgstr "Black Breath"
+ 
+ msgctxt "message"
+ msgid "01250"
+-msgstr "Dark Blessing"
++msgstr "Acid Breath"
+ 
+ msgctxt "message"
+ msgid "01251"
+-msgstr "Acid Blessing"
++msgstr "Acid Breath"
+ 
+ msgctxt "message"
+ msgid "01252"
+-msgstr "Storm Blessing"
++msgstr "Thunder Breath"
+ 
+ msgctxt "message"
+ msgid "01253"
+-msgstr "Storm Blessing"
++msgstr "Thunder Breath"
+ 
+ msgctxt "message"
+ msgid "01254"
+@@ -5090,7 +5090,7 @@ msgstr "Wing Stroke"
+ 
+ msgctxt "message"
+ msgid "01264"
+-msgstr "Evil Blessing"
++msgstr "Demon Breath"
+ 
+ msgctxt "message"
+ msgid "01265"
+@@ -5098,19 +5098,19 @@ msgstr "Deadly Gas"
+ 
+ msgctxt "message"
+ msgid "01266"
+-msgstr "?"
++msgstr "War Cry"
+ 
+ msgctxt "message"
+ msgid "01267"
+-msgstr "?"
++msgstr "Ghostly Rumble"
+ 
+ msgctxt "message"
+ msgid "01268"
+-msgstr "?"
++msgstr "Ghostly Rumble"
+ 
+ msgctxt "message"
+ msgid "01269"
+-msgstr "Rumble"
++msgstr "Ghostly Rumble"
+ 
+ msgctxt "message"
+ msgid "01270"
+@@ -5210,7 +5210,7 @@ msgstr "Double Fang"
+ 
+ msgctxt "message"
+ msgid "01294"
+-msgstr "Mortal Blow"
++msgstr "Suicide Sting"
+ 
+ msgctxt "message"
+ msgid "01295"
+@@ -5254,7 +5254,7 @@ msgstr "Mad Dash"
+ 
+ msgctxt "message"
+ msgid "01305"
+-msgstr "Soothing Star"
++msgstr "Healing Spores"
+ 
+ msgctxt "message"
+ msgid "01306"
+@@ -5266,7 +5266,7 @@ msgstr "Heartrender"
+ 
+ msgctxt "message"
+ msgid "01308"
+-msgstr "Mad Spatter"
++msgstr "Mud Spatter"
+ 
+ msgctxt "message"
+ msgid "01309"
+@@ -5362,7 +5362,7 @@ msgstr "Heat Flash"
+ 
+ msgctxt "message"
+ msgid "01332"
+-msgstr "Death Size"
++msgstr "Death Scythe"
+ 
+ msgctxt "message"
+ msgid "01333"
+@@ -5382,7 +5382,7 @@ msgstr "Severe Blow"
+ 
+ msgctxt "message"
+ msgid "01337"
+-msgstr "Thrash"
++msgstr "Ribbit Stomp"
+ 
+ msgctxt "MsgAbilityDescription"
+ msgid "01338"
+@@ -5478,7 +5478,7 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "01361"
+-msgstr "?"
++msgstr "Heal all ailments."
+ 
+ msgctxt "message"
+ msgid "01362"
+@@ -5710,15 +5710,15 @@ msgstr "Attack with a fearsome windstorm."
+ 
+ msgctxt "message"
+ msgid "01419"
+-msgstr "?"
++msgstr "Attack with bolts from the heavens."
+ 
+ msgctxt "message"
+ msgid "01420"
+-msgstr "?"
++msgstr "Attack with bolts from the heavens."
+ 
+ msgctxt "message"
+ msgid "01421"
+-msgstr "?"
++msgstr "Attack with bolts from the heavens."
+ 
+ msgctxt "message"
+ msgid "01422"
+@@ -5754,7 +5754,7 @@ msgstr "Restore 150 HP."
+ 
+ msgctxt "message"
+ msgid "01430"
+-msgstr "Restore 300 HP."
++msgstr "Restore 500 HP."
+ 
+ msgctxt "message"
+ msgid "01431"
+@@ -5766,7 +5766,7 @@ msgstr "Restore 200 HP with faith's power."
+ 
+ msgctxt "message"
+ msgid "01433"
+-msgstr "Restore 1000 HP with faith's power."
++msgstr "Restore 700 HP with faith's power."
+ 
+ msgctxt "message"
+ msgid "01434"
+@@ -5778,7 +5778,7 @@ msgstr "Restore 160 HP to the whole party."
+ 
+ msgctxt "message"
+ msgid "01436"
+-msgstr "Restore 400 HP to the whole party."
++msgstr "Restore 340 HP to the whole party."
+ 
+ msgctxt "message"
+ msgid "01437"
+@@ -5802,11 +5802,11 @@ msgstr "Boost party's Attack."
+ 
+ msgctxt "message"
+ msgid "01442"
+-msgstr "Drop enemy Attack."
++msgstr "Drop enemy's Attack."
+ 
+ msgctxt "message"
+ msgid "01443"
+-msgstr "Drop enemy Attack."
++msgstr "Drop enemy party's Attack."
+ 
+ msgctxt "message"
+ msgid "01444"
+@@ -5826,11 +5826,11 @@ msgstr "Drop enemy party's Defense."
+ 
+ msgctxt "message"
+ msgid "01448"
+-msgstr "Boost Resistance."
++msgstr "Boost ally's Resistance."
+ 
+ msgctxt "message"
+ msgid "01449"
+-msgstr "Boost Resistance."
++msgstr "Boost party's Resistance."
+ 
+ msgctxt "message"
+ msgid "01450"
+@@ -5842,7 +5842,7 @@ msgstr "Drop enemy party's Resistance."
+ 
+ msgctxt "message"
+ msgid "01452"
+-msgstr "?"
++msgstr "Poison multiple foes."
+ 
+ msgctxt "message"
+ msgid "01453"
+@@ -5862,7 +5862,7 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "01457"
+-msgstr "?"
++msgstr "Paralyze a foe."
+ 
+ msgctxt "message"
+ msgid "01458"
+@@ -5906,11 +5906,11 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "01468"
+-msgstr "?"
++msgstr "Drain enemy's PP into yourself."
+ 
+ msgctxt "message"
+ msgid "01469"
+-msgstr "?"
++msgstr "Revive a downed ally."
+ 
+ msgctxt "message"
+ msgid "01470"
+@@ -6066,11 +6066,11 @@ msgstr "Attack with a volcano's might."
+ 
+ msgctxt "message"
+ msgid "01508"
+-msgstr "Boost Attack with a demonic blade."
++msgstr "Boost ally's Attack."
+ 
+ msgctxt "message"
+ msgid "01509"
+-msgstr "Boost Attack with a heavenly blade."
++msgstr "Boost party's Attack."
+ 
+ msgctxt "message"
+ msgid "01510"
+@@ -6218,7 +6218,7 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "01546"
+-msgstr "?"
++msgstr "Strike with a legendary sword."
+ 
+ msgctxt "message"
+ msgid "01547"
+@@ -6598,7 +6598,7 @@ msgstr "Revive a downed ally."
+ 
+ msgctxt "message"
+ msgid "01641"
+-msgstr "Tangle foes to drop Agility."
++msgstr "Damage foes and drop their Agility."
+ 
+ msgctxt "message"
+ msgid "01642"
+@@ -7482,7 +7482,7 @@ msgstr "Lord"
+ 
+ msgctxt "message"
+ msgid "01862"
+-msgstr "Slayer"
++msgstr "Sovereign"
+ 
+ msgctxt "message"
+ msgid "01863"
+@@ -7514,11 +7514,11 @@ msgstr "Warrior"
+ 
+ msgctxt "message"
+ msgid "01870"
+-msgstr "Champion"
++msgstr "Baron"
+ 
+ msgctxt "message"
+ msgid "01871"
+-msgstr "Hero"
++msgstr "Phalanx"
+ 
+ msgctxt "message"
+ msgid "01872"
+@@ -7542,7 +7542,7 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "01877"
+-msgstr "Wind Seer"
++msgstr "Bolt User"
+ 
+ msgctxt "message"
+ msgid "01878"
+@@ -7550,11 +7550,11 @@ msgstr "Magician"
+ 
+ msgctxt "message"
+ msgid "01879"
+-msgstr "Mage"
++msgstr "Illusionist"
+ 
+ msgctxt "message"
+ msgid "01880"
+-msgstr "Magister"
++msgstr "Archmage"
+ 
+ msgctxt "message"
+ msgid "01881"
+@@ -7582,11 +7582,11 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "01887"
+-msgstr "Water Seer"
++msgstr "Water User"
+ 
+ msgctxt "message"
+ msgid "01888"
+-msgstr "Scribe"
++msgstr "Officiant"
+ 
+ msgctxt "message"
+ msgid "01889"
+@@ -7594,7 +7594,7 @@ msgstr "Cleric"
+ 
+ msgctxt "message"
+ msgid "01890"
+-msgstr "Paragon"
++msgstr "Saint"
+ 
+ msgctxt "message"
+ msgid "01891"
+@@ -7630,15 +7630,15 @@ msgstr "Defender"
+ 
+ msgctxt "message"
+ msgid "01899"
+-msgstr "Cavalier"
++msgstr "Valiant"
+ 
+ msgctxt "message"
+ msgid "01900"
+-msgstr "Guardian"
++msgstr "Fearless"
+ 
+ msgctxt "message"
+ msgid "01901"
+-msgstr "Protector"
++msgstr "Paragon"
+ 
+ msgctxt "message"
+ msgid "01902"
+@@ -7662,23 +7662,23 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "01907"
+-msgstr "Swordsman"
++msgstr "Armed"
+ 
+ msgctxt "message"
+ msgid "01908"
+-msgstr "Defender"
++msgstr "Fair"
+ 
+ msgctxt "message"
+ msgid "01909"
+-msgstr "Cavalier"
++msgstr "Virtuous"
+ 
+ msgctxt "message"
+ msgid "01910"
+-msgstr "Luminier"
++msgstr "Righteous"
+ 
+ msgctxt "message"
+ msgid "01911"
+-msgstr "Radiant"
++msgstr "Luminier"
+ 
+ msgctxt "message"
+ msgid "01912"
+@@ -7702,7 +7702,7 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "01917"
+-msgstr "Dragoon"
++msgstr "White Knight"
+ 
+ msgctxt "message"
+ msgid "01918"
+@@ -7746,19 +7746,19 @@ msgstr "Apprentice"
+ 
+ msgctxt "message"
+ msgid "01928"
+-msgstr "Illusionist"
++msgstr "Practicant"
+ 
+ msgctxt "message"
+ msgid "01929"
+-msgstr "Enchanter"
++msgstr "Psionicist"
+ 
+ msgctxt "message"
+ msgid "01930"
+-msgstr "Conjurer"
++msgstr "Spellblade"
+ 
+ msgctxt "message"
+ msgid "01931"
+-msgstr "War Adept"
++msgstr "Psy Knight"
+ 
+ msgctxt "message"
+ msgid "01932"
+@@ -7786,19 +7786,19 @@ msgstr "Page"
+ 
+ msgctxt "message"
+ msgid "01938"
+-msgstr "Illusionist"
++msgstr "Pupil"
+ 
+ msgctxt "message"
+ msgid "01939"
+-msgstr "Enchanter"
++msgstr "Fated"
+ 
+ msgctxt "message"
+ msgid "01940"
+-msgstr "Conjurer"
++msgstr "Mystic Knight"
+ 
+ msgctxt "message"
+ msgid "01941"
+-msgstr "War Adept"
++msgstr "Star Knight"
+ 
+ msgctxt "message"
+ msgid "01942"
+@@ -7822,15 +7822,15 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "01947"
+-msgstr "Ninja"
++msgstr "Shinobi"
+ 
+ msgctxt "message"
+ msgid "01948"
+-msgstr "Disciple"
++msgstr "Ninja"
+ 
+ msgctxt "message"
+ msgid "01949"
+-msgstr "Master"
++msgstr "Jonin"
+ 
+ msgctxt "message"
+ msgid "01950"
+@@ -7862,23 +7862,23 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "01957"
+-msgstr "Seer"
++msgstr "Herbalist"
+ 
+ msgctxt "message"
+ msgid "01958"
+-msgstr "Diviner"
++msgstr "Naturalist"
+ 
+ msgctxt "message"
+ msgid "01959"
+-msgstr "Shaman"
++msgstr "Therapist"
+ 
+ msgctxt "message"
+ msgid "01960"
+-msgstr "Druid"
++msgstr "Healer"
+ 
+ msgctxt "message"
+ msgid "01961"
+-msgstr "Oracle"
++msgstr "Thaumaturge"
+ 
+ msgctxt "message"
+ msgid "01962"
+@@ -7906,19 +7906,19 @@ msgstr "Seer"
+ 
+ msgctxt "message"
+ msgid "01968"
+-msgstr "Diviner"
++msgstr "Haruspex"
+ 
+ msgctxt "message"
+ msgid "01969"
+-msgstr "Shaman"
++msgstr "Diviner"
+ 
+ msgctxt "message"
+ msgid "01970"
+-msgstr "Druid"
++msgstr "Clairvoyant"
+ 
+ msgctxt "message"
+ msgid "01971"
+-msgstr "Oracle"
++msgstr "Augur"
+ 
+ msgctxt "message"
+ msgid "01972"
+@@ -7942,15 +7942,15 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "01977"
+-msgstr "Medium"
++msgstr "Elementalist"
+ 
+ msgctxt "message"
+ msgid "01978"
+-msgstr "Dark Mage"
++msgstr "Planar Mage"
+ 
+ msgctxt "message"
+ msgid "01979"
+-msgstr "Death Mage"
++msgstr "Worldwaker"
+ 
+ msgctxt "message"
+ msgid "01980"
+@@ -7982,11 +7982,11 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "01987"
+-msgstr "Pilgrim"
++msgstr "Monk"
+ 
+ msgctxt "message"
+ msgid "01988"
+-msgstr "Wanderer"
++msgstr "Yamabushi"
+ 
+ msgctxt "message"
+ msgid "01989"
+@@ -7994,11 +7994,11 @@ msgstr "Ascetic"
+ 
+ msgctxt "message"
+ msgid "01990"
+-msgstr "Water Monk"
++msgstr "Shugenja"
+ 
+ msgctxt "message"
+ msgid "01991"
+-msgstr "Guru"
++msgstr "Enlightened"
+ 
+ msgctxt "message"
+ msgid "01992"
+@@ -8022,23 +8022,23 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "01997"
+-msgstr "Pilgrim"
++msgstr "Disciple"
+ 
+ msgctxt "message"
+ msgid "01998"
+-msgstr "Wanderer"
++msgstr "Acolyte"
+ 
+ msgctxt "message"
+ msgid "01999"
+-msgstr "Ascetic"
++msgstr "Cultist"
+ 
+ msgctxt "message"
+ msgid "02000"
+-msgstr "Fire Monk"
++msgstr "Zealot"
+ 
+ msgctxt "message"
+ msgid "02001"
+-msgstr "Guru"
++msgstr "Fanatic"
+ 
+ msgctxt "message"
+ msgid "02002"
+@@ -8062,15 +8062,15 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "02007"
+-msgstr "Ranger"
++msgstr "Wild Mage"
+ 
+ msgctxt "message"
+ msgid "02008"
+-msgstr "Bard"
++msgstr "Channeler"
+ 
+ msgctxt "message"
+ msgid "02009"
+-msgstr "Warlock"
++msgstr "Fury"
+ 
+ msgctxt "message"
+ msgid "02010"
+@@ -8114,11 +8114,11 @@ msgstr "Savage"
+ 
+ msgctxt "message"
+ msgid "02020"
+-msgstr "Barbarian"
++msgstr "Berserker"
+ 
+ msgctxt "message"
+ msgid "02021"
+-msgstr "Berserker"
++msgstr "Black Knight"
+ 
+ msgctxt "message"
+ msgid "02022"
+@@ -8146,15 +8146,15 @@ msgstr "Samurai"
+ 
+ msgctxt "message"
+ msgid "02028"
+-msgstr "Ronin"
++msgstr "Shogun"
+ 
+ msgctxt "message"
+ msgid "02029"
+-msgstr "?"
++msgstr "Leader"
+ 
+ msgctxt "message"
+ msgid "02030"
+-msgstr "?"
++msgstr "Warlord"
+ 
+ msgctxt "message"
+ msgid "02031"
+@@ -8182,11 +8182,11 @@ msgstr "?"
+ 
+ msgctxt "message"
+ msgid "02037"
+-msgstr "Hermit"
++msgstr "Student"
+ 
+ msgctxt "message"
+ msgid "02038"
+-msgstr "Elder"
++msgstr "Researcher"
+ 
+ msgctxt "message"
+ msgid "02039"
+@@ -8198,11 +8198,11 @@ msgstr "Savant"
+ 
+ msgctxt "message"
+ msgid "02041"
+-msgstr "Sage"
++msgstr "Wise"
+ 
+ msgctxt "message"
+ msgid "02042"
+-msgstr "Wizard"
++msgstr "Arcanist"
+ 
+ msgctxt "message"
+ msgid "02043"
+@@ -8230,11 +8230,11 @@ msgstr "Pure Mage"
+ 
+ msgctxt "message"
+ msgid "02049"
+-msgstr "?"
++msgstr "Divine Mage"
+ 
+ msgctxt "message"
+ msgid "02050"
+-msgstr "?"
++msgstr "Fateweaver"
+ 
+ msgctxt "message"
+ msgid "02051"
+@@ -10184,7 +10184,7 @@ msgstr "Altin"
+ 
+ msgctxt "message"
+ msgid "02502"
+-msgstr "Altin Peak"
++msgstr "Altin Mines"
+ 
+ msgctxt "message"
+ msgid "02503"
+@@ -10316,7 +10316,7 @@ msgstr "Kalay Tunnel"
+ 
+ msgctxt "message"
+ msgid "02535"
+-msgstr "Gondowan Cave"
++msgstr "SE Karagol Cave"
+ 
+ msgctxt "message"
+ msgid "02536"
+@@ -10352,7 +10352,7 @@ msgstr "Babi Lighthouse"
+ 
+ msgctxt "message"
+ msgid "02544"
+-msgstr "Tunnel Ruins"
++msgstr "Venus Ruins"
+ 
+ msgctxt "message"
+ msgid "02545"
+@@ -11768,15 +11768,15 @@ msgstr "Resist"
+ 
+ msgctxt "message"
+ msgid "02898"
+-msgstr "Critical Hits increase"
++msgstr "Criticals"
+ 
+ msgctxt "message"
+ msgid "02899"
+-msgstr "Counterstrike rate"
++msgstr "Ailments"
+ 
+ msgctxt "message"
+ msgid "02900"
+-msgstr "The curse can be removed"
++msgstr "Nullifies curse"
+ 
+ msgctxt "message"
+ msgid "02901"
+@@ -11784,7 +11784,7 @@ msgstr "Turns"
+ 
+ msgctxt "message"
+ msgid "02902"
+-msgstr "Boosts monster encounters"
++msgstr "Boosts encounters"
+ 
+ msgctxt "message"
+ msgid "02903"
+@@ -13697,7 +13697,7 @@ msgstr ""
+ 
+ msgctxt "message"
+ msgid "03294"
+-msgstr "Thank you much.{page_break}"
++msgstr "Thank you very much.{page_break}"
+ 
+ msgctxt "message"
+ msgid "03295"
+@@ -13866,7 +13866,7 @@ msgstr ""
+ msgctxt "message"
+ msgid "03323"
+ msgstr ""
+-"Thank you very much.\n"
++"Thank you much.\n"
+ "Please come again.{end_wait}"
+ 
+ msgctxt "message"
+@@ -20923,7 +20923,7 @@ msgstr ""
+ msgctxt "message"
+ msgid "04472"
+ msgstr ""
+-"{actor_name:5} must{pause_20_skippable}{pause_20_skippable} unlock\n"
++"{actor_name:5} wants{pause_20_skippable}{pause_20_skippable} to unlock\n"
+ "the power.{end_wait}"
+ 
+ msgctxt "message"
+@@ -27959,11 +27959,9 @@ msgid "05486"
+ msgstr ""
+ "{actor_name:4} is a good girl.\n"
+ "I wish I had a\n"
+-"daughter like her.{page_break}"
+-"It's a shame her last\n"
+-"apprentice, Alex,\n"
+-"disappeared...{page_break}"
+-"leaving her all alone.{end_wait}"
++"daughter like her.{page_break}It's a shame the last\n"
++"apprentice of her father,\n"
++"Alex, disappeared...{page_break}leaving her all alone.{end_wait}"
+ 
+ msgctxt "MsgImilMiaClanOnceLivedHere"
+ msgid "05487"
+@@ -28458,7 +28456,7 @@ msgstr ""
+ 
+ msgctxt "message"
+ msgid "05564"
+-msgstr "Come here, child...{end_wait}"
++msgstr "Move, child...{end_wait}"
+ 
+ msgctxt "message"
+ msgid "05565"
+@@ -28469,14 +28467,14 @@ msgstr ""
+ msgctxt "message"
+ msgid "05566"
+ msgstr ""
+-"I should teach you a\n"
+-"lesson, child, but...{end_wait}"
++"I'd like to teach you\n"
++"a lesson, child, but...{end_wait}"
+ 
+ msgctxt "message"
+ msgid "05567"
+ msgstr ""
+-"{actor_name:5}, I'd get your sister\n"
+-"to obey me, if you hope\n"
++"{actor_name:5}, you'd better get your\n"
++"sister to obey me, if you hope\n"
+ "to keep her from harm.{end_wait}"
+ 
+ msgctxt "message"
+@@ -28538,7 +28536,7 @@ msgstr "No! Get back!{end_wait}"
+ 
+ msgctxt "message"
+ msgid "05578"
+-msgstr "What's the matter!{end_wait}"
++msgstr "What's the matter?{end_wait}"
+ 
+ msgctxt "message"
+ msgid "05579"
+-- 
+2.53.0
+

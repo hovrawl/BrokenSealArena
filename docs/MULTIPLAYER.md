@@ -360,7 +360,7 @@ cannot reach the lobby without a save, and shares the three-a-side protocol): wi
 same signature the two lobbies accept each other, each waits for records the other does not
 send, and both end with **"The link was disconnected."** after the receive timeout. No
 crash or hang, but a poor message. Fix, patch 14: the four-a-side build publishes its own
-signature word (`BSA4`), and while a player waits for an opponent, a partner with another
+signature word (`BSA4`; `BSR4` since the Reloaded data, patch 26, so two builds with different rules do not link), and while a player waits for an opponent, a partner with another
 word for one second makes the attendant say **"Your opponent has a different version of the
 game!"** and stop waiting. Seen on the four-a-side console; **the other console (stock or
 three-a-side) says nothing**, as the stock lobby simply leaves a console with a different

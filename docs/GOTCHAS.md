@@ -134,3 +134,18 @@
 - Shell variables inside `wsl -- bash -lc '...'` called from Git Bash were
   expanded wrongly (a `git diff $B` came out reversed). Use literal values, or a
   script file.
+
+## The data port
+
+- Run `port-reloaded-tables.py` once, on pristine tables: it assumes the source still holds
+  the stock values (its `--check` says so by comparing its own rendering with the file). To
+  redo it, `git checkout` the table files first.
+- A table row that stock leaves out a field for (a zero) gets the field back only in struct
+  order and only where the converter writes it; do not hand-edit a ported row and then rerun.
+- The enemy rows have bytes 30 to 39 (reserved) the patch fills for bosses and Mimics. Not ported
+  and not read by any code we decoded; if a boss ever misbehaves compared with Reloaded, look
+  there first (`table-check.py` lists the rows).
+- The class ward is `ClassDefinition.ward` (was `weakEffects[3]`); `weakEffects` is three
+  bytes now, and the check that decides what ails a unit still reads three.
+- Python written through an inline heredoc in this environment had `\r\n` turn into a real
+  newline inside a string. Write scripts with the Write or Edit tools.

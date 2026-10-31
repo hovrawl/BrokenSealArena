@@ -1,0 +1,806 @@
+From 2d04cb44bb267f4531ef20487dd77d5c085c2515 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sun, 1 Nov 2026 08:53:04 +1100
+Subject: [PATCH] Arena: more Reloaded engine rules (guard, heal, revive,
+ effect ids, stages, recovery, caps, summons by turn)
+
+The next engine rules of the Golden Sun Reloaded rebalance (forum.goldensunhacking.net
+topic 2779), read from its patch against an unmodified build and written again in C,
+each behind its own ARENA_RULES_* switch (on by default, stock code kept for 0):
+- GUARD: Total Defense takes a third of the damage, not a tenth.
+- HEAL: the healer's element power counts half as much; Ember restores a tenth of max PP.
+- REVIVE: a revival restores max HP x power / 1000 + 1 (at most max), from the ability's
+  power; a power of 0 keeps the stock amount. Battle and the item menu.
+- EFFECT_IDS: effect ids 8, 12, 16, 21, 22, 30, 36 to 41, 43 and 54 run another effect's
+  handler, so the data can give one handler several odds (needs the ability data).
+- DURATIONS: Impact, Guard and Ward last 5 turns, Luff is a Bind, the curse counts 4.
+- STAGES: a Defense stage is 3/16 of the stat, a Resistance stage 15 (calculation, the
+  messages and the status screen).
+- RECOVERY: the early-recovery roll counts luck once and level / 2 against it; new base
+  chances for Attack, Defense, Resistance, stun, sleep and Bind.
+- STATUS: haunt takes its share 103 times in 256, a deluded attack misses 70 percent
+  and a deluded unit never unleashes.
+- CLASS20: class multipliers are in twentieths (needs the class data doubled).
+- CAPS: element power and resistance and PP regeneration reach 255.
+- ITEMS: stat-boost items give exactly their power.
+- SUMMON_TURNS: the 3-Djinn summons wait for turn 2 and the 4-Djinn ones for turn 3
+  (BattleWork.arenaTurn).
+- AILMENTS also gains the Ailment attribute: Unit_Calculate sums equipment effect 24
+  into Unit.unused[0].
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/arena_config.h             |  62 +++++++++++
+ games/tbs/include/battle/battle_work.h       |   4 +-
+ games/tbs/src/battle/battle/ability.c        | 105 +++++++++++++++++--
+ games/tbs/src/battle/battle/action.c         |   4 +-
+ games/tbs/src/battle/battle/setup.c          |  26 +++++
+ games/tbs/src/battle/battle/turn_end.c       |  47 +++++++--
+ games/tbs/src/game/game/battle_arithmetic.c  |  13 +++
+ games/tbs/src/game/game/units.c              |  62 ++++++++---
+ games/tbs/src/menu/menu/use.c                |  23 +++-
+ games/tbs/src/window/screens/battle_status.c |   5 +
+ 10 files changed, 317 insertions(+), 34 deletions(-)
+
+diff --git a/games/tbs/include/arena_config.h b/games/tbs/include/arena_config.h
+index fd018d95bb..2a739b49d2 100644
+--- a/games/tbs/include/arena_config.h
++++ b/games/tbs/include/arena_config.h
+@@ -40,6 +40,68 @@
+ #ifndef ARENA_RULES_DAMAGE
+ #define ARENA_RULES_DAMAGE 1 ///< the base damage formula, summon HP damage and class ward
+ #endif
++#ifndef ARENA_RULES_GUARD
++#define ARENA_RULES_GUARD 1 ///< Total Defense takes a third of the damage, not a tenth
++#endif
++#ifndef ARENA_RULES_HEAL
++#define ARENA_RULES_HEAL 1 ///< healing: a smaller element multiplier; Ember restores a tenth of max PP
++#endif
++#ifndef ARENA_RULES_REVIVE
++#define ARENA_RULES_REVIVE 1 ///< a revival's HP comes from the ability's power (tenths of a percent)
++#endif
++#ifndef ARENA_RULES_EFFECT_IDS
++#define ARENA_RULES_EFFECT_IDS 1 ///< several effect ids are aliases of one handler with their own odds (needs the ability data)
++#endif
++#ifndef ARENA_RULES_DURATIONS
++#define ARENA_RULES_DURATIONS 1 ///< Impact, Guard and Ward last 5 turns, Luff is a Bind, the curse counts 4
++#endif
++#ifndef ARENA_RULES_STAGES
++#define ARENA_RULES_STAGES 1 ///< a Defense stage is worth 3/16, a Resistance stage 15
++#endif
++#ifndef ARENA_RULES_RECOVERY
++#define ARENA_RULES_RECOVERY 1 ///< the chances to shake off a debuff or status early
++#endif
++#ifndef ARENA_RULES_STATUS
++#define ARENA_RULES_STATUS 1 ///< haunt 40 percent, delusion misses 70 percent and stops unleashes
++#endif
++#ifndef ARENA_RULES_CLASS20
++#define ARENA_RULES_CLASS20 1 ///< class multipliers are in twentieths (needs the class data doubled)
++#endif
++#ifndef ARENA_RULES_CAPS
++#define ARENA_RULES_CAPS 1 ///< element power and resistance and PP regeneration are capped at 255
++#endif
++#ifndef ARENA_RULES_ITEMS
++#define ARENA_RULES_ITEMS 1 ///< stat-boost items give their stated amount, with no random part
++#endif
++#ifndef ARENA_RULES_SUMMON_TURNS
++#define ARENA_RULES_SUMMON_TURNS 1 ///< the 3- and 4-Djinn summons wait for the second and third turn
++#endif
++
++#if ARENA_RULES_STATUS
++/// A deluded unit's attack misses on a roll of 0 to this out of 255 (Reloaded: 70
++/// percent; stock 60).
++#define ARENA_DELUSION_MISS 179
++#else
++#define ARENA_DELUSION_MISS 152
++#endif
++
++#if ARENA_RULES_REVIVE
++/// The HP a revival restores: the target's max HP times the ability's power in
++/// tenths of a percent, plus 1, at most the max (Golden Sun Reloaded, forum
++/// topic 2779: Water of Life revives to 25 percent, power 250). A power of 0, as
++/// the stock data has, keeps the stock amount `stockHp`. Used by the battle
++/// and the item menu.
++static inline int ArenaRules_ReviveHp(int hpMax, int power, int stockHp) {
++  unsigned amount;
++
++  if (power == 0)
++    return stockHp;
++  amount = (unsigned)hpMax * (unsigned)power / 1000u;
++  if (amount >= (unsigned)hpMax)
++    return hpMax;
++  return (int)amount + 1;
++}
++#endif
+ 
+ #ifndef ARENA_LINK4
+ #define ARENA_LINK4 1
+diff --git a/games/tbs/include/battle/battle_work.h b/games/tbs/include/battle/battle_work.h
+index b85f8a59d0..082e0e9fd1 100644
+--- a/games/tbs/include/battle/battle_work.h
++++ b/games/tbs/include/battle/battle_work.h
+@@ -110,7 +110,9 @@ struct BattleWork {
+   u8 firstStrike; ///< BATTLE_ENCOUNTER_: who strikes first
+   /// Failed attempts to run; each adds 2000 to the base chance of 5000.
+   u8 fleeFailures;
+-  u8 unusedAfterEscapes; ///< no code names it
++  /// Arena romhack (ARENA_RULES_SUMMON_TURNS): the turns this battle has
++  /// finished, from 0, counted by Battle_ProcessTurnEnd (stock: no code names it).
++  u8 arenaTurn;
+   /// For each party unit, its slot as a link opponent's enemy, minus
+   /// FIRST_ENEMY_UNIT; 0xff for none.
+   u8 opponentSlots[8];
+diff --git a/games/tbs/src/battle/battle/ability.c b/games/tbs/src/battle/battle/ability.c
+index 0ef59213f5..3e69fb6bfd 100644
+--- a/games/tbs/src/battle/battle/ability.c
++++ b/games/tbs/src/battle/battle/ability.c
+@@ -32,7 +32,13 @@ s32 Ability_EffectAppliesToDowned(s32 effect) {
+ #define AGILITY_STAGE_DOUBLED 8
+ /// A Resistance stage adds 20 to the resistance to every element
+ /// (Unit_Calculate).
++/// (15 with ARENA_RULES_STAGES, as the Golden Sun Reloaded rebalance, forum
++/// topic 2779, has it.)
++#if ARENA_RULES_STAGES
++#define RESISTANCE_PER_STAGE 15
++#else
+ #define RESISTANCE_PER_STAGE 20
++#endif
+ 
+ // The turns a stat change or a status lasts. A status, or a lowered stat but
+ // never a raised one or Agility, may end sooner at the rolls the end of every
+@@ -41,13 +47,60 @@ s32 Ability_EffectAppliesToDowned(s32 effect) {
+ #define AGILITY_CHANGE_TURNS 5
+ #define STATUS_TURNS 7
+ /// The Grim Reaper's countdown.
++#if ARENA_RULES_DURATIONS
++/// Reloaded: the curse counts 4 turns, and the two-stage raises (Impact,
++/// Guard, Ward) last 5, not 7.
++#define CURSE_TURNS 4
++#define STAT_RAISE_2_TURNS 5
++#else
+ #define CURSE_TURNS 7
++#define STAT_RAISE_2_TURNS STAT_CHANGE_TURNS
++#endif
+ 
+ /// Unit.psySeal: Bind's seal counts its seven turns in the low three
+ /// bits, and may end sooner; Luff's counts down 8 a turn, two turns that never
+ /// end early (Battle_AdvanceCounterAndCheckChance).
+ #define PSY_SEAL_BIND 7
++#if ARENA_RULES_DURATIONS
++/// Reloaded: Luff seals as long as Bind does.
++#define PSY_SEAL_LUFF PSY_SEAL_BIND
++#else
+ #define PSY_SEAL_LUFF 16
++#endif
++
++#if ARENA_RULES_EFFECT_IDS
++/// Arena romhack (Golden Sun Reloaded, forum topic 2779): the effect ids that run
++/// another effect's handler. The ability data gives such an alias its own odds
++/// (Battle_GetEffectBaseSuccessRate's tables are by id), so one handler serves
++/// several ids: a one-stage Dull at 75 percent, the two-stage version as id 36
++/// at 90, and so on. Dull, Impair and Weaken (8, 12, 16) become the one-stage
++/// Blunt, Debilitate and Enfeeble; Confuse (21) is Delude's handler, Charm
++/// (22) Paralyze's, Reflect (30) Haunt's and the unused 54 Condemn's; 36 to 38
++/// are the two-stage versions the old ids lose, 39 and 40 Taint and Poison,
++/// 41 Paralyze, 43 Haunt.
++static s32 ArenaRules_EffectHandler(s32 effect) {
++  switch (effect) {
++  case 8: return ABILITY_EFFECT_ATTACK_DOWN;
++  case 12: return ABILITY_EFFECT_DEFENSE_DOWN;
++  case 16: return ABILITY_EFFECT_RESISTANCE_DOWN;
++  case 21: return ABILITY_EFFECT_DELUSION;
++  case 22: return ABILITY_EFFECT_STUN;
++  case 30: return ABILITY_EFFECT_HAUNT;
++  case 36: return ABILITY_EFFECT_ATTACK_DOWN_2;
++  case 37: return ABILITY_EFFECT_DEFENSE_DOWN_2;
++  case 38: return ABILITY_EFFECT_RESISTANCE_DOWN_2;
++  case 39: return ABILITY_EFFECT_POISON;
++  case 40: return ABILITY_EFFECT_VENOM;
++  case 41: return ABILITY_EFFECT_STUN;
++  case 43: return ABILITY_EFFECT_HAUNT;
++  case 54: return ABILITY_EFFECT_INSTANT_DEATH;
++  default: return effect;
++  }
++}
++#define ARENA_EFFECT_SWITCH(effect) ArenaRules_EffectHandler(effect)
++#else
++#define ARENA_EFFECT_SWITCH(effect) (effect)
++#endif
+ 
+ /// The rate Battle_CalculatePsynergyPowerFar and Battle_CalculateRecoveryFar
+ /// scale by: 256 is 1.
+@@ -91,7 +144,23 @@ static const u8 sArenaSummonHpPercent[] = {2, 4, 6, 8, 0, 0, 2, 4, 6, 8, 0,
+       PUSH_MESSAGE(enemyMessage);                                              \
+   }
+ 
+-/// A guarding unit takes half the damage, or a tenth behind Total Defense.
++#if ARENA_RULES_REVIVE
++/// The HP a revival restores (Reloaded: the ability's power in tenths of a
++/// percent of the max HP, see ArenaRules_ReviveHp); `stock` is the stock amount,
++/// kept for an ability whose power is 0.
++#define REVIVE_HP(stock)                                                       \
++  ArenaRules_ReviveHp(target->hpMax, ability->power, (stock))
++#else
++#define REVIVE_HP(stock) (stock)
++#endif
++
++/// A guarding unit takes half the damage, or a tenth behind Total Defense (a
++/// third with ARENA_RULES_GUARD: Golden Sun Reloaded, forum topic 2779).
++#if ARENA_RULES_GUARD
++#define TOTAL_DEFENSE_DIVISOR 3
++#else
++#define TOTAL_DEFENSE_DIVISOR 10
++#endif
+ #define REDUCE_BY_GUARD(damage, unit)                                          \
+   {                                                                            \
+     s32 guard = (unit)->defendLevel;                                           \
+@@ -100,7 +169,7 @@ static const u8 sArenaSummonHpPercent[] = {2, 4, 6, 8, 0, 0, 2, 4, 6, 8, 0,
+       if (guard == DEFEND_NORMAL)                                              \
+         (damage) /= 2;                                                         \
+       else                                                                     \
+-        (damage) /= 10;                                                        \
++        (damage) /= TOTAL_DEFENSE_DIVISOR;                                     \
+     }                                                                          \
+   }
+ 
+@@ -736,6 +805,14 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+       if (hit != 0) {
+         if (ability->power == 0)
+           break;
++#if ARENA_RULES_REVIVE
++        // Reloaded: a revival's power is the share of HP it restores, not
++        // damage.
++        if (ability->effect == ABILITY_EFFECT_REVIVE ||
++            ability->effect == ABILITY_EFFECT_REVIVE_HALF ||
++            ability->effect == ABILITY_EFFECT_REVIVE_80)
++          break;
++#endif
+         newHp = target->hp;
+         if (element != ELEMENT_NONE)
+           elementBonus = elementPower - target->element[element].resistance;
+@@ -781,7 +858,7 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+   if ((Battle_IsReviveEffectFar(ability->effect) != 0 || target->hp != 0 ||
+        Ability_EffectAppliesToDowned(ability->effect) != 0) &&
+       hit != 0) {
+-    switch (ability->effect) {
++    switch (ARENA_EFFECT_SWITCH(ability->effect)) {
+     // Tonic leaves confusion and charm, and ends sleep without a message.
+     // Most of its messages push the name for the next after them; Restore
+     // below clears the arguments and pushes the name before each instead.
+@@ -906,7 +983,11 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+       newPp = target->pp;
+       ppMax = target->ppMax;
+       oldPp = newPp;
++#if ARENA_RULES_HEAL
++      newPp += ppMax * 7 / 70; // Reloaded: a tenth, not 7 percent
++#else
+       newPp += ppMax * 7 / 100;
++#endif
+       if (newPp > ppMax)
+         newPp = ppMax;
+       restored = newPp - oldPp;
+@@ -976,7 +1057,7 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+       Unit_CalculateFar(targetId);
+       BattlePlayback_Push(PLAYBACK_NUMBER, target->atk - savedTarget->atk);
+       PUSH_MESSAGE(MsgAtkUp);
+-      target->attackTurns = STAT_CHANGE_TURNS;
++      target->attackTurns = STAT_RAISE_2_TURNS;
+       break;
+ 
+     case ABILITY_EFFECT_DEFENSE_DOWN:
+@@ -1012,7 +1093,7 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+       Unit_CalculateFar(targetId);
+       BattlePlayback_Push(PLAYBACK_NUMBER, target->def - savedTarget->def);
+       PUSH_MESSAGE(MsgDefUp);
+-      target->defenseTurns = STAT_CHANGE_TURNS;
++      target->defenseTurns = STAT_RAISE_2_TURNS;
+       break;
+ 
+     // The revivals bring back a downed target with all, half or 80% of its
+@@ -1021,7 +1102,7 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+       if (target->hp != 0)
+         break;
+       PUSH_MESSAGE(MsgRevived);
+-      target->hp = target->hpMax;
++      target->hp = REVIVE_HP(target->hpMax);
+       Unit_RecalculateGaugesFar(targetId);
+       break;
+ 
+@@ -1029,7 +1110,7 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+       if (target->hp != 0)
+         break;
+       PUSH_MESSAGE(MsgRevived);
+-      target->hp = target->hpMax / 2;
++      target->hp = REVIVE_HP(target->hpMax / 2);
+       Unit_RecalculateGaugesFar(targetId);
+       break;
+ 
+@@ -1037,7 +1118,7 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+       if (target->hp != 0)
+         break;
+       PUSH_MESSAGE(MsgRevived);
+-      target->hp = target->hpMax * 8 / 10;
++      target->hp = REVIVE_HP(target->hpMax * 8 / 10);
+       Unit_RecalculateGaugesFar(targetId);
+       break;
+ 
+@@ -1086,7 +1167,7 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+                                             savedTarget->resistanceStage) *
+                                                RESISTANCE_PER_STAGE);
+       PUSH_MESSAGE(MsgResUp);
+-      target->resistanceTurns = STAT_CHANGE_TURNS;
++      target->resistanceTurns = STAT_RAISE_2_TURNS;
+       break;
+ 
+     // Poison does nothing to a poisoned target, deadly poison nothing to one
+@@ -1349,7 +1430,13 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+   // A haunted unit pays, one time in four, for each target it took HP or PP
+   // from: a quarter of that (at least 1), gathered in hauntDamage and taken
+   // from its own HP at the end of its action (BattleUnit_ProcessActionEnd).
++#if ARENA_RULES_STATUS
++  // Reloaded: 103 in 256 (about 40 percent) in place of one in four.
++  if (actor->haunt != 0 && (Battle_RandomFar() & 255) <= 102 &&
++      damageDealt > 0) {
++#else
+   if (actor->haunt != 0 && (Battle_RandomFar() & 3) == 0 && damageDealt > 0) {
++#endif
+     s32 share;
+ 
+     share = damageDealt >> 2;
+diff --git a/games/tbs/src/battle/battle/action.c b/games/tbs/src/battle/battle/action.c
+index 2062b068ae..bc7086ef90 100644
+--- a/games/tbs/src/battle/battle/action.c
++++ b/games/tbs/src/battle/battle/action.c
+@@ -3,6 +3,7 @@
+ // Part of battle.c.
+ 
+ #include "../battle_internal.h"
++#include "arena_config.h"
+ 
+ /// Returns 1 when the unit is in its side's list of units in the battle
+ /// (BattleUnit_ListIds), 0 otherwise.
+@@ -648,7 +649,8 @@ s32 BattleActionRun_Build(struct BattleAction *request,
+       if (target->hp == 0 || target->sleep != 0 || target->stun != 0 ||
+           target->immobile != 0 || target->charm != 0)
+         break;
+-      if (actor->delusion != 0 && (Battle_RandomFar() & 255) <= 152)
++      if (actor->delusion != 0 &&
++          (Battle_RandomFar() & 255) <= ARENA_DELUSION_MISS)
+         plan->targetMultiplier[0] = 0;
+       if ((Battle_RandomFar() & 31) == 0)
+         plan->targetMultiplier[0] = 0;
+diff --git a/games/tbs/src/battle/battle/setup.c b/games/tbs/src/battle/battle/setup.c
+index 89d40a70c1..9589b8333d 100644
+--- a/games/tbs/src/battle/battle/setup.c
++++ b/games/tbs/src/battle/battle/setup.c
+@@ -4,6 +4,7 @@
+ // Part of battle.c.
+ 
+ #include "../battle_internal.h"
++#include "arena_config.h"
+ 
+ /// Runs each frame of a battle. In a link battle it first checks the link:
+ /// a connection lost for more than LINK_MAX_MISSED_FRAMES frames, or a
+@@ -131,6 +132,25 @@ void BattleIntro_AnnounceEncounter(s32 enemyCount) {
+   }
+ }
+ 
++#if ARENA_RULES_SUMMON_TURNS
++/// Arena romhack (Golden Sun Reloaded, forum topic 2779): the summons that cost
++/// three Djinn wait for the second turn and those that cost four for the third.
++/// BattleWork.arenaTurn counts the turns the battle has finished: Battle_Run
++/// zeroes it with the rest of the work, BattleUnit_Collect clears it again and
++/// Battle_ProcessTurnEnd counts it.
++
++/// The summons that may be called on turn `turn` (from 0), one bit each, by id:
++/// ids 0 to 7 (one and two Djinn) from the start, 8 to 11 (three) from turn 1,
++/// the rest from turn 2.
++static u32 ArenaRules_SummonTierMask(s32 turn) {
++  if (turn <= 0)
++    return 0xff;
++  if (turn == 1)
++    return 0xfff;
++  return 0xffff;
++}
++#endif
++
+ /// Fills the battle's two unit lists, each ended by BATTLE_UNIT_LIST_END:
+ /// the party members in their order, and the enemies, left to right for a
+ /// random formation or, for a fixed one, alternating out from the centre
+@@ -145,6 +165,9 @@ void BattleUnit_Collect(void) {
+   s32 position;
+   s32 formation;
+ 
++#if ARENA_RULES_SUMMON_TURNS
++  gBattleWork->arenaTurn = 0;
++#endif
+   battle = gBattleWork;
+   count = BattleParty_PrepareMembers(unitIds);
+   for (i = 0; i < count; i++)
+@@ -405,6 +428,9 @@ struct BattleSummonState *BattleSummon_UpdateAvailability(void) {
+   {
+     struct BattleSummonState *state =
+         Djinn_GetRecoveryTableFar(DJINN_RECOVERY_PARTY);
++#if ARENA_RULES_SUMMON_TURNS
++    availableMask &= ArenaRules_SummonTierMask(gBattleWork->arenaTurn);
++#endif
+     state->availableMask = availableMask;
+     return state;
+   }
+diff --git a/games/tbs/src/battle/battle/turn_end.c b/games/tbs/src/battle/battle/turn_end.c
+index e55db95f54..cb445f6700 100644
+--- a/games/tbs/src/battle/battle/turn_end.c
++++ b/games/tbs/src/battle/battle/turn_end.c
+@@ -4,6 +4,26 @@
+ // Part of battle.c.
+ 
+ #include "../battle_internal.h"
++#include "arena_config.h"
++
++#if ARENA_RULES_RECOVERY
++// Reloaded (Golden Sun Reloaded, forum topic 2779) lowers the base chances to
++// shake off a debuff or a status early, and counts luck once and the unit's
++// level over two against it (BattleUnit_RollCounterEarlyEnd).
++#define RECOVER_BIAS_ATTACK 10
++#define RECOVER_BIAS_DEFENSE 5
++#define RECOVER_BIAS_RESISTANCE 5
++#define RECOVER_BIAS_STUN 50
++#define RECOVER_BIAS_SLEEP 40
++#define RECOVER_BIAS_SEAL 40
++#else
++#define RECOVER_BIAS_ATTACK 30
++#define RECOVER_BIAS_DEFENSE 20
++#define RECOVER_BIAS_RESISTANCE 20
++#define RECOVER_BIAS_STUN 40
++#define RECOVER_BIAS_SLEEP 50
++#define RECOVER_BIAS_SEAL 30
++#endif
+ 
+ /// Rolls whether a stat change or status with five turns or fewer left ends
+ /// early, and returns 1 when it does.
+@@ -16,7 +36,12 @@ s32 BattleUnit_RollCounterEarlyEnd(s32 unitId, s32 turns, s32 bias) {
+   if (turns <= 5) {
+     // 65536 / 100, rounded down, scales the percentage to the 16-bit random
+     // range.
++#if ARENA_RULES_RECOVERY
++    s32 threshold =
++        ((unit->luck - turns * 5 - unit->level / 2) + bias) * (65536 / 100);
++#else
+     s32 threshold = ((unit->luck * 3 - turns * 5) + bias) * (65536 / 100);
++#endif
+     if (threshold >= (Battle_RandomFar() & 0xffff))
+       return 1;
+   }
+@@ -39,7 +64,8 @@ s32 BattleUnit_CountDownAttackStage(s32 unitId) {
+       return 1;
+     }
+     if (unit->attackStage < 0) {
+-      if (BattleUnit_RollCounterEarlyEnd(unitId, unit->attackTurns, 30) != 0) {
++      if (BattleUnit_RollCounterEarlyEnd(unitId, unit->attackTurns,
++                                         RECOVER_BIAS_ATTACK) != 0) {
+         unit->attackStage = cleared;
+         unit->attackTurns = cleared;
+         return 1;
+@@ -53,7 +79,7 @@ s32 BattleUnit_CountDownAttackStage(s32 unitId) {
+ /// BattleUnit_CountDownAttackStage is with bias 20: clears `level` and returns
+ /// 1 when `counter` runs out, or clears both when a lowered stat recovers
+ /// early.
+-#define DEFINE_COUNT_DOWN_MODIFIER(name, counter, level)                       \
++#define DEFINE_COUNT_DOWN_MODIFIER(name, counter, level, bias)                       \
+   s32 name(s32 unitId) {                                                       \
+     struct Unit *state = Unit_GetFar(unitId);                                  \
+                                                                                \
+@@ -64,7 +90,7 @@ s32 BattleUnit_CountDownAttackStage(s32 unitId) {
+         return 1;                                                              \
+       }                                                                        \
+       if (state->level < 0 &&                                                  \
+-          BattleUnit_RollCounterEarlyEnd(unitId, state->counter, 20) != 0) {   \
++          BattleUnit_RollCounterEarlyEnd(unitId, state->counter, bias) != 0) {   \
+         state->level = 0;                                                      \
+         state->counter = 0;                                                    \
+         return 1;                                                              \
+@@ -76,11 +102,11 @@ s32 BattleUnit_CountDownAttackStage(s32 unitId) {
+ /// Counts down a Defense change; Battle_ProcessTurnEnd shows `MsgDefNormal`
+ /// when it returns 1.
+ DEFINE_COUNT_DOWN_MODIFIER(BattleUnit_CountDownDefenseStage, defenseTurns,
+-                           defenseStage)
++                           defenseStage, RECOVER_BIAS_DEFENSE)
+ /// Counts down a Resistance change; Battle_ProcessTurnEnd shows
+ /// `MsgResNormal` when it returns 1.
+ DEFINE_COUNT_DOWN_MODIFIER(BattleUnit_CountDownResistanceStage, resistanceTurns,
+-                           resistanceStage)
++                           resistanceStage, RECOVER_BIAS_RESISTANCE)
+ 
+ /// Defines a status's turn-end countdown: returns 1 when `counter` runs out, or
+ /// clears it and returns 1 when the status ends early at `bias`.
+@@ -128,10 +154,10 @@ s32 BattleUnit_CountDownConfusion(s32 unitId) {
+ DEFINE_COUNT_DOWN_STATUS(BattleUnit_CountDownCharm, charm, 70)
+ /// Counts down stun, which may end early at bias 40; Battle_ProcessTurnEnd
+ /// shows `MsgCureStun` when it returns 1.
+-DEFINE_COUNT_DOWN_STATUS(BattleUnit_CountDownStun, stun, 40)
++DEFINE_COUNT_DOWN_STATUS(BattleUnit_CountDownStun, stun, RECOVER_BIAS_STUN)
+ /// Counts down sleep, which may end early at bias 50; Battle_ProcessTurnEnd
+ /// shows `MsgWakes` when it returns 1.
+-DEFINE_COUNT_DOWN_STATUS(BattleUnit_CountDownSleep, sleep, 50)
++DEFINE_COUNT_DOWN_STATUS(BattleUnit_CountDownSleep, sleep, RECOVER_BIAS_SLEEP)
+ 
+ /// Counts down both seals packed in Unit.psySeal and returns 1 when the
+ /// last ends.
+@@ -165,7 +191,8 @@ s32 Battle_AdvanceCounterAndCheckChance(s32 unitId) {
+     if (remaining == 0)
+       return 1;
+     if (remaining <= 7U &&
+-        BattleUnit_RollCounterEarlyEnd(unitId, unit->psySeal, 30) != 0) {
++        BattleUnit_RollCounterEarlyEnd(unitId, unit->psySeal,
++                                         RECOVER_BIAS_SEAL) != 0) {
+       unit->psySeal = 0U;
+       return 1;
+     }
+@@ -313,6 +340,10 @@ s32 Battle_ProcessTurnEnd(void) {
+   struct DjinnRecoveryEntry *timedEntry;
+   struct DjinnRecoveryEntry *expiredEntry;
+ 
++#if ARENA_RULES_SUMMON_TURNS
++  if (gBattleWork->arenaTurn < 255)
++    gBattleWork->arenaTurn++;
++#endif
+   // Djinn recovery: the party's list, and in a link battle the opponent's
+   // too. Only a Djinni whose unit is on the field with HP counts down.
+   battle = gBattleWork;
+diff --git a/games/tbs/src/game/game/battle_arithmetic.c b/games/tbs/src/game/game/battle_arithmetic.c
+index bbf234daef..1f41130759 100644
+--- a/games/tbs/src/game/game/battle_arithmetic.c
++++ b/games/tbs/src/game/game/battle_arithmetic.c
+@@ -115,8 +115,15 @@ s32 Battle_CalculateRecovery(s32 power, s32 elementPower, s32 powerMultiplier) {
+   s32 signedProduct;
+   u32 scaledRecovery;
+ 
++#if ARENA_RULES_HEAL
++  // Reloaded (Golden Sun Reloaded, forum topic 2779): the healer's element
++  // power counts half as much as it did.
++  scaledRecovery =
++      Battle_GetElementMultiplier(elementPower * 2 - 200, 1) * power;
++#else
+   scaledRecovery =
+       Battle_GetElementMultiplier(elementPower * 2 - 200, 0) * power;
++#endif
+   scaledRecovery = powerMultiplier * scaledRecovery;
+   signedProduct = scaledRecovery;
+   if (signedProduct < 0)
+@@ -182,6 +189,12 @@ s32 RollWeaponUnleash(struct Unit *unit) {
+   if (item->unleashAbility == 0) {
+     return 1;
+   }
++#if ARENA_RULES_STATUS
++  // Reloaded: a deluded unit never unleashes.
++  if (unit->delusion != 0) {
++    return 1;
++  }
++#endif
+   rate = ((Equipment_GetUnleashRateBonus(unit) + (item->unleashChance * 5))
+           << 16) /
+          100;
+diff --git a/games/tbs/src/game/game/units.c b/games/tbs/src/game/game/units.c
+index 704bcc37ad..511bf4dfb1 100644
+--- a/games/tbs/src/game/game/units.c
++++ b/games/tbs/src/game/game/units.c
+@@ -27,6 +27,31 @@ struct StatWork {
+   s32 unusedAfterItem;         ///< never written
+ };
+ 
++#if ARENA_RULES_CLASS20
++#define CLASS_MULTIPLIER_ONE 20
++#else
++#define CLASS_MULTIPLIER_ONE 10
++#endif
++#if ARENA_RULES_STAGES
++/// Reloaded: a Defense stage is 3/16 of the stat (stock: 1/8), and a Resistance
++/// stage 15 (stock: 20).
++#define DEFENSE_STAGE_SCALE(stage) ((stage) * 3 + 16)
++#define DEFENSE_STAGE_ONE 16
++#define RESISTANCE_STAGE_STEP 15
++#else
++#define DEFENSE_STAGE_SCALE(stage) ((stage) + 8)
++#define DEFENSE_STAGE_ONE 8
++#define RESISTANCE_STAGE_STEP 20
++#endif
++#if ARENA_RULES_CAPS
++/// Reloaded: element power and resistance, and PP regeneration, reach 255.
++#define UNIT_CALC_ELEMENT_MAX 255
++#define UNIT_CALC_PP_REGEN_MAX 255
++#else
++#define UNIT_CALC_ELEMENT_MAX UNIT_ELEMENT_MAX
++#define UNIT_CALC_PP_REGEN_MAX UNIT_PP_REGEN_MAX
++#endif
++
+ /// The distance between `a` and `b`, |a - b|.
+ #define UNIT_STAT_DIFF(a, b) ((a) - (b) < 0 ? (b) - (a) : (a) - (b))
+ 
+@@ -169,6 +194,10 @@ void Unit_Calculate(s32 unitId) {
+   // Start with the unit's base stats and elemental power/resistance.
+   stats = Heap_AllocEwram(sizeof(struct StatWork));
+   unit = Unit_Get(unitId);
++#if ARENA_RULES_AILMENTS
++  // The Ailment attribute is summed from the equipment below.
++  UNIT_AILMENT(unit) = 0;
++#endif
+   stats->hp = unit->baseHp;
+   stats->pp = unit->basePp;
+   stats->atk = unit->baseAttack;
+@@ -277,7 +306,13 @@ void Unit_Calculate(s32 unitId) {
+           unit->equipBonus[0] += stats->amount;
+           break;
+         case EQUIP_EFFECT_24:
++#if ARENA_RULES_AILMENTS
++          // Reloaded: this effect (stock sums it into a byte nothing reads) is
++          // the Ailment attribute.
++          UNIT_AILMENT(unit) += stats->amount;
++#else
+           unit->equipBonus[1] += stats->amount;
++#endif
+           break;
+         case EQUIP_EFFECT_CURSE_REMOVABLE:
+           unit->curse |= CURSE_REMOVABLE;
+@@ -310,17 +345,19 @@ void Unit_Calculate(s32 unitId) {
+       }
+     }
+ 
+-    // The class's multipliers are in tenths: 10 keeps a stat as it is
++    // The class's multipliers are in tenths: 10 keeps a stat as it is (twentieths
++    // with ARENA_RULES_CLASS20, as in the Golden Sun Reloaded rebalance, forum
++    // topic 2779: 20 keeps it)
+     {
+       struct ClassDefinition *classDefinition =
+           Class_GetDefinition(unit->classId);
+ 
+-      stats->hp = stats->hp * classDefinition->hp / 10;
+-      stats->pp = stats->pp * classDefinition->pp / 10;
+-      stats->atk = stats->atk * classDefinition->atk / 10;
+-      stats->def = stats->def * classDefinition->def / 10;
+-      stats->agi = stats->agi * classDefinition->agi / 10;
+-      stats->luck = stats->luck * classDefinition->luck / 10;
++      stats->hp = stats->hp * classDefinition->hp / CLASS_MULTIPLIER_ONE;
++      stats->pp = stats->pp * classDefinition->pp / CLASS_MULTIPLIER_ONE;
++      stats->atk = stats->atk * classDefinition->atk / CLASS_MULTIPLIER_ONE;
++      stats->def = stats->def * classDefinition->def / CLASS_MULTIPLIER_ONE;
++      stats->agi = stats->agi * classDefinition->agi / CLASS_MULTIPLIER_ONE;
++      stats->luck = stats->luck * classDefinition->luck / CLASS_MULTIPLIER_ONE;
+     }
+ 
+     // Then the equipment's multiplying effects, EQUIP_EFFECT_SCALE_HP to
+@@ -370,7 +407,8 @@ void Unit_Calculate(s32 unitId) {
+   // Then the battle's changes apply: the Attack, Defense and Agility stages,
+   // a summon's boost to each element's power, and the Resistance stage.
+   stats->atk = stats->atk * (unit->attackStage + 8) / 8;
+-  stats->def = stats->def * (unit->defenseStage + 8) / 8;
++  stats->def =
++      stats->def * DEFENSE_STAGE_SCALE(unit->defenseStage) / DEFENSE_STAGE_ONE;
+   stats->agi = stats->agi * (unit->agilityStage + 8) / 8;
+   for (index = 0; index < ELEMENT_COUNT; index++)
+     stats->element[index][0] +=
+@@ -378,7 +416,7 @@ void Unit_Calculate(s32 unitId) {
+          unit->summonBoost[index]) *
+         5;
+   for (index = 0; index < ELEMENT_COUNT; index++)
+-    stats->element[index][1] += unit->resistanceStage * 20;
++    stats->element[index][1] += unit->resistanceStage * RESISTANCE_STAGE_STEP;
+ 
+   if (unit->classId != CLASS_NONE) {
+     lighthouseLit = 0;
+@@ -410,10 +448,10 @@ void Unit_Calculate(s32 unitId) {
+   CLAMP(stats->luck, 0, UNIT_LUCK_MAX);
+   CLAMP(stats->actionCount, 0, 2);
+   CLAMP(stats->hpRegen, 0, UNIT_HP_REGEN_MAX);
+-  CLAMP(stats->ppRegen, 0, UNIT_PP_REGEN_MAX);
++  CLAMP(stats->ppRegen, 0, UNIT_CALC_PP_REGEN_MAX);
+   for (index = 0; index < ELEMENT_COUNT; index++) {
+-    CLAMP(stats->element[index][0], 0, UNIT_ELEMENT_MAX);
+-    CLAMP(stats->element[index][1], 0, UNIT_ELEMENT_MAX);
++    CLAMP(stats->element[index][0], 0, UNIT_CALC_ELEMENT_MAX);
++    CLAMP(stats->element[index][1], 0, UNIT_CALC_ELEMENT_MAX);
+   }
+ 
+   unit->atk = stats->atk;
+diff --git a/games/tbs/src/menu/menu/use.c b/games/tbs/src/menu/menu/use.c
+index 714a2dfa6f..6edcd881f1 100644
+--- a/games/tbs/src/menu/menu/use.c
++++ b/games/tbs/src/menu/menu/use.c
+@@ -4,6 +4,7 @@
+ // Part of menu.c.
+ 
+ #include "../menu_internal.h"
++#include "arena_config.h"
+ 
+ /// Copies the first sprite palette into background palette 14 and makes a
+ /// highlight palette in palette 13. Nothing calls it.
+@@ -55,6 +56,15 @@ s32 Item_Use(s32 slot, s32 memberId, s32 targetId) {
+ /// Nothing calls it.
+ s32 Item_ReturnOne(void) { return 1; }
+ 
++#if ARENA_RULES_REVIVE
++/// The HP a revival restores: with ARENA_RULES_REVIVE the ability's power in
++/// tenths of a percent of the max HP (Golden Sun Reloaded, forum topic 2779),
++/// or the stock amount when the power is 0.
++#define MENU_REVIVE_HP(stock)                                                    ArenaRules_ReviveHp(target->hpMax, effect->power, (stock))
++#else
++#define MENU_REVIVE_HP(stock) (stock)
++#endif
++
+ /// Applies the healing, curing, revival or lasting stat rise of action
+ /// effectId, used by party member sourceId, to targetId, or to every party
+ /// member when the action's range is ABILITY_RANGE_ALL. Item_Use passes
+@@ -150,6 +160,12 @@ s32 Ability_ApplyToTargets(s32 effectId, s32 sourceId, s32 targetId,
+     // and plus one a quarter of the time (a roll of 0 to 3: 0 gives -1, 1 gives
+     // +1, 2 and 3 give 0); Luck rises by power alone.
+     case ABILITY_FORMULA_NO_POWER:
++#if ARENA_RULES_ITEMS
++      // Reloaded ("Item Stat-boost Randomness Removal"): the stat rises by
++      // exactly its power.
++      randomAdjust = 0;
++      randomDifference = 0;
++#else
+       randomAdjust = (Random16() * 4) >> 16;
+       if (randomAdjust == 0) {
+         randomAdjust = -1;
+@@ -158,6 +174,7 @@ s32 Ability_ApplyToTargets(s32 effectId, s32 sourceId, s32 targetId,
+         randomAdjust = (u32)((-randomDifference) | randomDifference) >> 31;
+         randomAdjust = 1 - randomAdjust;
+       }
++#endif
+ 
+       switch (effectId & PSYNERGY_ABILITY_MASK) {
+       case ABILITY_POWER_BREAD:
+@@ -270,7 +287,7 @@ s32 Ability_ApplyToTargets(s32 effectId, s32 sourceId, s32 targetId,
+ 
+     case ABILITY_EFFECT_REVIVE:
+       if (target->hp == 0) {
+-        target->hp = target->hpMax;
++        target->hp = MENU_REVIVE_HP(target->hpMax);
+         Unit_RecalculateGaugesFar(targetId);
+         changed = 1;
+         if (partyResultShown == 0)
+@@ -285,7 +302,7 @@ s32 Ability_ApplyToTargets(s32 effectId, s32 sourceId, s32 targetId,
+     // is used from the menus. Dew gives 7/10 of maximum HP here.
+     case ABILITY_EFFECT_REVIVE_HALF:
+       if (target->hp == 0) {
+-        target->hp = target->hpMax / 2;
++        target->hp = MENU_REVIVE_HP(target->hpMax / 2);
+         Unit_RecalculateGaugesFar(targetId);
+         if (partyResultShown == 0)
+           messageOffset = ITEM_USE_RESULT_REVIVED;
+@@ -296,7 +313,7 @@ s32 Ability_ApplyToTargets(s32 effectId, s32 sourceId, s32 targetId,
+ 
+     case ABILITY_EFFECT_REVIVE_80:
+       if (target->hp == 0) {
+-        target->hp = target->hpMax * 7 / 10;
++        target->hp = MENU_REVIVE_HP(target->hpMax * 7 / 10);
+         Unit_RecalculateGaugesFar(targetId);
+         if (partyResultShown == 0)
+           messageOffset = ITEM_USE_RESULT_REVIVED;
+diff --git a/games/tbs/src/window/screens/battle_status.c b/games/tbs/src/window/screens/battle_status.c
+index c0db325de9..a556e1070e 100644
+--- a/games/tbs/src/window/screens/battle_status.c
++++ b/games/tbs/src/window/screens/battle_status.c
+@@ -3,6 +3,7 @@
+ // Part of screens.c.
+ 
+ #include "../screens_internal.h"
++#include "arena_config.h"
+ 
+ #if LANGUAGE != LANGUAGE_JAPANESE
+ #define OWNER_STATUS_TEXT_MAX 128
+@@ -719,7 +720,11 @@ s32 BattleStatusScreen_Run(u16 *list, s32 listCount, s32 member) {
+           break;
+         case OWNER_CONDITION_RESISTANCE_UP:
+         case OWNER_CONDITION_RESISTANCE_DOWN:
++          #if ARENA_RULES_STAGES
++          helpValue = unit->resistanceStage * 15; // Reloaded, as Unit_Calculate
++#else
+           helpValue = unit->resistanceStage * 20;
++#endif
+ #if TBS_PATCH_4
+           if (helpValue < 0) {
+             helpValue = -helpValue;
+-- 
+2.53.0
+

@@ -1,0 +1,176 @@
+From c916da23d4616a07832eeb6d6032b7b00c19812d Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sun, 1 Nov 2026 09:16:32 +1100
+Subject: [PATCH] Arena: Reloaded battle animations per ability
+ (gAbilityBattleEffects)
+
+Ported by scripts/port-reloaded-tables.py from the Golden Sun Reloaded v1.83a rebalance (forum.goldensunhacking.net topic 2779). The new abilities and the swapped Drain and Psy Drain variants get their effects.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/battle/ability_staging.c | 66 +++++++++++++-------------
+ 1 file changed, 33 insertions(+), 33 deletions(-)
+
+diff --git a/games/tbs/src/battle/ability_staging.c b/games/tbs/src/battle/ability_staging.c
+index c9dc44bafd..c7950b1b57 100644
+--- a/games/tbs/src/battle/ability_staging.c
++++ b/games/tbs/src/battle/ability_staging.c
+@@ -554,7 +554,7 @@ const u32 gAbilityBattleEffects[] = {
+     0, // ?
+     0, // ?
+     0, // ?
+-    0, // ?
++    BATTLE_EFFECT_CURE_POISON | (2 << EFFECT_VARIANT_SHIFT), // ?
+     BATTLE_EFFECT_FROST, // Frost
+     BATTLE_EFFECT_FROST | (1 << EFFECT_VARIANT_SHIFT), // Tundra
+     BATTLE_EFFECT_FROST | (2 << EFFECT_VARIANT_SHIFT), // Glacier
+@@ -612,9 +612,9 @@ const u32 gAbilityBattleEffects[] = {
+     BATTLE_EFFECT_WHIRLWIND, // Whirlwind
+     BATTLE_EFFECT_WHIRLWIND | (1 << EFFECT_VARIANT_SHIFT), // Tornado
+     BATTLE_EFFECT_WHIRLWIND | (2 << EFFECT_VARIANT_SHIFT), // Tempest
+-    0, // ?
+-    0, // ?
+-    0, // ?
++    BATTLE_EFFECT_RAY, // ?
++    BATTLE_EFFECT_RAY | (1 << EFFECT_VARIANT_SHIFT), // ?
++    BATTLE_EFFECT_RAY | (2 << EFFECT_VARIANT_SHIFT), // ?
+     0, // ?
+     0, // ?
+     0, // ?
+@@ -646,7 +646,7 @@ const u32 gAbilityBattleEffects[] = {
+     BATTLE_EFFECT_WEAKEN, // Weaken
+     BATTLE_EFFECT_WEAKEN | (1 << EFFECT_VARIANT_SHIFT), // Enfeeble
+     BATTLE_EFFECT_TAINT, // Taint
+-    BATTLE_EFFECT_TAINT, // Poison
++    BATTLE_EFFECT_TAINT | (1 << EFFECT_VARIANT_SHIFT), // Poison
+     BATTLE_EFFECT_DELUDE, // Delude
+     BATTLE_EFFECT_DELUDE | (1 << EFFECT_VARIANT_SHIFT), // Confuse
+     0, // Charm
+@@ -656,14 +656,14 @@ const u32 gAbilityBattleEffects[] = {
+     BATTLE_EFFECT_HAUNT, // Haunt
+     BATTLE_EFFECT_CURSE, // Curse
+     BATTLE_EFFECT_CONDEMN, // Condemn
+-    BATTLE_EFFECT_DRAIN, // Drain
+-    BATTLE_EFFECT_DRAIN | (1 << EFFECT_VARIANT_SHIFT), // Psy Drain
++    BATTLE_EFFECT_DRAIN | (1 << EFFECT_VARIANT_SHIFT), // Drain
++    BATTLE_EFFECT_DRAIN, // Psy Drain
+     BATTLE_EFFECT_BREAK, // Break
+     BATTLE_EFFECT_REGENERATE, // Regenerate
+     BATTLE_EFFECT_REFLECT, // Reflect
+-    0, // ?
+-    0, // ?
+-    0, // ?
++    BATTLE_EFFECT_DRAIN, // ?
++    BATTLE_EFFECT_REVIVE, // ?
++    BATTLE_EFFECT_QUICK_STRIKE, // ?
+     0, // ?
+     0, // ?
+     0, // ?
+@@ -739,7 +739,7 @@ const u32 gAbilityBattleEffects[] = {
+     0, // ?
+     0, // ?
+     0, // ?
+-    0, // ?
++    BATTLE_EFFECT_TITAN_BLADE, // ?
+     0, // ?
+     108 | EFFECT_BY_ID_RANGE, // Terra Strike
+     109 | EFFECT_BY_ID_RANGE, // Poison Cloud
+@@ -751,8 +751,8 @@ const u32 gAbilityBattleEffects[] = {
+     BATTLE_EFFECT_BLIZZARD, // Blizzard
+     116 | EFFECT_BY_ID_RANGE, // Frost Bite
+     BATTLE_EFFECT_DROWN, // Drown
+-    118 | EFFECT_BY_ID_RANGE, // Life Leech
+-    119 | EFFECT_BY_ID_RANGE, // Psy Leech
++    119 | EFFECT_BY_ID_RANGE, // Life Leech
++    118 | EFFECT_BY_ID_RANGE, // Psy Leech
+     120 | EFFECT_BY_ID_RANGE, // Broil
+     121 | EFFECT_BY_ID_RANGE, // Meltdown
+     122 | EFFECT_BY_ID_RANGE, // Heat Mirage
+@@ -782,11 +782,11 @@ const u32 gAbilityBattleEffects[] = {
+     0, // ?
+     0, // ?
+     BATTLE_EFFECT_PLY, // Herb
+-    BATTLE_EFFECT_PLY, // Nut
+-    BATTLE_EFFECT_PLY, // Vial
+-    BATTLE_EFFECT_PLY, // Potion
+-    BATTLE_EFFECT_PLY, // Soothing Water
+-    BATTLE_EFFECT_PSY_CRYSTAL, // Psy Crystal
++    BATTLE_EFFECT_PLY | (1 << EFFECT_VARIANT_SHIFT), // Nut
++    BATTLE_EFFECT_PLY | (2 << EFFECT_VARIANT_SHIFT), // Vial
++    BATTLE_EFFECT_PLY | (2 << EFFECT_VARIANT_SHIFT), // Potion
++    BATTLE_EFFECT_PLY | (2 << EFFECT_VARIANT_SHIFT), // Soothing Water
++    BATTLE_EFFECT_PSY_CRYSTAL | (2 << EFFECT_VARIANT_SHIFT), // Psy Crystal
+     BATTLE_EFFECT_CURE_POISON, // Antidote
+     BATTLE_EFFECT_CURE_POISON | (1 << EFFECT_VARIANT_SHIFT), // Elixir
+     BATTLE_EFFECT_REVIVE, // Water of Life
+@@ -797,12 +797,12 @@ const u32 gAbilityBattleEffects[] = {
+     0, // Hard Nut
+     0, // Mint
+     0, // Lucky Pepper
+-    0, // ?
++    BATTLE_EFFECT_PSY_CRYSTAL, // ?
+     BATTLE_EFFECT_SMOKE_BOMB, // Smoke Bomb
+     BATTLE_EFFECT_SMOKE_BOMB, // Sleep Bomb
+-    BATTLE_EFFECT_PSY_CRYSTAL, // Adept Ring
+-    BATTLE_EFFECT_CURE, // Corn
+-    0, // ?
++    BATTLE_EFFECT_CURE_POISON, // Adept Ring
++    BATTLE_EFFECT_PLY, // Corn
++    BATTLE_EFFECT_CURE_POISON | (1 << EFFECT_VARIANT_SHIFT), // ?
+     0, // ?
+     0, // ?
+     0, // ?
+@@ -857,7 +857,7 @@ const u32 gAbilityBattleEffects[] = {
+     BATTLE_EFFECT_SPRITZ, // Spritz
+     BATTLE_EFFECT_HAIL, // Hail
+     BATTLE_EFFECT_TONIC, // Tonic
+-    BATTLE_EFFECT_DEW, // Dew
++    BATTLE_EFFECT_DEW | (1 << EFFECT_VARIANT_SHIFT), // Dew
+     0, // =
+     0, // =
+     0, // =
+@@ -944,13 +944,13 @@ const u32 gAbilityBattleEffects[] = {
+     0, // ?
+     0, // ?
+     0, // ?
++    BATTLE_EFFECT_BREAK, // ?
++    BATTLE_EFFECT_PRISM | (2 << EFFECT_VARIANT_SHIFT), // ?
++    BATTLE_EFFECT_PLASMA | (2 << EFFECT_VARIANT_SHIFT), // ?
++    BATTLE_EFFECT_FIRE | (2 << EFFECT_VARIANT_SHIFT), // ?
+     0, // ?
+-    0, // ?
+-    0, // ?
+-    0, // ?
+-    0, // ?
+-    0, // ?
+-    0, // ?
++    BATTLE_EFFECT_MYSTIC_FLAME, // ?
++    BATTLE_EFFECT_CUTTING_EDGE, // ?
+     BATTLE_EFFECT_FIRE_BLESSING | EFFECT_VIEW_REVERSED, // Fire Blessing
+     BATTLE_EFFECT_FIRE_BLESSING | EFFECT_VIEW_REVERSED, // Fire Blessing
+     BATTLE_EFFECT_FIRE_BLESSING | EFFECT_VIEW_REVERSED, // Fire Blessing
+@@ -978,9 +978,9 @@ const u32 gAbilityBattleEffects[] = {
+     BATTLE_EFFECT_WING_STROKE, // Wing Stroke
+     BATTLE_EFFECT_EVIL_BLESSING | EFFECT_VIEW_REVERSED, // Evil Blessing
+     BATTLE_EFFECT_DEADLY_GAS | EFFECT_VIEW_REVERSED, // Deadly Gas
+-    0, // ?
+-    0, // ?
+-    0, // ?
++    BATTLE_EFFECT_WAR_CRY, // ?
++    BATTLE_EFFECT_RUMBLE, // ?
++    BATTLE_EFFECT_RUMBLE, // ?
+     BATTLE_EFFECT_RUMBLE, // Rumble
+     BATTLE_EFFECT_BONE_CHILLER, // Bone Chiller
+     BATTLE_EFFECT_RAPID_SMASH, // Slice
+@@ -991,7 +991,7 @@ const u32 gAbilityBattleEffects[] = {
+     BATTLE_EFFECT_STICKY_GOO, // Sticky Goo
+     BATTLE_EFFECT_CANNIBAL_FANG, // Cannibal Fang
+     BATTLE_EFFECT_BEAR_CLAW, // Bear Claw
+-    BATTLE_EFFECT_POISONOUS_BITE, // Poisonous Bite
++    BATTLE_EFFECT_DOUBLE_FANG, // Poisonous Bite
+     BATTLE_EFFECT_FLYING_ATTACK, // Flying Attack
+     BATTLE_EFFECT_UNDEAD_SWORD, // Undead Sword
+     BATTLE_EFFECT_RANSACK, // Ransack
+-- 
+2.53.0
+
