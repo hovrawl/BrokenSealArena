@@ -391,7 +391,7 @@ Each is one layer, in order; each builds on its own.
 - Port notes: only the English signature is changed; other editions do not build.
 
 ### 15. The Reloaded engine rules: level-up, ailments, damage
-- Patch: `0015-Arena-the-Reloaded-engine-rules-level-up-ailments-and-.patch`
+- Patch: `0015-Arena-the-Reloaded-engine-rules-level-up-ailments-an.patch`
 - Switches: `ARENA_RULES_LEVELUP`, `ARENA_RULES_AILMENTS`, `ARENA_RULES_DAMAGE`
   (`arena_config.h`), **off by default** until the rebalance's data is ported.
 - Files: `game/game/arena_rules.c` (new part of game.c: the level gain and the effect
