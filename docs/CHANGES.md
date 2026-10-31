@@ -390,6 +390,19 @@ Each is one layer, in order; each builds on its own.
   stock side stays silent, since the stock lobby only leaves such a console out.
 - Port notes: only the English signature is changed; other editions do not build.
 
+### 15. The Reloaded engine rules: level-up, ailments, damage
+- Patch: `0015-Arena-the-Reloaded-engine-rules-level-up-ailments-and-.patch`
+- Switches: `ARENA_RULES_LEVELUP`, `ARENA_RULES_AILMENTS`, `ARENA_RULES_DAMAGE`
+  (`arena_config.h`), **off by default** until the rebalance's data is ported.
+- Files: `game/game/arena_rules.c` (new part of game.c: the level gain and the effect
+  rate tables), hooks in `levels.c`, `battle_arithmetic.c` and `battle/battle/ability.c`.
+- See `RELOADED.md` (the decision) and `RELOADED-ENGINE.md` (each rule, how it was
+  checked, and the code changes still to decode). Level-up is checked against the
+  rebalance's own level 99 stats; bosses (luck 40 and up) are immune to most ailments
+  in its table, which we can edit.
+- Port notes: the Lost Age has its own patch (v1.83) and eight characters; the same rules
+  apply, with different addresses.
+
 ## Dropped on the way
 
 - The first training menu was a full-screen canvas-text window with its own list
