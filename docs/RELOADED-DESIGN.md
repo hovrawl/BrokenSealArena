@@ -4,7 +4,6 @@ Summary (not a copy) of the first post of the mod's release thread (forum.golden
 topic 2779), read 2026-11-01 because the changelog is only a delta between versions. The
 author is credited there as the mod's maker; their post explains the intent behind the
 numbers. This note records the intent so our port keeps it.
-same tree).
 
 ## Philosophy
 
