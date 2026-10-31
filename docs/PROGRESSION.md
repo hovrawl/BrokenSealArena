@@ -95,3 +95,9 @@ its patch, if reviewed later, may show what they changed. It links these spreads
 Caveats: the page is about The Lost Age, and their numbers are tuned to their difficulty
 and rebalance, so nothing is taken as is. None of it has been opened or checked here;
 this is a bookmark. The version at the time of saving was 1.83 (updated 2026-05-16).
+
+## Progression by cups
+
+The owner's direction for how a player moves through the game (linear cups that set the
+level, side cups, a level 99 stat shop, 4v4 PvP at 50 or 99) is in `CUPS.md`. The author's
+design intent for the Reloaded rules is in `RELOADED-DESIGN.md`.

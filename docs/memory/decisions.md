@@ -108,3 +108,13 @@
   ported). A New Game levels the party to 50 (`ARENA_START_LEVEL`) so every class's Psynergy
   is open and only the set Djinn limit the pool. Balance against the ladders (rungs top out
   at level 45) is deferred.
+- **Progression by cups** (2026-11-01): the game is a battle simulator, not a story replay.
+  Cups are linear and mimic story regions (mobs from an area, capped by its boss); a cup sets
+  the party's level (bracket of ten, the first can be level 10) and finishing it unlocks the
+  next gate, Djinn and items. Side cups (themed, mechanic-challenge, the Boss Rush) sit beside
+  the line. The stat shop is for level 99 only. 4v4 PvP has two brackets, a cap of 50 (standard)
+  and 99 (tuned builds), player's choice. See `docs/CUPS.md`.
+- **Reloaded design intent kept** (2026-11-01): summon turn gating, no unleashing while
+  deluded, luck 40 immunity and the ward are intended, per the author's post
+  (`docs/RELOADED-DESIGN.md`). The lobby signature is `BSR4` so builds with different rules
+  do not link.
