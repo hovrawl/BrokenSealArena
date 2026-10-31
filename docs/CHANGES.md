@@ -356,6 +356,29 @@ Each is one layer, in order; each builds on its own.
 - Port notes: the Lost Age has its own starting equipment and sprite special cases;
   look for the same kind of "drawn as part of the sprite" check.
 
+### 12. Quitting before winning a round
+- Patch: `0012-Arena-quitting-before-winning-a-round-says-Try-again.patch`
+- Files: `scene/arena_series.c`, `text/en.po` (`MsgArenaTryAgain`).
+- Giving up with no wins ends the series with "Try again next time!" instead of
+  the stock "You won 0 battle." (its `{plural_suffix}` treats zero as singular):
+  they did not want to compete, so the line is generic. With wins it is unchanged.
+
+### 13. Linked battles are four a side
+- Patch: `0013-Arena-linked-battles-are-four-a-side-ARENA_LINK4.patch`
+- Switch: `ARENA_LINK4` (`arena_config.h`, on by default).
+- Files: `scene/battle_arena.c` (the lobby sends and receives four unit records),
+  `game/units.c` (the opponent's Djinn recovery table moves from enemy unit 3 to 4),
+  `battle/battle/arena_link.c` (new: opponent layout and the half-size sprite map),
+  hooks in `placement.c`, `battle.c`, `battle_internal.h`, `main.ld`, `sprites.tsv`,
+  `layout.tsv`.
+- A spike, proved with `scripts/smoke/link.c` (two consoles, lockstep): a 4v4 runs to
+  a result, with Attack, Psynergy and a Djinn crossing the link. See `MULTIPLAYER.md`.
+- Eight 64x64 characters fill sprite VRAM, so the opponents use 32x32 sheets made at
+  build time (`scripts/gen-opponent-sprites.py`, run by `build.ps1`) with no weapon.
+  The ROM grows 20 KB (`main.ld` start of the last region, `ROM_END_tbs` on the make line).
+- Port notes: the Lost Age has eight characters; its party order and sprite ids differ.
+  Not yet tested: Djinn recovery over several turns, Summons, hacked against stock.
+
 ## Dropped on the way
 
 - The first training menu was a full-screen canvas-text window with its own list

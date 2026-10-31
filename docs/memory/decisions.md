@@ -72,3 +72,19 @@
   Rush (six boss rounds, no healing) exists to test that logic; its balance is data and
   is deferred with the Gauntlet's. The user chose to skip the balance pass until the
   logic is tested.
+- **Multiplayer** (user, 2026-10-31): Broken Seal 1v1 is **4v4**, bespoke story
+  characters only. The Lost Age has eight characters with party switching; whether to
+  fix the first row of four is undecided. First build **offline records**: send your
+  party's record and let the game play it as an AI opponent (pseudo-online); real-time
+  play is a separate step, in increments. The spike (`docs/MULTIPLAYER.md`) showed two
+  hack instances link and fight locally, and that 4v4 needs the opponent's Djinn table
+  moved out of enemy unit 3.
+- **Multiplayer baseline** (2026-10-31): the stock link battle is real time and player
+  driven (each console sends its own chosen actions over the link; the enemy AI is not
+  used). Online play therefore rests on the emulator carrying the link cable. Records
+  plus an AI opponent is a later fallback, not the plan. Next: investigate 4v4.
+- **4v4 hits the sprite VRAM limit** (2026-10-31): at link-battle target selection the 512
+  blocks of sprite VRAM (32 KB) are 94 percent used; eight 64-block character sprites need
+  all of it, so one (the party's 4th) is evicted and the 4th opponent flickers. Roughly 30
+  blocks short. See `docs/MULTIPLAYER.md`. The data and exchange work at 4v4; the picture is
+  what does not fit.

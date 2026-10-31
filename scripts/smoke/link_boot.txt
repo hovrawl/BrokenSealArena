@@ -1,0 +1,4 @@
+# Smallest link test: both consoles boot New Game, step through the greeter, and
+# are looked at. (Both run this same script.)
+include to_lobby.txt
+wait 60

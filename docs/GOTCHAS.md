@@ -109,6 +109,14 @@
   the Boss Rush. Tests that need a win start as an easy team and switch the
   tournament byte after the battle begins.
 
+- A program using libmgba's `struct mCoreThread` must be built with
+  `-DENABLE_SCRIPTING` (the installed library has it): without it the struct is too
+  short, the library overwrites the next field and the program crashes in
+  `GBAFrameEnded`.
+- PowerShell and Git Bash differ: a PowerShell tool call has no `grep` and a Bash one
+  has no `Select-String`. Filter inside the shell the command runs in. And never pipe
+  an empty heredoc to `python -`: it waits for input and the call hangs.
+
 ## Testing
 
 - A stray A press beside a person starts their talk (or opens the field menu).
