@@ -88,3 +88,11 @@
   all of it, so one (the party's 4th) is evicted and the 4th opponent flickers. Roughly 30
   blocks short. See `docs/MULTIPLAYER.md`. The data and exchange work at 4v4; the picture is
   what does not fit.
+- **Psynergy is learnt by class, not bought** (2026-11-01): the base game's own mechanic is
+  kept: the Djinn a character has set decide the class (Venus-only Djinn lead down the
+  Squire line and so on), the class limits the Psynergy pool, and each Psynergy has a
+  level requirement on top; it is not permanent, which is liked. The data is in
+  `gClass_DefinitionTable` (`abilities`, `required`) and `Unit_RefreshPsynergy`; see
+  `docs/PROGRESSION.md`. The party manager's Psynergy shop contradicts it (not decided what
+  replaces it). The forum rebalance mod and its spreadsheets are saved there as reference
+  only, not to be taken to heart.
