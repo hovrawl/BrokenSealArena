@@ -108,6 +108,8 @@ Tests (each ends in shots; `build\smoke\shots\sheet.png` shows them all):
   **Turns:** a turn's messages wait for a button, so step them with `tap B` (30 taps of
   100 frames); B does nothing at the command menu, so extra taps are harmless, unlike A.
   A unit that dies changes the order of the command menus, so keep the scripts short.
+- `rules_turn.txt`: fight a few rounds and `peek` `BattleWork.arenaTurn` (0x47 into the
+  battle work, which `gBattleWork`, 0x03001e74, points to): 0 in the first turn, 1 after it.
 - `pause.txt`, `save.txt`: the Pause menu and Save your quest.
 - `boot.txt`, `walk.txt`: calibration runs.
 ## Tips

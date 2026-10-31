@@ -415,6 +415,25 @@ Each is one layer, in order; each builds on its own.
   agility, luck); a Gauntlet battle runs to victory.
 - Existing saves keep their stats; only a New Game levels up.
 
+### 17. More Reloaded engine rules: guard, heal, revive, effect ids, stages, recovery
+- Patch: `0017-Arena-more-Reloaded-engine-rules-guard-heal-revive-e.patch`
+- Switches (`arena_config.h`, all on): `ARENA_RULES_GUARD`, `_HEAL`, `_REVIVE`,
+  `_EFFECT_IDS`, `_DURATIONS`, `_STAGES`, `_RECOVERY`, `_STATUS`, `_CLASS20`, `_CAPS`,
+  `_ITEMS`, `_SUMMON_TURNS`; `ARENA_RULES_AILMENTS` also sums the Ailment attribute.
+- Files: short hooks in `battle/battle/ability.c`, `action.c`, `setup.c`, `turn_end.c`,
+  `game/game/units.c`, `battle_arithmetic.c`, `menu/menu/use.c`,
+  `window/screens/battle_status.c`; `BattleWork.arenaTurn` (the byte no stock code named).
+- Each rule, its address in the original and how it was checked: `RELOADED-ENGINE.md`.
+  What is deliberately not ported (UI layout, graphics resources) is listed there too.
+- **Needs the data port**: `_EFFECT_IDS` (ability and enemy effect ids) and `_CLASS20`
+  (class multipliers doubled) change the meaning of data; on stock data Confuse acts as
+  Delude and class stats halve. `_REVIVE` keeps stock amounts for an ability of power 0.
+- **Design changes the rules make**: summons wait for turn 2 or 3 (`_SUMMON_TURNS`), a
+  deluded unit cannot unleash, Total Defense takes a third, Defense stages are stronger.
+- Checked: built with every switch 0 and every switch 1, a Gauntlet battle fought both
+  ways, the turn counter read in a battle (`scripts/smoke/rules_turn.txt`), and several
+  rebuilt functions compared with the patched original.
+
 ## Dropped on the way
 
 - The first training menu was a full-screen canvas-text window with its own list

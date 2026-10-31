@@ -1,0 +1,40 @@
+# Battle a few rounds by mashing A, then read gBattleWork (0x03001e74) and its arenaTurn byte.
+include to_solo.txt
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+mash A 6
+wait 100
+peek 0x02030093 1
+mash A 6
+wait 100
+peek 0x02030093 1
+mash A 6
+wait 100
+peek 0x02030093 1
+mash A 6
+wait 100
+peek 0x02030093 1
+mash A 6
+wait 100
+peek 0x02030093 1
+mash A 6
+wait 100
+peek 0x02030093 1
+mash A 6
+wait 100
+peek 0x02030093 1
+mash A 6
+wait 100
+peek 0x02030093 1
+mash A 6
+wait 100
+peek 0x02030093 1
+mash A 6
+wait 100
+peek 0x02030093 1
+peek 0x03001e74 4
+peek 0x02030093 1
