@@ -64,6 +64,15 @@ original** (`CountDownAttackStage`, `Defense`, `Resistance`, `Stun`, `Sleep`,
 
 ## What the data port must carry for these rules
 
+**Done (patches 18 to 26, 2026-11-01):** everything below is in our tables now, ported by
+`scripts/port-reloaded-tables.py` and verified byte for byte against the patched stock ROM
+(`scripts/table-check.py`, `docs/CHANGES.md` entries 18 to 26). Two things the port settled:
+the class ward is the named field `ClassDefinition.ward` (the old `weakEffects[3]` byte, same
+struct size), and the effect ids the aliases need are named `ARENA_EFFECT_*` in
+`arena_config.h`. With the data in, a New Game gives the workbook's stats (level 99 equals
+its sheet; level 50 is checked in `stats.txt`).
+The original checklist, kept for the Lost Age port:
+
 - Ability rows: effect ids as in the patch (see EFFECT_IDS), revival power in tenths of a
   percent, the stat-item amounts.
 - Class rows: the six multipliers doubled (CLASS20), vulnerabilities and the ward in

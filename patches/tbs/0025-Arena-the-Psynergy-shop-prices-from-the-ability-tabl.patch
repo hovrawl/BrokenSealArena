@@ -1,0 +1,60 @@
+From 0b1e8e652b9a3bdfed22b3c8ca03a23bfdd32c19 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sun, 1 Nov 2026 09:16:32 +1100
+Subject: [PATCH] Arena: the Psynergy shop prices from the ability table's PP
+ cost
+
+The shop kept its own copy of each spell's PP cost, which the Reloaded data changed; it now asks Ability_Get.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/shop/shop/arena_shop.c | 17 ++++++++---------
+ 1 file changed, 8 insertions(+), 9 deletions(-)
+
+diff --git a/games/tbs/src/shop/shop/arena_shop.c b/games/tbs/src/shop/shop/arena_shop.c
+index e7d4d8fc09..bc2f3b23ec 100644
+--- a/games/tbs/src/shop/shop/arena_shop.c
++++ b/games/tbs/src/shop/shop/arena_shop.c
+@@ -406,23 +406,22 @@ static void ArenaStat_Add(struct Unit *unit, s32 stat, s32 amount) {
+   }
+ }
+ 
+-/// A Psynergy for sale: its ability id and PP cost, which sets the price.
++/// A Psynergy for sale: its ability id. The price comes from the ability's PP
++/// cost in the ability table (the Reloaded data changed most of them), not from a
++/// copy kept here.
+ struct ArenaShopPsynergy {
+   u16 id;
+-  u16 ppCost;
+ };
+ 
+ static const struct ArenaShopPsynergy sArenaShopPsynergy[] = {
+     // Venus
+-    {3, 4}, {4, 7}, {8, 22}, {12, 4}, {15, 6}, {90, 3}, {91, 7}, {101, 15},
++    {3}, {4}, {8}, {12}, {15}, {90}, {91}, {101},
+     // Mercury
+-    {24, 5}, {26, 15}, {27, 5}, {33, 5}, {35, 20}, {93, 4}, {94, 8}, {96, 9},
+-    {128, 6},
++    {24}, {26}, {27}, {33}, {35}, {93}, {94}, {96}, {128},
+     // Mars
+-    {45, 4}, {49, 12}, {50, 23}, {52, 14}, {106, 3}, {107, 5}, {182, 5},
++    {45}, {49}, {50}, {52}, {106}, {107}, {182},
+     // Jupiter
+-    {66, 4}, {68, 14}, {71, 21}, {76, 9}, {79, 14}, {120, 5}, {125, 3},
+-    {189, 19},
++    {66}, {68}, {71}, {76}, {79}, {120}, {125}, {189},
+ };
+ 
+ /// A stock entry is a Psynergy's index in sArenaShopPsynergy, or a Djinni's
+@@ -432,7 +431,7 @@ static s32 ArenaShop_Price(s32 kind, s32 unitId, s32 entry) {
+     return ArenaStat_Cost(Unit_GetFar(unitId), entry);
+   if (kind == ARENA_SHOP_DJINN)
+     return ARENA_SHOP_DJINN_PRICE;
+-  return 150 + sArenaShopPsynergy[entry].ppCost * 50;
++  return 150 + Ability_Get(sArenaShopPsynergy[entry].id)->ppCost * 50;
+ }
+ 
+ static s32 ArenaShop_NameMessage(s32 kind, s32 entry) {
+-- 
+2.53.0
+

@@ -30,6 +30,26 @@ abilities with classes, items, then enemies, Djinn and characters, and the text 
 Generated reports of their numbers are written to `build/reloaded/` (ignored), not
 committed.
 
+## Status (2026-11-01)
+
+- **Engine rules**: done, patches 15 to 17, switches `ARENA_RULES_*` (`RELOADED-ENGINE.md`).
+- **Data**: done, patches 18 to 26 (`CHANGES.md`). The ability, class, item, enemy, element
+  preset, character growth, Djinn and battle-effect tables carry the Reloaded values, written
+  by `scripts/port-reloaded-tables.py` and equal to the patched stock ROM in every record
+  (`scripts/table-check.py`; only enemy bytes 30 to 39 of 11 rows, which nothing reads, are left
+  out). The source no longer needs the IPS.
+- **Text**: 227 messages decoded from the patch's message archive and written into `en.po`
+  (`scripts/ips-text-diff.py`: its decoder reads all 10,723 stock messages back identically
+  first); descriptions that state powers now state the new ones.
+- **Not taken**: the interface (Menu Panels Revamped), graphics, shop stock, inn prices,
+  formations (see `CHANGES.md` for the list).
+- **To decide**: the arena's balance (rungs, shop prices, coins) over the story game's retune;
+  asking the authors before this goes public (credit is in every table header and in this
+  document).
+
+Credit: **Golden Sun Reloaded** by its authors, forum.goldensunhacking.net topic 2779;
+the values in our tables are theirs.
+
 ## What is in the folder
 
 | File | What it is |

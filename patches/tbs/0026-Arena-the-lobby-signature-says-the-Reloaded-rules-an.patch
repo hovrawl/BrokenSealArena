@@ -1,0 +1,35 @@
+From 213fa50b43e8858e707615fd1e8777c20d2eee42 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sun, 1 Nov 2026 09:18:41 +1100
+Subject: [PATCH] Arena: the lobby signature says the Reloaded rules and data
+ (BSR4)
+
+Two consoles with different rules or tables would fight by different numbers; the third letter of the signature word is R when the Reloaded rules are on.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/scene/battle_arena.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
+index f5d9dbd956..0596795399 100644
+--- a/games/tbs/src/scene/battle_arena.c
++++ b/games/tbs/src/scene/battle_arena.c
+@@ -249,7 +249,14 @@ enum LinkTally {
+ /// understand, so its signature word differs (and so does that of any other
+ /// build). A console that publishes another word is not offered as an opponent
+ /// by the stock lobby; here BattleArena_PollPeerReady reports it to the player.
++/// The third letter says which rules and data the battles run: 'A' for the stock
++/// tables, 'R' for the Reloaded rebalance (ARENA_RULES_* and the ported data),
++/// so two consoles that would fight by different numbers do not link.
++#if ARENA_RULES_CLASS20
++#define LOBBY_SIGNATURE PEER_TAG('B', 'S', 'R', '4')
++#else
+ #define LOBBY_SIGNATURE PEER_TAG('B', 'S', 'A', '4')
++#endif
+ #else
+ #define LOBBY_SIGNATURE PEER_TAG('S', 'G', 'M', 'C')
+ #endif
+-- 
+2.53.0
+
