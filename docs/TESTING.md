@@ -101,7 +101,13 @@ Tests (each ends in shots; `build\smoke\shots\sheet.png` shows them all):
   lockstep link; `link.sh SCRIPT0 SCRIPT1`, shots named `p0_*` and `p1_*`).
   `link_att_*.txt` brings the link up at the attendant; `link_battle_*.txt` runs the
   whole stock Multiplayer flow to a linked battle. See `docs/MULTIPLAYER.md`. It must
-  be built with `-DENABLE_SCRIPTING` (`link.sh` does).
+  be built with `-DENABLE_SCRIPTING` (`link.sh` does). `link-run.sh NAME` runs
+  `link_NAME_0/1.txt` and keeps the log and shots under `build/smoke/link/NAME/`; set
+  `ROM1=` to a second ROM to link two builds (`link_mm_*` waits for an opponent,
+  `link_recover_*` is five turns with Djinn, a Summon and the recovery tables).
+  **Turns:** a turn's messages wait for a button, so step them with `tap B` (30 taps of
+  100 frames); B does nothing at the command menu, so extra taps are harmless, unlike A.
+  A unit that dies changes the order of the command menus, so keep the scripts short.
 - `pause.txt`, `save.txt`: the Pause menu and Save your quest.
 - `boot.txt`, `walk.txt`: calibration runs.
 ## Tips

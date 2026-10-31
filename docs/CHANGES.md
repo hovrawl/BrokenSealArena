@@ -377,7 +377,18 @@ Each is one layer, in order; each builds on its own.
   build time (`scripts/gen-opponent-sprites.py`, run by `build.ps1`) with no weapon.
   The ROM grows 20 KB (`main.ld` start of the last region, `ROM_END_tbs` on the make line).
 - Port notes: the Lost Age has eight characters; its party order and sprite ids differ.
-  Not yet tested: Djinn recovery over several turns, Summons, hacked against stock.
+  Tested since: Djinn recovery over several turns and a Summon (see `MULTIPLAYER.md`).
+
+### 14. Say so when the linked opponent is another version
+- Patch: `0014-Arena-say-so-when-the-linked-opponent-is-another-ver.patch`
+- Switch: `ARENA_LINK4`. Files: `scene/battle_arena.c`, `text/en.po`
+  (`MsgArenaLinkOtherGame`).
+- The four-a-side build publishes its own lobby signature word (`BSA4`). While the
+  player waits for an opponent, a partner with another word for a second (a stock game,
+  or a build with another party size) makes the attendant say "Your opponent has a
+  different version of the game!" and stop waiting, through the disconnect event. The
+  stock side stays silent, since the stock lobby only leaves such a console out.
+- Port notes: only the English signature is changed; other editions do not build.
 
 ## Dropped on the way
 

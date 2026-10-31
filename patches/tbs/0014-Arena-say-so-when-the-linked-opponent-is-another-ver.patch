@@ -1,0 +1,153 @@
+From da2aaf84281bfa3e1eb644a8a6627d67de3873c7 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sat, 31 Oct 2026 13:45:58 +1100
+Subject: [PATCH] Arena: say so when the linked opponent is another version of
+ the game (ARENA_LINK4)
+
+The stock lobby leaves a console with another signature word out without a
+word, and a build with a different number of party members a side that shares
+the signature drops the link after a long timeout. This build now publishes its
+own signature word, and while the player waits for an opponent, a partner
+with another word for a second makes the attendant say "Your opponent has a
+different version of the game!" and stop waiting. The stock game cannot say it.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/scene/battle_arena.c | 66 +++++++++++++++++++++++++++++-
+ games/tbs/text/en.po               |  7 ++++
+ 2 files changed, 71 insertions(+), 2 deletions(-)
+
+diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
+index d0f26bf162..f5d9dbd956 100644
+--- a/games/tbs/src/scene/battle_arena.c
++++ b/games/tbs/src/scene/battle_arena.c
+@@ -244,6 +244,16 @@ enum LinkTally {
+ 
+ #define PEER_TAG(a, b, c, d) ((a) | ((b) << 8) | ((c) << 16) | ((d) << 24))
+ 
++#if ARENA_LINK4
++/// Arena romhack: this build links four a side, which the stock three do not
++/// understand, so its signature word differs (and so does that of any other
++/// build). A console that publishes another word is not offered as an opponent
++/// by the stock lobby; here BattleArena_PollPeerReady reports it to the player.
++#define LOBBY_SIGNATURE PEER_TAG('B', 'S', 'A', '4')
++#else
++#define LOBBY_SIGNATURE PEER_TAG('S', 'G', 'M', 'C')
++#endif
++
+ // clang-format off
+ /// The words the Battle Arena publishes in its link payload, by slot; the
+ /// partner compares them with its own (BattleArena_PeerSlotMatches), by enum
+@@ -273,18 +283,19 @@ const s32 gBattleArena_SlotValues[] = {
+     PEER_TAG('E', 'F', 'G', '3'), PEER_TAG('C', 'I', 'G', 'S')
+ #else
+ #if (LANGUAGE != LANGUAGE_JAPANESE)
+-    PEER_TAG('S', 'G', 'M', 'C'),
++    LOBBY_SIGNATURE,
+ #else
+     PEER_TAG('C', 'M', 'G', 'S'),
+ #endif
+     PEER_TAG('0', '1', '2', '3'), PEER_TAG('A', 'B', 'C', '1'),
+     PEER_TAG('C', 'D', 'E', '2'), PEER_TAG('E', 'F', 'G', '3'),
+-    PEER_TAG('S', 'G', 'M', 'C')
++    LOBBY_SIGNATURE
+ #endif
+ };
+ // clang-format on
+ 
+ #undef PEER_TAG
++#undef LOBBY_SIGNATURE
+ 
+ /// A console's link payload as the Battle Arena reads it from
+ /// gLinkPeerSignatures: values[0] is its signature word and values[1] its state
+@@ -386,6 +397,32 @@ static s32 BattleArena_PeerSlotMatches(s32 slot) {
+   return 0;
+ }
+ 
++#if ARENA_LINK4
++/// Arena romhack: frames the partner has published a signature other than this
++/// build's while this console waits for an opponent; 0 otherwise.
++static s32 sBattleArenaOtherGameFrames;
++
++/// Arena romhack: set when the link was dropped because the partner runs
++/// another build, so that the attendant says so (BattleArena_ReportDisconnection).
++static s32 sBattleArenaOtherGame;
++
++/// Arena romhack: returns 1 when the link is up and the partner has published a
++/// signature word that is not this build's: a stock game, or a build with another
++/// number of party members a side.
++static s32 BattleArena_PeerIsOtherGame(void) {
++  s32 serialPlayerId;
++  struct LinkPeerPayload *peer;
++  s32 word;
++
++  if ((gLinkStatus & LOBBY_LINK_READY_MASK) != LOBBY_LINK_READY_MASK)
++    return 0;
++  serialPlayerId = (REG_SIOCNT << 26) >> 30;
++  peer = (struct LinkPeerPayload *)gLinkPeerSignatures[(serialPlayerId != 0) ^ 1];
++  word = peer->values[gBattleArena_SlotColumns[LOBBY_SLOT_SIGNATURE]];
++  return word != 0 && word != gBattleArena_SlotValues[LOBBY_SLOT_SIGNATURE];
++}
++#endif
++
+ /// Publishes slot's word in its column of this console's link payload, where
+ /// the partner's BattleArena_PeerSlotMatches reads it.
+ static void BattleArena_WriteSlotValue(s32 slot) {
+@@ -458,6 +495,25 @@ static s32 BattleArena_PollPeerReady(void) {
+       work->raisedTrigger = LOBBY_EVENT_PROMPT;
+     }
+   }
++#if ARENA_LINK4
++  // The opponent waited for is another game: after a second, say so (the stock lobby only
++  // leaves such a console out, and says nothing).
++  if (GameFlag_Get(FLAG_LINK_BATTLE) && !GameFlag_Get(FLAG_MONSTER_BATTLE) &&
++      BattleArena_PeerIsOtherGame()) {
++    if (++sBattleArenaOtherGameFrames >= 60) {
++      sBattleArenaOtherGameFrames = 0;
++      sBattleArenaOtherGame = 1;
++      work->raisedTrigger = LOBBY_EVENT_DISCONNECTED;
++      GameFlag_Set(FLAG_BATTLE_ARENA_LINK_LOST_UNREPORTED);
++      GameFlag_Clear(FLAG_BATTLE_ARENA_PARTNER_ASKED);
++      GameFlag_Clear(FLAG_BATTLE_ARENA_PLAYER_AGREED);
++      GameFlag_Clear(FLAG_LINK_BATTLE);
++      BattleArena_WriteSlotValue(LOBBY_SLOT_IDLE);
++    }
++  } else {
++    sBattleArenaOtherGameFrames = 0;
++  }
++#endif
+   // The 25th frame without a link while a linked battle is being arranged:
+   // report the link lost.
+   if ((Event_GetFlag(FLAG_BATTLE_ARENA_PARTNER_ASKED) ||
+@@ -530,7 +586,13 @@ static s32 BattleArena_ReportDisconnection(void) {
+   GameFlag_Clear(FLAG_BATTLE_ARENA_ENTERING_BATTLE);
+   Event_Start();
+   work->raisedTrigger = LOBBY_EVENT_NONE;
++#if ARENA_LINK4
++  Event_SetMessageId(sBattleArenaOtherGame ? MsgArenaLinkOtherGame
++                                           : MsgLobbyLinkDisconnected);
++  sBattleArenaOtherGame = 0;
++#else
+   Event_SetMessageId(MsgLobbyLinkDisconnected);
++#endif
+   FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+   GameFlag_Clear(FLAG_BATTLE_ARENA_LINK_LOST_UNREPORTED);
+   Event_End();
+diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
+index e243c8417c..f75d66189b 100644
+--- a/games/tbs/text/en.po
++++ b/games/tbs/text/en.po
+@@ -65238,3 +65238,10 @@ msgid "10775"
+ msgstr ""
+ "Try again\n"
+ "next time!{end_wait}"
++
++msgctxt "MsgArenaLinkOtherGame"
++msgid "10776"
++msgstr ""
++"Your opponent has a\n"
++"different version of\n"
++"the game!{end_wait}"
+-- 
+2.53.0
+

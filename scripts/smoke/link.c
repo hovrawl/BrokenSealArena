@@ -513,7 +513,8 @@ int main(int argc, char **argv) {
     p->totalFrames = frame;
 
     snprintf(rom, sizeof rom, "%s/link%d.gba", saveDir, i);
-    if (copyFile(argv[1], rom) != 0) {
+    /* ROM1 names a different ROM for player 1, to link two builds. */
+    if (copyFile((i == 1 && getenv("ROM1")) ? getenv("ROM1") : argv[1], rom) != 0) {
       fprintf(stderr, "cannot copy the ROM to %s\n", rom);
       return 2;
     }

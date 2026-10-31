@@ -331,10 +331,46 @@ moved slot: after the turn the casting console's own table count was 1 and the o
 **opponent table, in unit 0x84, read 1 as well** (and 0 on the console that did not cast).
 So the table sits and updates correctly in the fifth enemy unit.
 
-**Not yet checked:** a Djinni **recovering over several turns and being set again**, and
-a Summon from standby Djinn (one turn showed the table fill, not the countdown); a 4v4
-through to a result; saving and the series interacting with a linked battle;
-and a stock (3v3) ROM against a hacked one (they will not link).
+**Djinn over several turns, and a Summon (2026-10-31, `link_recover_*.txt`).** Both consoles
+bought Flint and Granite for Isaac and fought five turns in a linked 4v4. Readings of this
+console's recovery table and of the opponent's (unit 0x84) at the start of each turn,
+entries as element, index, unit and turns:
+
+| Turn starts | This console's table | Opponent's table (as seen here) |
+|---|---|---|
+| 1 | empty | empty |
+| 2 (Flint used) | Flint, standby (-1) | Flint, unit 0x80, standby |
+| 3 (Granite used) | Flint, Granite, both standby | the same, unit 0x80 |
+| 4 (both summoned Ramses) | Flint 1, Granite 2 turns | the same |
+| 5 | Granite 1 | the same |
+| after 5 | empty | empty |
+
+- **Identical on both consoles at every turn**, with the opponent's unit translated
+  (0x00 becomes 0x80). There was no desync.
+- Setting a standby Djinni again ("Flint is set to Isaac! Flint is set to EnemyIsaac!")
+  removes it at once; a Summon puts every Djinni it uses into recovery, counting down by one a
+  turn.
+- With two Djinni standing by, the command row gains a Summon icon beside Djinn; its list
+  showed "Ramses" (two Djinn) and "Venus" (one). Ramses crossed the link and both sides took
+  its damage.
+
+**Different versions (2026-10-31).** Linking the four-a-side build against a three-a-side
+build of the same hack (`ROM1=` in `link.c`, a second ROM for player 1; the stock game
+cannot reach the lobby without a save, and shares the three-a-side protocol): with the
+same signature the two lobbies accept each other, each waits for records the other does not
+send, and both end with **"The link was disconnected."** after the receive timeout. No
+crash or hang, but a poor message. Fix, patch 14: the four-a-side build publishes its own
+signature word (`BSA4`), and while a player waits for an opponent, a partner with another
+word for one second makes the attendant say **"Your opponent has a different version of the
+game!"** and stop waiting. Seen on the four-a-side console; **the other console (stock or
+three-a-side) says nothing**, as the stock lobby simply leaves a console with a different
+word out, and cannot be changed. Two matching builds still link and fight to a result
+(`link_full`).
+
+**Not yet checked:** saving and the series interacting with a linked battle (the
+"Battle results were saved." write after New Game); a real stock ROM (needs a save that
+reaches the Battle Arena); more than two Djinn of one element in a Summon; party members
+dying mid-turn changing the order of commands (the test scripts assume none die).
 
 ## Recommended route (revised)
 
