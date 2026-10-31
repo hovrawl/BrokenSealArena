@@ -45,7 +45,7 @@ These came from the user and are not open:
 
 ## Where we are
 
-Done and smoke-tested: New Game into the arena (level 30 party, 1500 coins), the
+Done and smoke-tested: New Game into the arena (level 50 party, 1500 coins), the
 attendant's Solo/Multiplayer and tournament menus (one tournament: the 12-rung
 Monster Gauntlet), the party manager (stats, Djinn, Psynergy, item shops) built
 from the game's own shop parts, coins per win, saving through the Pause menu and
@@ -119,7 +119,7 @@ Phase 1 so far:
 | Series state in the save | M | Store `{tournament, rung}` where it survives a save, and stop `ArenaSave_Begin` clearing the series (it now hides it so a load does not replay a reward). Unknown to settle first: which of the series flags and `linkTallies` the stock save already keeps (the best-streak tally is saved by `BattleArena_SaveMonsterBattleResults`, which suggests tallies have their own path), and that a load must not replay `BATTLE_ARENA_AFTER_MONSTER_WIN`'s reward. Prefer a game flag byte (as `FLAG_MONSTER_BATTLE_WINS` is) for the rung and one for the tournament. Smoke: save mid-series, reload, check the rung with `peek`. |
 | A tournament flag | S | The same tournament byte, read by `ArenaLadder_Select`, so more than one ladder can exist. Needed for Phase 2's second tournament, and it is the "which tournament" in the save. |
 | Check every rung loads | S | Poke the rung in a smoke script and look at each rung's first frame: sprite slots within six, nobody missing, names right. Rungs 4 to 12 have never been seen. |
-| Play every rung and balance | M | A smoke script per rung that fights by mashing A. Record win or loss and the turns in a table here. **Target: a sensible party clears the Gauntlet without max levels or maxed classes.** Variables: the party's level (all four start at 30), Djinn (see below), gear bought, the stat and Psynergy shops, the coins earned (200 + 100 per win). Fix the round 3 boss spike. If a rung is unfair, change the data, not the code. |
+| Play every rung and balance | M | A smoke script per rung that fights by mashing A. Record win or loss and the turns in a table here. **Target: a sensible party clears the Gauntlet without max levels or maxed classes.** Variables: the party's level (all four start at 50: every class's Psynergy is open, it is the Djinn that decide the class), Djinn (see below), gear bought, the stat and Psynergy shops, the coins earned (200 + 100 per win). Fix the round 3 boss spike. If a rung is unfair, change the data, not the code. |
 | Stock text and party order | S | Remove the link-cable lines from the attendant's talk; keep the party order across a load. |
 
 **Djinn are a balance variable.** Setting a Djinni on a character raises their
@@ -129,10 +129,10 @@ party, see which classes that gives, and how far the Gauntlet goes with and
 without. The first Gauntlet is not tuned around them yet; the table records what
 they do so the later tournaments can be.
 
-**Levels are not designed yet.** The party starts at level 30 and the ladder
+**Levels are not designed yet.** The party starts at level 50 and the ladder
 targets run from 10 to 45. Whether characters level up (from fights, from the
 shop) and how their growth fits the ladder is open. The balance pass should find
-out where level 30 plus purchases and Djinn stands against each rung before we
+out where level 50 plus purchases and Djinn stands against each rung before we
 design it.
 
 Exit: pause, shop, resume and save and load all work and are scripted; every rung

@@ -1,0 +1,300 @@
+From 642770e582db24a22363b153b9bee6680f3f4b7e Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sun, 1 Nov 2026 08:21:45 +1100
+Subject: [PATCH] Arena: the Reloaded engine rules, level-up, ailments and
+ damage (ARENA_RULES_*)
+
+The first engine rules of the Golden Sun Reloaded rebalance, written again in C from
+its patch, each behind a switch that defaults to off until the data they are tuned
+with has been ported:
+- ARENA_RULES_LEVELUP: a level-up gains a fixed amount (no random part).
+- ARENA_RULES_AILMENTS: the effect success roll, with base chance tables chosen by
+  the target's luck (bosses at 40 and up are immune to most ailments) and the
+  caster's Ailment attribute.
+- ARENA_RULES_DAMAGE: base power grows with the caster's max PP, summons add a
+  smaller share of the target's HP, a party member's class ward scales the damage.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/arena_config.h            | 14 ++++
+ games/tbs/src/battle/battle/ability.c       | 37 +++++++++++
+ games/tbs/src/game/game.c                   |  1 +
+ games/tbs/src/game/game/arena_rules.c       | 72 +++++++++++++++++++++
+ games/tbs/src/game/game/battle_arithmetic.c | 17 +++++
+ games/tbs/src/game/game/levels.c            | 21 ++++--
+ 6 files changed, 156 insertions(+), 6 deletions(-)
+ create mode 100644 games/tbs/src/game/game/arena_rules.c
+
+diff --git a/games/tbs/include/arena_config.h b/games/tbs/include/arena_config.h
+index c0220a26aa..91c209eaaa 100644
+--- a/games/tbs/include/arena_config.h
++++ b/games/tbs/include/arena_config.h
+@@ -27,6 +27,20 @@
+ /// A linked battle is four a side instead of three (the stock limit). The
+ /// opponent's Djinn recovery table is stored in an enemy unit, which the stock game
+ /// puts in the fourth place; with four a side it moves to the fifth.
++/// Arena romhack: the engine rules of the Reloaded rebalance (docs/RELOADED.md),
++/// one switch each. They are meant to run with its data (the ability, class, item
++/// and enemy tables), which is ported separately, so they default to off until
++/// that has landed.
++#ifndef ARENA_RULES_LEVELUP
++#define ARENA_RULES_LEVELUP 0 ///< level-ups gain a fixed amount, with no random part
++#endif
++#ifndef ARENA_RULES_AILMENTS
++#define ARENA_RULES_AILMENTS 0 ///< the effect success roll and its base chance tables
++#endif
++#ifndef ARENA_RULES_DAMAGE
++#define ARENA_RULES_DAMAGE 0 ///< the base damage formula, summon HP damage and class ward
++#endif
++
+ #ifndef ARENA_LINK4
+ #define ARENA_LINK4 1
+ #endif
+diff --git a/games/tbs/src/battle/battle/ability.c b/games/tbs/src/battle/battle/ability.c
+index a855bff46f..0ef59213f5 100644
+--- a/games/tbs/src/battle/battle/ability.c
++++ b/games/tbs/src/battle/battle/ability.c
+@@ -4,6 +4,7 @@
+ // Part of battle.c.
+ 
+ #include "../battle_internal.h"
++#include "arena_config.h"
+ 
+ /// Returns 1 for an effect that still applies when the ability's damage has
+ /// just knocked its target out: the drains, which give the damage they dealt
+@@ -52,6 +53,17 @@ s32 Ability_EffectAppliesToDowned(s32 effect) {
+ /// scale by: 256 is 1.
+ #define FULL_RATE 256
+ 
++#if ARENA_RULES_DAMAGE
++/// Arena romhack: the share of the target's max HP, in percent, that each summon
++/// adds to its power (Reloaded: 2, 4, 6 and 8 for one to four Djinn, in place of
++/// stock's 3, 6, 9 and 12), by ability id from ABILITY_VENUS. Each element's
++/// four summons are followed by two ids that are no summon.
++#define ARENA_SUMMON_FIRST ABILITY_VENUS
++#define ARENA_SUMMON_LAST ABILITY_THOR
++static const u8 sArenaSummonHpPercent[] = {2, 4, 6, 8, 0, 0, 2, 4, 6, 8, 0,
++                                           0, 2, 4, 6, 8, 0, 0, 2, 4, 6, 8};
++#endif
++
+ /// A message operand that shows nothing: the event only waits for the player.
+ #define MESSAGE_NONE -1
+ 
+@@ -579,8 +591,33 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+         if (pass == 0)
+           elementBonus = 0;
+         power = ability->power;
++#if ARENA_RULES_DAMAGE
++        if (ability->flags == (ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_SUMMON) &&
++            abilityId >= ARENA_SUMMON_FIRST && abilityId <= ARENA_SUMMON_LAST) {
++          // Reloaded: a summon adds a share of the target's max HP from a table
++          // (2, 4, 6 and 8 percent for one to four Djinn), by the ability alone.
++          power += target->hpMax *
++                   sArenaSummonHpPercent[abilityId - ARENA_SUMMON_FIRST] / 100;
++        } else {
++          s32 casterPpMax = actor->ppMax;
++
++          // The caster's max PP adds to the power: an eighth of it, then its
++          // thousandth part of the whole.
++          power += casterPpMax / 8;
++          power += (u32)(casterPpMax * power) >> 10;
++          // A party member's class has a ward, a percent of the power it takes.
++          if (IS_PARTY_UNIT(targetId)) {
++            s32 ward = gClass_DefinitionTable[target->classId].weakEffects[3];
++
++            if (ward != 0)
++              power = power * ward / 100;
++          }
++        }
++        if (0) {
++#else
+         // A summon adds 3% of the target's max HP for each Djinni it costs.
+         if (plan->command == COMMAND_SUMMON) {
++#endif
+           s32 maxHpPercent;
+ 
+           switch (abilityId) {
+diff --git a/games/tbs/src/game/game.c b/games/tbs/src/game/game.c
+index a21118eaed..ed809e5b46 100644
+--- a/games/tbs/src/game/game.c
++++ b/games/tbs/src/game/game.c
+@@ -27,6 +27,7 @@
+ #include "game_internal.h"
+ 
+ // The parts, in ROM order (src/README.md, "Objects and parts").
++#include "game/arena_rules.c"
+ #include "game/units.c"
+ #include "game/inventory.c"
+ #include "game/levels.c"
+diff --git a/games/tbs/src/game/game/arena_rules.c b/games/tbs/src/game/game/arena_rules.c
+new file mode 100644
+index 0000000000..3c8e3d9b9c
+--- /dev/null
++++ b/games/tbs/src/game/game/arena_rules.c
+@@ -0,0 +1,72 @@
++/// @file
++/// Arena romhack: the rules of the Golden Sun Reloaded rebalance that are code,
++/// not data (engine side), each behind its own switch in arena_config.h.
++/// The rebalance is by its authors (forum.goldensunhacking.net, topic 2779);
++/// the rules here were read from its patch and written again in C, see
++/// docs/RELOADED.md in the romhack's repository.
++// Part of game.c.
++
++#include "arena_config.h"
++
++#if ARENA_RULES_LEVELUP
++/// A level's gain in one stat, with no random part: the growth difference over
++/// the level's band (the 20 levels from one growth point to the next) is spread
++/// by dividing level times difference by 20, taking away what the level before
++/// had, so the gains of a band add up to the difference exactly (band 0, levels
++/// 1 to 19, divides by 19 for the same reason). Stock adds 0 to 19 at random to
++/// the difference and divides by 20. `level` is the level being reached.
++static s32 ArenaRules_LevelGain(s32 growthDifference, s32 level) {
++  s32 span = level >= 20 ? 20 : 19;
++
++  return level * growthDifference / span -
++         (level - 1) * growthDifference / span;
++}
++#endif
++
++#if ARENA_RULES_AILMENTS
++/// The unit's Ailment attribute: a bonus, in percent, to the chance of an effect
++/// it casts. It is kept in the byte of a unit record that no stock code names
++/// (Unit.unused[0], offset 0x46), set by Unit_Calculate from equipment.
++#define UNIT_AILMENT(unit) ((unit)->unused[0])
++
++/// The effects' base chances, in percent, by effect (enum AbilityEffect), for a
++/// target below luck 40 and for one at or above it (bosses). 151 and up is a
++/// fixed chance that neither levels nor luck change, less 151: so 251 always
++/// works and 151 never does (the target is immune). Below 151 the chance goes
++/// on to be adjusted by level, luck, the Ailment attribute and weaknesses.
++#define ARENA_EFFECT_RATE_COUNT 71
++#define ARENA_EFFECT_RATE_LUCK 40
++// clang-format off
++static const u8 sArenaRules_EffectRates[2][ARENA_EFFECT_RATE_COUNT] = {
++    {
++    251, 251, 251, 251, 251, 251, 251, 251, 75, 125, 251, 251,
++    75, 125, 251, 251, 75, 125, 45, 40, 70, 50, 40, 60,
++    45, 55, 60, 20, 60, 251, 40, 251, 251, 251, 30, 90,
++    90, 90, 90, 70, 251, 0, 251, 0, 251, 251, 251, 251,
++    251, 251, 251, 251, 251, 115, 5, 251, 251, 251, 130, 251,
++    251, 251, 251, 251, 251, 251, 251, 100, 251, 251, 251,
++    },
++    {
++    251, 251, 251, 251, 251, 251, 251, 251, 75, 125, 251, 251,
++    75, 125, 251, 251, 75, 125, 151, 151, 70, 50, 151, 151,
++    151, 55, 151, 151, 151, 251, 151, 251, 251, 251, 151, 90,
++    90, 90, 90, 151, 251, 151, 251, 151, 251, 251, 251, 251,
++    251, 251, 251, 251, 251, 115, 151, 251, 251, 251, 130, 251,
++    251, 251, 251, 251, 251, 251, 251, 100, 251, 251, 251,
++    },
++};
++// clang-format on
++
++/// Returns the base chance of effect `effectId` against a target of `luck`, as
++/// Battle_GetEffectBaseSuccessRate does: a negative value is a fixed chance.
++static s32 ArenaRules_EffectBaseRate(s32 effectId, s32 luck) {
++  s32 rate;
++
++  if (effectId < 0 || effectId >= ARENA_EFFECT_RATE_COUNT)
++    return -100;
++  rate = sArenaRules_EffectRates[luck >= ARENA_EFFECT_RATE_LUCK][effectId];
++  if (rate >= 151)
++    return 151 - rate;
++  return rate;
++}
++#endif
+diff --git a/games/tbs/src/game/game/battle_arithmetic.c b/games/tbs/src/game/game/battle_arithmetic.c
+index ef9783f516..bbf234daef 100644
+--- a/games/tbs/src/game/game/battle_arithmetic.c
++++ b/games/tbs/src/game/game/battle_arithmetic.c
+@@ -357,12 +357,24 @@ action4_done:
+ 
+   // A positive base rate is adjusted by the element levels, the target's luck
+   // and its weaknesses; 0 or a negative one is a fixed chance.
++#if ARENA_RULES_AILMENTS
++  // Reloaded: the base chance depends on the target's luck (bosses, luck 40 and
++  // up, are immune to some effects), the caster's level over 4 stands in for the
++  // element levels, and the caster's Ailment attribute is added.
++  score = ArenaRules_EffectBaseRate(effectId, unit->luck);
++  if (score > 0) {
++    struct Unit *caster_ = Unit_Get(caster);
++    s32 difference = (caster_->level >> 2) - (unit->luck >> 1);
++
++    score += difference * 3 + UNIT_AILMENT(caster_);
++#else
+   score = Battle_GetEffectBaseSuccessRate(effectId);
+   if (score > 0) {
+     s32 difference = Unit_GetElementLevel(caster, resistanceCategory) -
+                      Unit_GetElementLevel(target, resistanceCategory) -
+                      (unit->luck >> 1);
+     score += difference * 3;
++#endif
+     if (BattleAbility_IsWeakToEffect(unit, effectId) != 0) {
+       score += 25;
+     }
+@@ -375,7 +387,12 @@ action4_done:
+   }
+ 
+   for (attempt = 0; attempt < attempts; attempt++) {
++#if ARENA_RULES_AILMENTS
++    // Strictly greater: a chance of 0 never works.
++    if (score * successScale / 100 > (s32)Battle_RandomPercent()) {
++#else
+     if (score * successScale / 100 >= (s32)Battle_RandomPercent()) {
++#endif
+       return 1;
+     }
+   }
+diff --git a/games/tbs/src/game/game/levels.c b/games/tbs/src/game/game/levels.c
+index dd5904cb43..0b67ecadeb 100644
+--- a/games/tbs/src/game/game/levels.c
++++ b/games/tbs/src/game/game/levels.c
+@@ -325,6 +325,15 @@ u32 Unit_GetExperienceForLevel(s32 unitId, s32 level) {
+   return -1;
+ }
+ 
++/// One stat's gain for the level reached: stock adds 0 to 19 at random to the
++/// growth difference and divides by 20; with ARENA_RULES_LEVELUP there is no
++/// random part (ArenaRules_LevelGain).
++#if ARENA_RULES_LEVELUP
++#define LEVEL_GAIN(difference) ArenaRules_LevelGain(difference, gains->level)
++#else
++#define LEVEL_GAIN(difference) (((Random16() * 20 >> 16) + (difference)) / 20)
++#endif
++
+ /// Raises a character one level (up to 99), adding to each base stat the
+ /// growth between the two points of its growth curve around the new level
+ /// (one point every 20 levels), a twentieth of it per level with a random
+@@ -378,22 +387,22 @@ struct LevelUpResult *Unit_LevelUp(s32 unitId, struct LevelUpResult *gains) {
+     CLAMP(growthBand, 0, 4);
+     growthDifference =
+         work->growth->hp[growthBand + 1] - work->growth->hp[growthBand];
+-    gains->hp += ((Random16() * 20 >> 16) + growthDifference) / 20;
++    gains->hp += LEVEL_GAIN(growthDifference);
+     growthDifference =
+         work->growth->pp[growthBand + 1] - work->growth->pp[growthBand];
+-    gains->pp += ((Random16() * 20 >> 16) + growthDifference) / 20;
++    gains->pp += LEVEL_GAIN(growthDifference);
+     growthDifference =
+         work->growth->atk[growthBand + 1] - work->growth->atk[growthBand];
+-    gains->atk += ((Random16() * 20 >> 16) + growthDifference) / 20;
++    gains->atk += LEVEL_GAIN(growthDifference);
+     growthDifference =
+         work->growth->def[growthBand + 1] - work->growth->def[growthBand];
+-    gains->def += ((Random16() * 20 >> 16) + growthDifference) / 20;
++    gains->def += LEVEL_GAIN(growthDifference);
+     growthDifference =
+         work->growth->agi[growthBand + 1] - work->growth->agi[growthBand];
+-    gains->agi += ((Random16() * 20 >> 16) + growthDifference) / 20;
++    gains->agi += LEVEL_GAIN(growthDifference);
+     growthDifference =
+         work->growth->luck[growthBand + 1] - work->growth->luck[growthBand];
+-    gains->luck += ((Random16() * 20 >> 16) + growthDifference) / 20;
++    gains->luck += LEVEL_GAIN(growthDifference);
+     // Commit the six gains before rebuilding Psynergy and derived stats.
+     unit->baseHp += gains->hp;
+     unit->basePp += gains->pp;
+-- 
+2.53.0
+
