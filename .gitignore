@@ -1,3 +1,6 @@
 # Your own cartridge dump and build output are never committed.
 rom/
 build/
+
+# Third-party mod files kept for reference only (never committed)
+reloaded/
