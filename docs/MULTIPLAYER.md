@@ -290,6 +290,33 @@ the problem to whoever is fourth.
   pictures, since overlays are composited into the frame at its size. A 48 x 48 frame (36
   blocks) is the middle road.
 
+**Half-size opponents, built (2026-10-31, branch `link4`).**
+- The Bat in the shrink test was not visible because resource 453 is a monster sprite whose
+  pictures come from the enemy picture cache, which a character never loads; its VRAM was
+  still taken, so the test proved the budget but showed nothing.
+- Now the four opponents draw from 32 x 32 sheets: sprite table rows 304, 306, 307 and 308
+  (empty in the original) hold them, `layout.tsv` lists them, and
+  `scripts/gen-opponent-sprites.py` makes `spr_304/306/307/308.png` at build time from
+  `spr_300` to `spr_303` (each 2 x 2 block becomes its commonest solid colour). The pictures
+  are not committed, as they derive from the game's art; `build.ps1` runs the script. The
+  rows reuse the animation scripts of 300 to 303 (the tsv's last column) and carry twice the
+  scale, 0x180 for 0xc0. In `placement.c`, a character on the enemy side of a link battle
+  takes the half-size sheet and no weapon layer (`ArenaLink_OpponentSprite`).
+- **The ROM grows by 20 KB.** The sprite data region is packed to its fixed end, 0x08320000.
+  `main.ld` now starts the last region at 0x08325000 and the image is padded to 0x08805000
+  (`ROM_END_tbs=` on the make line, set in `build.ps1`). A GBA cartridge can be up to
+  32 MB, so nothing else cares.
+- **Result:** the block table at target selection is entries 0 to 3 at 64, 4 to 7 at 16, the
+  UI entries, and **162 blocks free** (was over budget by 30). All four of ours and all four
+  of theirs are drawn, with no flicker, through the full linked battle to the result
+  screen (`link_full`).
+- **The cost: opponents look about two thirds the size of the party.** A sprite is drawn
+  at most twice its frame size (a double-size affine box, `Render_PlaceProjectedSprite`
+  clamps the scale at 2.0), so a 32 x 32 frame cannot reach the party's 64 x 64 at the
+  battle camera's zoom. Weapons are not drawn on opponents. Possible improvements: stand the
+  opponents a little closer to the camera, or use 64 x 32 / 32 x 64 frames (32 blocks; not
+  tried; the pictures sit at different x offsets, so cropping needs per-picture offsets).
+
 **Control, to prove the offset is needed:** the same four-a-side build with only the table
 put back in unit 3 shows **three** opposing characters, and the intro reads "EnemyMia
 appeared! (blank) appeared!": the table overwrote the fourth unit's record, so its name is
