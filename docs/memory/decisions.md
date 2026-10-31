@@ -96,3 +96,10 @@
   `docs/PROGRESSION.md`. The party manager's Psynergy shop contradicts it (not decided what
   replaces it). The forum rebalance mod and its spreadsheets are saved there as reference
   only, not to be taken to heart.
+- **Reloaded rebalance is ported into our source, not patched on** (2026-11-01): engine
+  changes by hand in our own files behind switches; data changes generated once from the
+  IPS (`scripts/ips-table-diff.py`) into our tables and committed as ordinary patches. The
+  patched-stock-ROM oracle test is optional (not wanted). The owner will tell the authors;
+  credit them. Their files stay in `reloaded/` (git-ignored). Order: rules, ailments,
+  abilities and classes together, items, then enemies, Djinn, characters, text. See
+  `docs/RELOADED.md`.

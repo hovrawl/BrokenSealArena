@@ -7,6 +7,29 @@ git-ignored and never committed**, and the aim here is to understand and re-impl
 its ideas as our own patches (in source), crediting it and asking its authors before we
 reproduce their numbers wholesale.
 
+## Decision (2026-11-01)
+
+**Build their logic into our own changes, whole, rather than patching theirs on top.**
+The owner will tell the authors about the project; either route was acceptable, but the
+long-run plan is one source tree whose changelist contains the rebalance. Reasons: we
+already change the engine; an IPS cannot be applied to our layout anyway; their patch is
+at a stable version (v1.83a, only enemy balance expected to move), so this is a good
+moment to take it whole; and ports to The Lost Age (its own patch, v1.83) follow the same
+way.
+
+How, in short: the engine changes are written by hand in C (our own files, one switch each);
+the data changes are **generated once** from the patch (`ips-table-diff.py` shows every
+changed field; a converter rewrites our source tables) and then committed as ordinary
+source patches, so nothing depends on the IPS afterwards. A throwaway "apply theirs to
+ours" step is not needed. The side-by-side test against a patched stock ROM (plan point 2
+below) is **optional**: the owner is not keen on it; smoke battles with our own checks are
+enough.
+
+The patch series would grow by layers in the order from the plan review: rules, ailments,
+abilities with classes, items, then enemies, Djinn and characters, and the text each needs.
+Generated reports of their numbers are written to `build/reloaded/` (ignored), not
+committed.
+
 ## What is in the folder
 
 | File | What it is |
