@@ -147,7 +147,7 @@ played; they are independent.
 | Item | Size | Notes |
 |---|---|---|
 | A second tournament | M | A second ladder (`gArenaLadder` is one table today) chosen from the attendant's menu, with its own theme and rewards. Needs the tournament flag. Teams are rows of `enemy_table.c`; a rung stays within six sprite slots. May assume Djinn and levelling. |
-| Levels and growth | M | Design after the Phase 1 findings: how characters grow beyond buying stats. |
+| Levels and growth | M | Design after the Phase 1 findings: how characters grow beyond buying stats. **Direction (2026-11-01, see `PROGRESSION.md`): Psynergy is learnt by class, not bought; the set Djinn decide the class; each Psynergy has a level requirement on top.** The Psynergy shop is a candidate to retire. |
 | Rewards beyond coins | M | Items, Djinn or Psynergy for clearing a tournament; the manager's stock changing as you progress. |
 | Characters beyond the four | L | The party is fixed at Isaac, Garet, Mia and Ivan. More means more recruits in the manager and the right sprites in battle and in the shop's strip (CHILD sprites are the open question). Investigate before committing; this may be much larger than it looks. The 4v4 link battle (Phase 4) needs only the four we have. |
 
