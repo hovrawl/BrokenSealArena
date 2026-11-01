@@ -223,3 +223,99 @@ rung with `peek`, talk to the attendant, see S1.
 The specs are agreed. Next: build S1 to S3 with their smoke scripts (`give_up.txt`,
 the extended `win.txt`, `lose.txt`), then review the sheets against `UI.md`
 section 6.
+
+---
+
+## Class viewer (patches 0044 and on)
+
+An NPC in the upper hall of the lobby (a scholar) opens a **class viewer**: pick a character,
+read a line of classes with the Djinn each needs and its stats, and read a class's Psynergy.
+It teaches the class system without a spreadsheet. The owner's design is in
+`docs/FEEDBACK-1.md` ("Class viewer NPC"); this section is the screen spec, in the format of
+`UI.md` section 7. It lives in the main image (`shop/shop/arena_shop.c`, next to the member
+picker), far-called from the overlay like `ItemPicker_ChooseMember`.
+
+**Terms.** A *line* is a chain of classes with one name root, ten class ids apart from the next
+line (Squire, Knight, Gallant, Lord, Sovereign is one; Swordsman to Paragon, Armed to Luminier
+and White Knight to Paladin are three lines of the same series). The class table has 20 lines
+of up to six classes (the fixed classes 200 to 202 and the NPC class are not in any). A class
+needs, for a given character, `ceil((required * 10 - elementBonus) / 10)` Djinn of each element
+(never below 0): the character's own element carries a bonus of 5.4 levels, so Isaac needs no
+Venus Djinn for Squire.
+
+### CV1. Choose a character
+
+```
+Screen:        Class viewer, step 1
+Job:           Pick whose classes to look at.
+Closest model: The party manager's Characters step (ItemPicker_ChooseMember, status panel).
+Opened from:   Talking to the scholar (ACTOR_CLASS_VIEWER). He turns to the player.
+States:        1. The party strip with the status panel (mode 3), exactly as the manager's.
+               A picks, B leaves the viewer.
+Windows:       The picker's own: panel (0, 0, 30, 11), strip (0, 14, 13, 3), hand.
+Text:          none new.
+Input:         Left/Right move, A, B. Sounds: stock.
+```
+
+### CV2. A class line (browse)
+
+```
+Screen:        Class viewer, step 2 (browse)
+Job:           Page through the lines; highlight a class to read its Djinn and stats.
+Closest model: The Djinn and Psynergy panels (30 by 11 at the top) over a list window, as the
+               stock counters keep a list under a panel (ArenaShop_Run's windows).
+Windows:       Detail panel  (0, 0, 30, 11)   224 by 64 inside, redrawn on every move
+               List window   (0, 11, 30, 9)   48 inside: two columns, three rows of 16 pixels
+               Anchor window (-5, 0, 5, 5)    carries the hand (as ArenaShop_Run)
+Detail panel:  row 0   character name, "Line n/m", the filter tag at the right
+               row 1   "Djinn" and four element icons, each with the count needed
+               rows 3-5  HP, PP, Attack at the left; Defense, Agility, Luck at the right,
+                         each as a percentage of the base stat (the table's twentieths x 5)
+               row 7   "Ward" and its percentage; at the right whether the Djinn the party
+                       owns reach the class ("Reachable now" or "Needs more Djinn")
+List window:   the class names of the line (at most six), two columns of three, the hand on the
+               highlighted one. Names are tile text at y + 8 of a 16-pixel row. A class the
+               party cannot reach now is drawn red (as the stock Psynergy list draws what you
+               cannot afford), so the red marks missing Djinn at a glance in "All".
+Filter (Select): "Now" lists only the classes the character could have with the Djinn the
+               PARTY owns: for every element, the Djinn of that element held by the four party
+               members together (set or standby; the Djinn can be traded) must be at least
+               what the class needs. "All" lists every class of the line. The tag in the
+               panel says which: "Can reach now" or "All classes". Lines with no class in
+               Now are skipped by L and R; if no line has any, the list says "None".
+               The viewer opens on All.
+Text:          Labels are one-line messages (MsgArenaCv*): Line, Djinn, HP, PP, Attack, Defense,
+               Agility, Luck, Ward, "%", the two tags, the two reach lines, None. Class names
+               are MsgClassName + id. Numbers are Text_DrawNumberInWindow.
+Icons:         The four element tiles (ARENA_ELEMENT_TILE + element), as the Djinn menu's list.
+Input:         Left/Right: column; Up/Down: row (wraps within the line); L/R: previous/next
+               line; Select: toggle Now/All; A: show the class's Psynergy; B: back to step 1.
+Sounds:        Stock: move, confirm, cancel.
+```
+
+### CV3. A class's Psynergy
+
+```
+Screen:        Class viewer, step 3 (Psynergy)
+Job:           Show what the class teaches and from which level.
+Closest model: The Psynergy panel of the picker (icon and name, two columns of four) over a
+               detail window.
+Windows:       Panel (0, 0, 30, 11): up to eight Psynergy a page, in the class's order; the
+               hand moves over them (Up and Down page when they run out).
+               Detail (0, 11, 30, 9): the class name, the character's name and level; for the
+               highlighted Psynergy its level, PP and whether the character has it yet.
+Marks:         A Psynergy the character's current level has is drawn with its icon in white;
+               one it has not is drawn red, with the level it needs in place of the icon.
+Text:          MsgAbilityName + id for names; labels Lv, PP, Learned, "Not yet", one legend line.
+Input:         D-pad: move; L/R: previous/next page; Select: nothing; B: back to step 2.
+```
+
+### CV4. The scholar
+
+A field sprite already in the game (no new art), standing in the upper hall clear of the stairs,
+the carpets' visitors and the wary visitor. A talk trigger starts the viewer; he says nothing
+before it. Only the viewer's windows are new; all the numbers it shows come from
+`gClass_DefinitionTable`, `gCharacter_DefinitionTable` and the units' Djinn.
+
+Shots: `class_viewer.txt` (Isaac, lines, classes, Psynergy, the filter, back out),
+`class_viewer_all.txt` (the other characters), `npc_position.txt` (the lobby with the scholar).

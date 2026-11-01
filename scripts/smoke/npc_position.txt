@@ -1,0 +1,20 @@
+include to_lobby.txt
+poke 0x0200013E 1 7
+poke 0x0200013D 1 3
+poke 0x02000132 1 255
+poke 0x02000133 1 1
+include save_continue.txt
+wait 60
+press U 55
+press L 160
+shot /tmp/shots/c1.png
+press U 60
+shot /tmp/shots/c2.png
+press L 40
+shot /tmp/shots/c3.png
+press U 80
+shot /tmp/shots/c4.png
+press U 80
+shot /tmp/shots/c5.png
+press R 80
+shot /tmp/shots/c6.png
