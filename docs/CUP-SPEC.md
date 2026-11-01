@@ -7,7 +7,7 @@ line; every guess is marked **GUESS** and every gap **UNKNOWN**. Numbers come fr
 Reloaded retune). Paths below are relative to `games/tbs` unless they start with `docs/` or `scripts/`.
 
 Contents: 1 Areas, 2 Brackets and cups, 3 Level setting, 4 Data format, 5 Unlock state and saves,
-6 Menus, 7 Balance hooks and risks, 8 Implementation plan, 9 Decisions for the owner.
+6 Menus, 7 Balance hooks and risks, 8 Implementation plan, 9 Decisions for the owner, 10 Unknowns.
 
 ## 0. Summary
 
@@ -16,7 +16,7 @@ Contents: 1 Areas, 2 Brackets and cups, 3 Level setting, 4 Data format, 5 Unlock
   (`src/field/encounter_zones.c`, 104 rows, commented by place), reached by scene from
   `src/field/encounter_rules.s` and by world-map region from
   `src/field/world_map_encounter_rules.c`. Bosses are the `Field_RequestBattleFromEncounterTable(zone, slot)`
-  calls in `src/scene`. `scripts/cup-candidates.py` joins these (about 650 lines, run in 1 s) and
+  calls in `src/scene`. `scripts/cup-candidates.py` joins these (about 700 lines, a few seconds) and
   groups the zones into 20 story regions. The only hand-made part is the grouping list `REGIONS`.
 - **Enemy levels run 1 to 43**, not to 50 (`cup-candidates.md`, last rows: Deadbeard L43, Fusion
   Dragon L39, Saturos and Menardi L38). Random-battle mobs stop at L28. Past 43 there is no content,
@@ -467,3 +467,219 @@ Items outside shops (the "Artifacts" lists in some rows) depend on `FLAG_SHOP_AR
 Rows 1 to 15 and 19 to 34 are untested in the arena: smoke every row (plan step 6). The rows were
 authored for the story, so a town can sell gear far stronger or weaker than the cup suggests. The tier
 table in 2.2 is the first draft of the item curve; the balance pass owns it.
+
+## 6. Menus
+
+Rules from `UI.md`: a choice is an icon row with a prompt, at most **four icons** (section 3 "Icons":
+five left the prompt window empty); a list of things to buy is a counter; yes/no is the game's;
+all words are messages in `text/en.po` (the prompts end in `{end_now}` when a menu follows, `en.po`
+near `MsgArenaAttendantPrompt`). `ArenaMenu_IconChoose(prompt, icons, labelBase, count)` draws the
+row and labels are **consecutive messages** (`arena_icon_menu.c:17-39`). That function has **no
+disabled or greyed state**, so "locked ones greyed" needs a different tool (below). New screens need a
+`UI.md` section 7 spec reviewed before code (section 2 step 4 of that file).
+
+### 6.1 Flow
+
+```
+Attendant (no series):  [Fight = Solo] [Cable = Multiplayer]            (unchanged, arena_menu.c:89-94)
+  Solo -> "Which cups?"  [Battle = Next cup] [Item = Replay] [Summon = Side cups]
+     Next cup   -> confirm  "<Cup name>. Your party will be set to level N. Enter?"  Yes/No
+     Replay     -> cup list (counter style), main line, cups with requires <= progress
+     Side cups  -> cup list, side cups with requires <= progress
+  Yes -> ArenaCup_SetLevel, series starts (battle_arena.c:1196-1204)
+Attendant (series running): "Round n. Do you want to give up?"  (unchanged, arena_series.c:65-78)
+```
+
+- **Next cup** is the shortcut: the first main cup not yet cleared. When all are cleared the row
+  shows "Replay" and "Side cups" only.
+- **The list.** At most four cups fit an icon row, and the line has 11 or more, so the list is a
+  *counter*: reuse the party manager's counters (`ArenaShop_Run`, a row of icons with a price tag, page
+  arrows, description window; `arena_shop.c:292-300, 538-600`) with a new kind `ARENA_SHOP_CUPS`.
+  Entry icon = a boss or element icon for the cup's theme; the price tag slot shows the party level
+  ("Lv 10"); the description message is the cup's blurb. Paging is the counter's own. **GUESS:** the
+  counter needs only a new `kind` in `ArenaShop_Price`, `_NameMessage`, `_DescriptionMessage`, `_Owned`
+  (the five switch points at `arena_shop.c:429-489`) and no new drawing code.
+- **Locked cups.** Inside the counter a locked entry uses the stock "can't buy" treatment: **UNKNOWN**
+  whether the counter greys sold-out or unaffordable entries; the closest existing state is "owned"
+  (`ArenaShop_Owned`, `:466-489`), drawn as the item's note instead of a price. Use that: a locked cup
+  reads "Clear <previous cup> first" in the price window and cannot be chosen (`ArenaShop_Buy` returns
+  its message id). If a true grey is wanted it is a palette tweak on the icon sprite (**UNKNOWN**
+  cost, treat as polish).
+- **The confirm prompt** is a per-cup message with one number blank for the level; `Event_AskYesNoWithActorAnimation(0, 0)` as in the give-up (`arena_series.c:72`). Because a field message shows a
+  repeated number twice (GOTCHAS 74-76), put no second blank in it.
+- **Series flow** for a cup, using the existing machinery:
+  1. *Start:* confirm, `ArenaCup_SetLevel`, `FLAG_MONSTER_BATTLE` set, streak 0 (`battle_arena.c:1196-1203`).
+  2. *Win a round:* coins `200 + 100 * (win - 1)` (`:1696`) and the heal if `ARENA_CUP_HEALS`
+     (`arena_menu.c:106-115`); "Round n won! Step into the circle when you are ready."
+  3. *Clear:* progress advances (main cup) or the side bit is set; `firstClearCoins` paid the first
+     time; message "You cleared the <Cup name>!" naming what opened ("The Kolima Cup is open!"); then
+     `ArenaSeries_End` (`arena_series.c:40-61`).
+  4. *Lose:* stock loss line, party restored, series ends (`CHANGES.md` entry 8); no progress change.
+  5. *Give up:* ends, not a loss (`arena_series.c:65-78`). The level stays at the cup's level.
+  6. *Resume:* Continue after a Pause-menu save; the attendant asks "Round n. Do you want to give up?"
+     (entry 9); cup id and level are in the save.
+- **Locked-at-99 stat counter.** The manager's Characters icon opens the status strip then the
+  stat counter (`arena_menu.c:143-146`). Below level 99 show the status strip only and a message on
+  trying the counter: `MsgArenaStatsLocked`.
+- **Messages to add** (names are proposals; wording in the game's voice, lines of at most ~20 chars,
+  `{end_now}` on prompts that lead to a menu):
+
+| Message | Text |
+|---|---|
+| `MsgArenaCupPrompt` | "Which cups would\nyou like?{end_now}" |
+| `MsgArenaCupNext`, `...Replay`, `...Side` (consecutive labels) | "Next cup", "Replay", "Side cups" |
+| `MsgArenaCupConfirm0..n` | "The Vale Cup.\nYour party will be set\nto level {argument_signed_number}.\nEnter?{end_now}" |
+| `MsgArenaCupLocked` | "That cup is closed.\nClear the one before it." |
+| `MsgArenaCupNextRound` | "Round {argument_signed_number} won!\nStep into the circle\nwhen you are ready." |
+| `MsgArenaCupGiveUp` | "Round {argument_signed_number}.\nDo you want to give up?" |
+| `MsgArenaCupCleared0..n` | "You cleared the Vale Cup!\nCongratulations!" (one a cup, generated) |
+| `MsgArenaCupOpened` | "A new cup is open!" |
+| `MsgArenaStatsLocked` | "Stat training opens\nat level 99." |
+| `MsgArenaNoDjinnYet` | "That Djinni is not\nyours to train yet." |
+
+Smoke: every state of every screen gets a screenshot compared to the stock screen it copies (`UI.md`
+design intent 5): the cup prompt, the counter with a locked entry, the confirm, the clear message.
+
+## 7. Balance hooks and risks
+
+### 7.1 A level-10 start
+
+- **Stats** (base, before Djinn, class and gear; `cup-candidates.md` "Party base stats by level"):
+  Isaac L10 HP 123, PP 52, Atk 50, Def 23, Agi 47, Luck 5; Mia HP 115, Atk 44, Def 21; L50 is
+  roughly HP 450, Atk 187. L20 is HP 207, Atk 85; L99 is HP 750 to 850, Atk 306 to 338.
+- **Psynergy tiers** (`cup-candidates.md` "Psynergy by the level a class first teaches it"): levels 1 to 9
+  give 40 abilities, 10 to 19 add 38, 20 to 29 add 25, 30 to 39 add 22, 40 to 49 add 2 (Spark Plasma and
+  Scourge, PP 40), and **nothing is taught after 40** (the highest teaching level in the
+  Reloaded table is 40). So the Psynergy ladder is *complete at bracket 40*. Brackets 50 and up add no
+  spells; their power comes from Djinn, gear and stat boosts. This supports the stat shop being the
+  level-99 tool.
+- **Enemies are strong early.** An enemy moved to the cup level has Atk about 2.5 to 3 times the party's
+  base Atk and Def about 1.1 to 1.7 times (`cup-candidates.md` "Early cups": Vermin L1 at L10 is
+  Atk 135 vs Isaac 50). Gear and Djinn close the gap; the numbers say a bare party cannot take a Vale
+  team at target 10. Hence rung targets ramping from `level - 3` (2.1) and the first cup being short
+  and in the Vale shop's tier. Boss HP ratios are huge at low level (Saturos at L10: HP 1633 vs 119,
+  13.7x). Treat bosses as the difficulty gate and consider a boss target 2 to 4 under the party level.
+- **Coins:** a 12-round cup pays `sum(200 + 100k, k = 0..11) = 9000`; 8 rounds pay 4400; 10 rounds 6500.
+  Shop prices run 12 (Herb) to 7500 (Steel Armor); Vale gear 10 to 200. The start purse of 1500 buys
+  the Vale stock; the Lalivero stock needs a full cup's winnings. **GUESS** a first-clear bonus of one
+  extra cup's pay keeps the shops ahead of the Djinn price (500 each, 28 Djinn = 14000).
+- **Djinn.** 28 at 500 is 14000 coins, two to three cups of winnings, so the *unlock* (not the price) is
+  what rations Djinn; keep the price.
+
+### 7.2 Bracket fit of the region mobs
+
+At party level 10, regions 1 to 3 have native mobs of level 1 to 7 (margin +3 to +9, "Early cups"),
+fine for cup 1. At party level 20 the region 7 and 8 mobs are native L5 to L14 (margin about +6 to +15).
+At party 40 the Lighthouse mobs are L23 to L28 (margin +12 to +17) and the bosses L38 to L43 (margin
+about 0). So the Atk ratio of mobs to the party is highest in the *low brackets*; the balance pass should
+lower rung targets there rather than lowering party levels.
+
+### 7.3 Luck and the stat shop
+
+- **Luck 40 is immunity.** `sArenaRules_EffectRates[luck >= 40]` makes effects 18, 19, 22 to 24, 26 to 28, 30, 34, 39, 41, 43 and 54 a fixed 151 meaning "never" (`arena_rules.c:37-57, 60-71`).
+  The rule reads the *target's* luck whatever its side, so a player at luck 40 is immune in PvP too.
+- **Where luck comes from.** Base Luck at 99 is only 23 to 26 per character (table in
+  `cup-candidates.md`); the shop sells +1 for `(value + 1) * 100` coins up to 99
+  (`arena_shop.c:314, 348, 361-362, 379-380`). From 25 to 40 costs `sum(26..40) * 100 = 49,500` coins,
+  about five full-cup clears. Unit_Calculate adds Djinn, class and gear to the base (UNKNOWN how
+  much, probably a few points), so a base of 35 may already reach 40.
+- **Recommendation (decision D6):** cap the *purchasable base* Luck at **30 to 34** (`ArenaStat_Cap`,
+  `arena_shop.c:356-366`; today `UNIT_LUCK_MAX` 99), so immunity needs gear and is a build choice.
+  For the 99 PvP bracket this bounds the "everything is immune" build. A hard cap on the final value
+  would be an engine change (`Unit_Calculate`, UNKNOWN location) and is not recommended.
+- **Stat caps** otherwise stand: HP and PP 1999, others 999, steps 20, 10, 5 (`:355-366`, `:341-353`);
+  at 99 base HP is 750 to 850, so 1999 is about +1150 HP: roughly 58 purchases at 800 to 1999 coins
+  each, about 80,000 coins per character. Plenty of sink for the 99 tier.
+- **Stat bonus loss on level change** is discussed in 3.5.
+
+### 7.4 Boss Rush fit
+
+The Boss Rush's rung targets 14, 22, 30, 36, 41, 45 (`arena_ladder.c:55-68`) are absolute. As a side cup
+at party level 40 to 50 (decision D3): round 1 (Orc Lord L25 and Lizard King L28 at target 14,
+margin -12) is a *downward* scale (enemies lose levels, floored at 70 percent of base HP and others,
+`formation.c:200-216`), so it is easier than its numbers; the old note that pressing A does not win
+round 1 (GOTCHAS 108-110) predates the Reloaded data port; recheck.
+At 99 the ladder is trivially low: move to option D (targets 90 to 99) for the super-boss tier.
+
+### 7.5 The arena's current start
+
+`ArenaBoot_NewGame`: level 50 party, 1500 coins (`arena_boot.c:55-88`; `ARENA_START_LEVEL` 50,
+`arena.h:13`). With cups the start should be level 10 and a smaller purse (**GUESS** 500 to 1500) with
+cup 1 and only the starter Djinn. Old saves are unaffected (they keep their level until the first
+cup). `Unit_LevelUpTo(…, 10)` at boot is cheaper than today.
+
+### 7.6 Risk list
+
+| Risk | Where | Mitigation |
+|---|---|---|
+| Stat boosts wiped by `SetLevel` | 3.5 item 1 | keep bonus at 99 only, say so in the confirm text |
+| Permanent Psynergy bypasses level tiers | 3.5 item 2 | retire the Psynergy shop (D4) |
+| Bought gear and Djinn carried into low cups | 3.3 | accept, or "kit reset" (D5) |
+| Six-slot overflow in a cup team | 4.2 | `cup-check.py`, static asserts |
+| Round-count text and `msgid` allocation | 4 | generic messages, generated per-cup clears |
+| Flag range collisions | 5.1 | verified free; list in `arena.h` |
+| Old saves (tournament byte 0 or 1, no progress) | 5.2 | ids 0 and 1 unchanged; confirm prompt |
+| Locked entries cannot be greyed in the icon row | 6 | use the counter and a "closed" message |
+| Enemy Atk caps at 999 near party 80 | 2.3 | only HP, Def, Agi scale above that; design 99 cups around HP |
+| Unscripted bosses missing for 8 regions | 1.3 | editorial caps, mark in the cup table |
+| Shop rows 1 to 15, 19 to 34 untested in the arena | 5.3 | smoke every row |
+| Linked 4v4 brackets | 3.5 item 8 | signature carries the bracket (patch 14) |
+
+## 8. Implementation plan (for the builder)
+
+One patch per step, in order, each building on its own and behind the existing switches
+(`ARENA_LADDER`, `ARENA_TRAINING`; add `ARENA_CUPS` in `arena_config.h` for steps 2 onward so the
+old behaviour is one switch away). After each: build (check the log for `***`), run the smoke
+script(s), look at `build\smoke\shots\sheet.png`, commit in `~/alchemy`, `export-patches.ps1`, update
+`CHANGES.md`. Patch numbers continue from 26.
+
+| # | Patch | Content | Smoke scripts (`scripts/smoke/`) |
+|---|---|---|---|
+| 27 | **Cup table, no change in behaviour** | `arena_cups.c`, `struct ArenaCup`, Gauntlet and Boss Rush converted (4.1), `ArenaLadder_Select` and `ARENA_ROUNDS/HEALS` read the table, generic round messages plus one cleared message per cup, `scripts/cup-check.py` | all existing: `tournaments`, `rungs_rush`, `rush_round`, `heal_round`, `rush_clear`, `clear`, `give_up`, `resume`, `resume_rush` unchanged and green |
+| 28 | **ArenaCup_SetLevel** | the function (3.3) in `src/game/game/`, far-call veneer, a debug entry that calls it | `cup_setlevel_down.txt`: boot (L50), call set 10, shot the Characters strip and Psynergy panel (stats and spell list shrink), set 99, shot, set 10 again (compare the same stats); `cup_setlevel_psynergy.txt`: Psynergy shop purchase survives a level drop (documents the pitfall) |
+| 29 | **Progress and the attendant's cup menu** | flags 0x7f0, 0x7e8 (`arena.h`), `Next cup / Replay / Side cups` row, the cup counter kind, locked entries, the confirm prompt, level set at series start | `cup_menu.txt` (shots: prompt, counter, locked entry, confirm), `cup_lock.txt` (progress 0: only cup 1 and open side cups; poke 0x0200013E to 3: more open), `cup_start.txt` (Yes sets level; No does not), `cup_old_save.txt` (a pre-cup save: tournament byte 1, progress 0) |
+| 30 | **Cup clear and rewards** | progress written at the clear, `firstClearCoins`, `MsgArenaCupOpened`, lose and give-up leave progress alone | `cup_clear.txt` (the test trick of `rush_clear.txt`: start as the easy team, poke the cup byte and win count mid-battle), `cup_clear_twice.txt` (second clear pays nothing), `cup_giveup.txt`, `cup_lose.txt`, `cup_resume.txt` (save mid-cup, `reset`, Continue, give-up prompt, progress byte kept) |
+| 31 | **Bracket 10 cups (data)** | cups 1 to 3 with region mobs and caps from `cup-candidates.md`, rung ramps per 2.1 | `cup_rungs_1.txt` ... one shot per rung of cup 1 (reuse the loading pattern of `rungs_rush.txt`), `cup_boss_1.txt` |
+| 32 | **Djinn and shop gating** | Djinn panel hides locked Djinn, `ArenaCup_ShopRow`, stat counter locked below 99, optional retirement of the Psynergy counter | `cup_djinn_gate.txt` (progress 0, 3, 11: count of Djinn offered; shot), `cup_shop_rows.txt` (open each of the 34 rows once, shot, check no crash), `cup_stat_locked.txt` (below 99: message; at 99: counter) |
+| 33 | **Brackets 20 to 40 (data)** | cups 4 to 11 | `cup_rungs_N.txt` per cup, and `cup_check` (script) as a gate |
+| 34 | **Side cups** | convert the Gauntlet and Boss Rush to party levels, add the first themed cup | `cup_side.txt`, `tournaments.txt` updated |
+| 35 | **50 to 99 content** | after decision D2 | per cup |
+| 36 | **New Game at level 10** | `ARENA_START_LEVEL` 10, purse, zeroed progress | `boot.txt` updated; `cup_newgame.txt` |
+| 37 | **PvP brackets (separate agent)** | the lobby asks 50 or 99, `ArenaCup_SetLevel`, signature carries it | link scripts (`link.sh`) at each bracket |
+| later | **Trophies** | best result per cup in 0x7d8 and below, shown in the arena and the file list | not in this spec |
+
+Order rationale: 27 changes nothing visible, so it is the safe place to find table and message
+mistakes; 28 is isolated and can be tested by calling it from a debug hook before any menu exists;
+29 and 30 give a full loop on a single test cup; data (31, 33) and gating (32) come after the loop works.
+
+**Agent hints.** Use `smoke-tester` for 29, 30 and 32 (screens). The `rush_clear.txt` poke
+addresses (`0x0200013F` tournament, `0x020004EA` win count) are the pattern for new scripts; the flag
+bytes added here are `0x0200013E` and `0x0200013D` (5.1). Do not hand-write the cup table's numbers
+that exist in `cup-candidates.md`; copy member ids from it and run `cup-check.py`.
+
+## 9. Decisions needed from the owner
+
+| # | Decision | My recommendation |
+|---|---|---|
+| D1 | One party level per **bracket** (cups 1 to 3 all at 10, 4 to 6 at 20, ...) as written in 2.2, or one per **cup** in steps of five? | per bracket, as in `CUPS.md` ("brackets of ten") |
+| D2 | What fills 50 to 99, and how many cups? (2.3 options A to E) | B at 50, A optional at 60 to 80, C plus D at 99; or only 50 and 99 |
+| D3 | Boss Rush and Gauntlet: `requires` and a party level (KEEP_LEVEL today)? | open after cup 4 and cup 9; give them levels 40 and 50 once the line exists |
+| D4 | Retire the Psynergy shop (permanent spells bypass level tiers)? | yes, with this change |
+| D5 | Bracket "kit" reset (Djinn and gear) at cup start, or keep what was bought? | keep; the unlocks only gate what can be *bought* |
+| D6 | Luck cap in the stat shop | base Luck bought up to 30 to 34 |
+| D7 | Start purse and whether the first-clear bonus is one cup's pay | 1000 start, bonus = cup's total pay |
+| D8 | Cup names (2.2 are candidates) and the thematic side cups wanted first | name by place; first side cup Poison and Debuffs |
+| D9 | Region caps with no scripted boss (1.3): hand-built trios as marked **GUESS** | accept, review in the balance pass |
+
+## 10. Unknowns collected
+
+1. Whether bosses are started anywhere other than `Field_RequestBattleFromEncounterTable` (1.2).
+2. Sprites, abilities and AI fields of unused enemy rows (2.3 E).
+3. Whether the Djinn recovery list stays consistent if `djinnHeld` is edited directly (3.3).
+4. Whether equipment has a level requirement (3.3).
+5. How `msgid` numbers and `msg_ids.h` are produced for generated messages (4).
+6. Whether the arena's `Shop_Run` initialises the artifact stock flags (5.3).
+7. How the File Screen could read a save's flags for trophies (5.1).
+8. Whether the shop counter greys unaffordable or sold entries (6.1).
+9. How much Luck Djinn, class and gear add on top of the base (7.3).
+10. What an over-six-slot team looks like on screen (4.2).
