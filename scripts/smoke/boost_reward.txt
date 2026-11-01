@@ -1,0 +1,92 @@
+# Win round 1 with the win count poked to 1 mid-battle, so the win is round 2 (Tret): the HP boost reward is given once: the message and the pool (peek 0x02000128, the HP byte) grow.
+peek 0x02000128 1
+include to_solo.txt
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+poke 0x020004EA 2 1
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 2
+wait 60
+shot /tmp/shots/b10.png
+mash A 2
+wait 60
+shot /tmp/shots/b11.png
+mash A 2
+wait 60
+shot /tmp/shots/b12.png
+mash A 2
+wait 60
+shot /tmp/shots/b13.png
+mash A 2
+wait 60
+shot /tmp/shots/b14.png
+mash A 2
+wait 60
+shot /tmp/shots/b15.png
+mash A 2
+wait 60
+shot /tmp/shots/b16.png
+mash A 2
+wait 60
+shot /tmp/shots/b17.png
+mash A 2
+wait 60
+shot /tmp/shots/b18.png
+mash A 2
+wait 60
+shot /tmp/shots/b19.png
+mash A 2
+wait 60
+shot /tmp/shots/b20.png
+mash A 2
+wait 60
+shot /tmp/shots/b21.png
+peek 0x02000128 1
+peek 0x0200012E 1

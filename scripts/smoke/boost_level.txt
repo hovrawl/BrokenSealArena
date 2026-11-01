@@ -1,0 +1,158 @@
+# The boost derivation after a level raise: clear the Tret Cup (the party rises to level 15), walk to the manager (no save), poke the HP pool to 2: the stat counter must read Used 0 at level 15, then 1 after a boost (+8 base HP), then 0 after Reset (base HP back to the closed form).
+# the win is the 8th (the last). Shows the victory line, the first-clear scene, the end line.
+include to_solo.txt
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+peek 0x0200013E 1
+poke 0x020004EA 2 7
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 2
+wait 60
+shot /tmp/shots/x10.png
+mash A 2
+wait 60
+shot /tmp/shots/x11.png
+mash A 2
+wait 60
+shot /tmp/shots/x12.png
+mash A 2
+wait 60
+shot /tmp/shots/x13.png
+mash A 2
+wait 60
+shot /tmp/shots/x14.png
+mash A 2
+wait 60
+shot /tmp/shots/x15.png
+mash A 2
+wait 60
+shot /tmp/shots/x16.png
+mash A 2
+wait 60
+shot /tmp/shots/x17.png
+mash A 2
+wait 60
+shot /tmp/shots/x18.png
+mash A 2
+wait 60
+shot /tmp/shots/x19.png
+mash A 2
+wait 60
+shot /tmp/shots/x20.png
+mash A 2
+wait 60
+shot /tmp/shots/x21.png
+mash A 2
+wait 60
+shot /tmp/shots/x22.png
+mash A 2
+wait 60
+shot /tmp/shots/x23.png
+mash A 2
+wait 60
+shot /tmp/shots/x24.png
+mash A 2
+wait 60
+shot /tmp/shots/x25.png
+mash A 2
+wait 60
+shot /tmp/shots/x26.png
+mash A 2
+wait 60
+shot /tmp/shots/x27.png
+mash A 2
+wait 60
+shot /tmp/shots/x28.png
+mash A 2
+wait 60
+shot /tmp/shots/x29.png
+peek 0x0200013E 1
+
+mash A 2
+wait 60
+mash A 2
+wait 60
+mash A 2
+wait 60
+mash A 2
+wait 60
+mash A 2
+wait 60
+mash A 2
+wait 60
+mash A 2
+wait 60
+mash A 2
+wait 60
+peek 0x0200050F 1
+mash B 4
+wait 60
+press R 50
+press U 25
+tap A
+wait 150
+poke 0x02000128 1 2
+tap A
+wait 150
+tap A
+wait 150
+shot /tmp/shots/y0.png
+peek 0x0200050F 1
+peek 0x02000510 2
+tap A
+wait 30
+shot /tmp/shots/y1.png
+peek 0x02000510 2
+tap L
+wait 20
+tap A
+wait 30
+shot /tmp/shots/y2.png
+peek 0x02000510 2

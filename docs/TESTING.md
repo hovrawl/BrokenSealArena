@@ -192,5 +192,11 @@ folder each time, so copy them out between runs). Check the champion's first mes
 - `npcs_moved.txt`: scout and champion at the new spots, both talks.
 - `boss_warning.txt`, `boss_warning_mini.txt`: the warning page after "Round 7 won!" (the second
   pokes the cup byte 0x0200013F to 3 mid-battle).
+- `boost_reward.txt`: Tret round 2 won: "You can boost HP once more!", the HP pool byte
+  (0x02000128: HP, then PP, Attack, Defense, Agility, Luck) 0 to 1 and the reward bit
+  (0x0200012E) set. `boost_shop.txt`: pools poked, the stat counter for Isaac and Garet (boosts
+  left, used, "No boosts left", Reset and its message); base HP peeks 0x02000510 (Isaac),
+  0x0200065C (Garet). `boost_resume.txt`: pools and bits kept through save, reset, Continue.
+  `boost_level.txt`: after a Tret clear (party level 15) Used reads 0, then 1, then 0 again.
 Screenshots worth showing are copied into `build\smoke\keep\` by hand (the driver wipes
 `build\smoke\shots`).

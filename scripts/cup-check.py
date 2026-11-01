@@ -58,6 +58,9 @@ def main():
                 elif rw[0] == "item":
                     if rw[1] not in ITEMS:
                         bad.append("%s round %d: %s is not an item id" % (cup.name, ri + 1, rw[1]))
+                elif rw[0] == "boost":
+                    if rw[1] not in D.BOOST_STATS:
+                        bad.append("%s round %d: %s is not a boost stat" % (cup.name, ri + 1, rw[1]))
                 else:
                     bad.append("%s round %d: unknown reward" % (cup.name, ri + 1))
         for n in cup.sells:

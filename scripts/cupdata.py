@@ -17,6 +17,8 @@ no warning.
 Rewards on a round are given the first time the round is won (once only):
   ("djinn", element, n)   a Djinni won in a Djinn battle
   ("item", itemName)      gear from the cup's stretch of the story (GEAR below; cup-gear.py lists them)
+  ("boost", stat)         one more boost of a stat (BOOST_STATS) for the party to spend at the
+                          party manager; the story's stat-boost items of the stretch (BOOSTS below)
 """
 
 # Djinn by table index: element (0 Venus, 1 Mercury, 2 Mars, 3 Jupiter) and n.
@@ -265,3 +267,37 @@ GEAR = {
 for _cup in CUPS:
     for _round, _items in GEAR.get(_cup.short, {}).items():
         _cup.rounds[_round - 1].rewards += [("item", i) for i in _items]
+
+
+# Stat boosts: the story's stat-boost items (Power Bread, Cookie, Apple, Hard Nut, Mint, Lucky
+# Pepper) found in a cup's stretch are NOT given as items. Winning the round that holds one for the
+# first time adds one to the party-wide pool of that stat (stock order of the stat counter:
+# game/menu/use.c says which item raises which stat; the amounts are the abilities' power, 8, 4, 5,
+# 3, 4, 1, kept in ArenaStat_Step in arena_shop.c). `cup-gear.py` lists the sources. Left out: the
+# Hard Nut in cottage_rooms_b (a scene no cup's stretch names).
+BOOST_STATS = ["HP", "PP", "Attack", "Defense", "Agility", "Luck"]
+BOOSTS = {
+    "Tret": {2: ["HP"],                 # Power Bread: Goma Cave
+             3: ["Attack"]},            # Apple: Kolima jar
+    "Mercury": {2: ["Defense"],         # Hard Nut: Jill, Bilibin
+                4: ["Defense"]},        # Hard Nut: Cottage barrel
+    "Mogall": {1: ["Luck"],             # Lucky Pepper: Imil oven
+               4: ["Attack"]},          # Apple: Mogall Forest
+    "Altin": {1: ["PP"],                # Cookie: Altin Peak
+              2: ["HP"],                # Power Bread: Lama Temple
+              4: ["Luck"],              # Lucky Pepper: Lamakan
+              5: ["Agility"],           # Mint: Lamakan
+              7: ["Agility"],           # Mint: Linked log room
+              8: ["Agility"]},          # Mint: Linked log room
+    "Tolbi": {1: ["Attack"],            # Apple: Kalay
+              3: ["HP"],                # Power Bread: Tolbi hidden chest
+              5: ["PP"]},               # Cookie: Altmiller Cave
+    "Lunpa": {1: ["Attack"],            # Apple: Gondowan Cave
+              3: ["HP"],                # Power Bread: Lunpa Fortress
+              4: ["Defense"],           # Hard Nut: Suhalla
+              8: ["PP"]},               # Cookie: Suhalla Desert
+    "Crossbone": {2: ["Luck"], 5: ["PP"], 8: ["Defense"]},
+}
+for _cup in CUPS:
+    for _round, _stats in BOOSTS.get(_cup.short, {}).items():
+        _cup.rounds[_round - 1].rewards += [("boost", s) for s in _stats]
