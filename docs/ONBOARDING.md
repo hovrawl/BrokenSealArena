@@ -1,4 +1,8 @@
-# Onboarding and reference NPCs (plan, 2026-11-01; not built, not in this milestone)
+# Onboarding and reference NPCs (plan, 2026-11-01)
+
+**Status:** the new-save introduction is built (patch 0031, `CHANGES.md` entry 31): the
+greeter's two messages, flag 0x7e0 `FLAG_ARENA_ONBOARDED`, switch `ARENA_ONBOARDING`. The
+walk-up trigger was left out. Reference NPCs below are still a plan.
 
 
 

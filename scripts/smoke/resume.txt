@@ -31,6 +31,8 @@ shot /tmp/shots/v04.png
 # flags at 0x02000040, bit 3, so 8 when set).
 peek 0x020004EA 2
 peek 0x0200006E 1
+# FLAG_ARENA_ONBOARDED (0x7e0): set by the greeter's intro in to_lobby, kept by the save.
+peek 0x0200013C 1
 # Isaac starts at the door with no greeter walk-in: walk up to the attendant
 # a step at a time, looking.
 press U 20

@@ -1,0 +1,18 @@
+# The flag FLAG_ARENA_ONBOARDED (0x0200013C) poked to 1 right after New Game
+# starts: the greeter says her stock welcome at once, no introduction.
+wait 900
+press A 2
+poke 0x0200013C 1 1
+wait 10
+peek 0x0200013C 1
+wait 50
+shot /tmp/shots/seen1.png
+tap A
+wait 40
+shot /tmp/shots/seen2.png
+tap A
+wait 40
+shot /tmp/shots/seen3.png
+tap A
+wait 60
+shot /tmp/shots/seen_end.png

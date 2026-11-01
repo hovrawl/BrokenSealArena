@@ -9,3 +9,10 @@ tap A
 wait 40
 tap A
 wait 60
+# the introduction is six pages (three more taps than her stock welcome)
+tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 60
