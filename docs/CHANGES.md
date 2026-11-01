@@ -705,6 +705,61 @@ party or its level.
   pool, Reset), `boost_resume.txt` (save, restart, Continue: pool kept), `boost_level.txt` (level
   15). The screens are in `build/smoke/keep/boost_*.png`.
 
+### 44. A class viewer: the scholar in the upper hall
+
+Branch `class-viewer`, patch `0044` (the owner's feedback item 7, `docs/FEEDBACK-1.md`; the screen
+spec is "Class viewer" in `docs/UI-SPECS.md`).
+
+- **The NPC.** A scholar uses sprite `0x6f`, the white-haired elder the upper hall already shows
+  (two rows already use it), so the sprite memory is unchanged (`vram_all.txt`: 350 used, 162
+  free). He stands at (56, 168) in the upper hall, facing east, just below the left table and
+  clear of the stairs, the arch, the carpets' visitors (the wary visitor is at (84, 124)) and the
+  south hall. One new row after the scout in both placement tables (`ACTOR_CLASS_VIEWER`) and a
+  talk trigger to `BattleArena_ClassViewer` (`arena_menu.c`). `to_scholar.txt` walks to him.
+- **The flow.** The talk loops the party manager's member picker (status panel) and
+  `ClassViewer_Run(unitId)` (`shop/shop/arena_class_viewer.c`, a new part of `shop.c`, far call
+  `ClassViewer_RunFar`, import row `ClassViewer_Run`). B at the picker leaves. In the viewer:
+  - **Lines.** The class table has 20 lines of up to six classes: the ids that share a tens digit
+    and have a series of 1 to 10 (Squire to Sovereign is ids 1 to 5; "Swordsman, Armed and White
+    Knight" are three lines of one series). L and R change the line, wrapping. Every line is
+    reachable in principle by every character (any element can be made the strongest with its
+    seven Djinn), so the lines are not cut per character; what differs is the Djinn counts.
+  - **A class.** The hand highlights a class; the top panel shows its name, the Djinn it needs for
+    this character, HP, PP, Attack, Defense, Agility and Luck as percentages of the base stat
+    (the table's twentieths times 5), the ward and "Reachable now", "Needs more Djinn" or "Out of
+    reach". The Djinn needed of an element = ceil((required * 10 - elementBonus) / 10), never
+    below 0 (the character's own element starts at 5.4 levels, so Isaac needs no Venus Djinn for
+    Squire). Shown as the Djinn panel's animated figures with a count each. "Out of reach" =
+    needs more than the seven the game has of an element (Sovereign for Isaac: 8 Venus).
+  - **Psynergy.** A shows the class's abilities, eight a page (two columns), the hand moving over
+    them; an icon and name for what the character's level has, a red level and name for what it
+    has not; the window under shows the class, the character and level, the highlighted one's
+    level, PP and "Learned" or "Not yet". L and R page, B goes back.
+  - **Now / All (Select).** All lists every class of the line (red = the party's Djinn do not
+    reach it). Now lists only those the party **owns the Djinn for**: for each element, the Djinn
+    of it held by the four members together (set or on standby; they can be traded) is at least
+    what the class needs. It is a per-character view of the pooled Djinn; it does not divide them
+    between the characters. L and R skip lines with nothing in Now. The tag in the panel says
+    "Can reach now" or "All classes". The viewer opens on All.
+- **Built from** the picker's windows (a 30 by 11 panel over a 30 by 9 list window), the hand
+  anchored as in `ArenaShop_Run`, tile text (`Text_DrawMessageAsTiles`, `Text_DrawNumberInWindow`),
+  `Text_SetColor` red as the stock Psynergy list shows what you cannot use, `ICON_KIND_ABILITY`
+  icons and the Djinn figures. No canvas text. Labels are 19 messages (`MsgArenaCv*`) above the
+  generated cups block (`scripts/add-cv-messages.py`; `gen-cups.py` re-run).
+- **The element icon tiles do not work here**: `DJINN_ELEMENT_TILE` needs the Djinn menu's palette
+  setup, so the first try showed wrong colours. The animated figures are used instead.
+- **ROM layout.** The shop bank overflowed by 0x81d bytes. `main.ld` moves bank 07 to
+  0x080b7000 and bank 08 to 0x080c9d00 (tbs-en); bank 07 now ends at 0x080c9c6c (0x94 below bank 08) and bank 08 at
+  0x080efd54 (0x2ac below bank 09). See `docs/GOTCHAS.md`. `scripts/bank-slack.py` estimates each bank's slack from the map.
+- Tests: `class_viewer.txt` (Isaac: lines, highlights, the Psynergy pages, Now and All, back
+  out), `class_viewer_all.txt` (Garet, Mia, Ivan: the Mars line, Out of reach, Now), 
+  `class_viewer_djinn.txt` (Djinn poked into Isaac and Garet: Now shows Squire to Lord, Guard and
+  Soldier), `npc_position.txt`. Shots in `build/smoke/keep/cv*.png`, `npc_*.png`.
+- **Not done / open:** descriptions of the Psynergy; the character's resulting stats at the
+  current level; the series test (a class also needs its series to be the one chosen by the two
+  strongest elements, so a mixed class like Brute for a Jupiter character needs more than the
+  counts shown); the Now filter counts the Djinn as one pool.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

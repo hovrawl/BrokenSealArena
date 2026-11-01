@@ -165,6 +165,7 @@ What each is made of, so a new one can start from the nearest.
 | Djinn and Psynergy panels | 30 by 11 panel; ability icons; animated element figures | picker modes 1 and 2 |
 | Stat, Djinn and Psynergy counters | `Shop_SelectBuy`'s whole layout | `ArenaShop_Run(kind, unit)` |
 | Win report | the attendant speaking a message with the coins as a blank | `ArenaMenu_ShowWin` |
+| Class viewer (the scholar) | the picker, a 30 by 11 panel over a 30 by 9 list, Djinn figures, tile text, red text, the Psynergy panel's icons | `ClassViewer_Run` (`shop/shop/arena_class_viewer.c`) |
 | Saving | the Pause menu and its own file list and messages | stock `PauseMenu_Run`, `Save_ToChosenFile` |
 
 ## 6. Review checklist (before anyone looks at it)

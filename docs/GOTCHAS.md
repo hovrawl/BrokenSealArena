@@ -28,7 +28,10 @@
   backwards", `main.ld`). Bank 07's start was moved up 0x1000 for `tbs-en`. Check
   slack from `out/tbs-en/tbs-en.map` before adding code to a bank. The same error came
   from sprite data (four more sprite rows): the last region of `main.ld` now starts at
-  0x08326000 and `build.ps1` pads to 0x08806000.
+  0x08326000 and `build.ps1` pads to 0x08806000. Patch 0044 overflowed bank 06 again (by
+  0x81d): bank 07 now starts at 0x080b7000 and bank 08 at 0x080c9d00 (the banks after have no
+  room: 08 ends within 0x2ac of 09). The next overflow needs code moved to another bank or an
+  `objects.tsv` object; `scripts/bank-slack.py` reads the map for the slack.
 - A placement row's flag condition is only read when the actors are spawned. After
   changing the flag in the lobby, call `Event_SpawnActorPlacements(gFieldWork->tables[1],
   ACTOR_FIRST_PLACED)` again (it creates the new actors and resets the others' places).

@@ -319,3 +319,20 @@ before it. Only the viewer's windows are new; all the numbers it shows come from
 
 Shots: `class_viewer.txt` (Isaac, lines, classes, Psynergy, the filter, back out),
 `class_viewer_all.txt` (the other characters), `npc_position.txt` (the lobby with the scholar).
+
+**Built (patch 0044, branch `class-viewer`).** Built as specified, with these changes found by
+looking at the screenshots (`class_viewer.txt`, `class_viewer_all.txt`, `class_viewer_djinn.txt`):
+
+- The four element icons are the **animated Djinn figures** of the Djinn panel (a count beside
+  each): the element icon tiles only draw with the Djinn menu's palette setup. The Djinn row is a
+  16-pixel band, text on its lower half.
+- The detail panel has the class name on its own row, the stats in two columns (HP, PP, Attack at
+  the left; Defense, Agility, Luck at the right) and the ward under them.
+- A class the party's Djinn do not reach is red in the list in All (the same red as the stock
+  Psynergy list), with three reach lines: "Reachable now", "Needs more Djinn" and "Out of reach"
+  (it needs more than the seven Djinn the game has of an element).
+- The list text starts 24 pixels in so the hand does not cover the first letter; the Psynergy
+  page draws its content 16 pixels in for the same reason.
+- Select works as designed; on a character with no Djinn owned, Now shows the classes whose
+  needs the character's own element bonus already covers (Isaac: Squire; Garet: Guard).
+

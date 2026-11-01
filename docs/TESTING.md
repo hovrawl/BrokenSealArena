@@ -200,3 +200,14 @@ folder each time, so copy them out between runs). Check the champion's first mes
   `boost_level.txt`: after a Tret clear (party level 15) Used reads 0, then 1, then 0 again.
 Screenshots worth showing are copied into `build\smoke\keep\` by hand (the driver wipes
 `build\smoke\shots`).
+
+## Class viewer (patch 0044)
+
+`to_scholar.txt` (prefix): all cups poked cleared, Continue, up the left stairs, talk to the
+scholar; ends with the character picker open (it opens on Isaac each time; the party order is
+Isaac, Garet, Mia, Ivan). Keys here: `r` and `l` are the shoulders (line), `R` and `L` the D-pad,
+`S` Select (Now/All). Tests: `class_viewer.txt` (Isaac: lines, highlight, Psynergy, filter, back
+out), `class_viewer_all.txt` (Garet, Ivan, Mia), `class_viewer_djinn.txt` (pokes Djinn bits:
+Isaac's `djinnHeld[0]` 0x020005f8 and Garet's `djinnHeld[2]` 0x0200074C; units are at 0x02000500 +
+id * 0x14c, `djinnHeld` at +0xf8), `npc_position.txt` (the scholar's spot, full size).
+
