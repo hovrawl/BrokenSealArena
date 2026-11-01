@@ -101,3 +101,6 @@ this is a bookmark. The version at the time of saving was 1.83 (updated 2026-05-
 The owner's direction for how a player moves through the game (linear cups that set the
 level, side cups, a level 99 stat shop, 4v4 PvP at 50 or 99) is in `CUPS.md`. The author's
 design intent for the Reloaded rules is in `RELOADED-DESIGN.md`.
+
+See also `ARENA-SCENE.md` (how the lobby scene and the save file list work: where trophies, cup NPCs and the
+cups display go) and `ONBOARDING.md` (the new-save introduction and reference NPCs).
