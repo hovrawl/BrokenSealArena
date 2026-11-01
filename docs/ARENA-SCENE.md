@@ -1,5 +1,7 @@
 # How the arena scene and the file list work: notes for trophies, cup NPCs and the file display
 
+STATUS 2026-11-01: built in patches 0032 to 0034 (trophies, champion and scout, file list cups); see CHANGES 32 to 34.
+
 Research read from `~/alchemy/games/tbs` on 2026-11-01 (read-only, while the cup spec agent
 works), to be moved into the docs after that branch is merged. Nothing here is built.
 

@@ -1,0 +1,23 @@
+# With every trophy standing, can the player still reach the attendant (left counter)
+# and the party manager (right counter)? Walk from the door and talk.
+include to_lobby.txt
+poke 0x0200013E 1 7
+poke 0x0200013D 1 3
+poke 0x02000132 1 255
+poke 0x02000133 1 1
+include save_continue.txt
+shot /tmp/shots/r0.png
+press U 45
+wait 20
+press L 45
+wait 20
+press U 20
+wait 20
+press L 14
+press U 10
+shot /tmp/shots/r1.png
+tap A
+wait 150
+shot /tmp/shots/r2.png
+tap B
+wait 30

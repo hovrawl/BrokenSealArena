@@ -10,6 +10,12 @@ wait 40
 tap A
 wait 40
 tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 40
+tap A
 wait 60
 press U 80
 press R 50

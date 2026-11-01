@@ -557,6 +557,40 @@ party or its level.
   are tile areas by id and the talk is enough. In a smoke run the A press that starts New Game
   also talks to her, which is why `to_lobby.txt` now taps three more times.
 
+## 32. Trophies in the lobby (patch 0032)
+
+- **Behaviour:** one trophy actor per cup (nine), in a row along the ledge above the entrance
+  pits (z 268; x 120 to 174 and 240 to 308, the entrance lane between), each placed when its
+  flag is set. Bronze (cups 1, 2), silver (3, 4), gold (5, 6), crowned gold (7), blue (the two
+  side cups). The lane in front of the counters stays walkable (`trophies_reach.txt`).
+- **State:** `FLAG_ARENA_TROPHY_FIRST` = 0x790, bit n = cup n has been cleared (0x790 to 0x798;
+  0x790 to 0x79f claimed), set in `ArenaSeries_Cleared` at the first clear. Not derived for
+  older saves (new saves only).
+- **Art:** `scripts/gen-trophy-sprites.py` (run by `build.ps1`; outputs git-excluded)
+  makes `spr_309` to `313`, 16 x 32, one picture, the field sprites' palette; rows in
+  `sprites.tsv`, `layout.tsv`. 32 x 32 sprites were tried first and exhausted the sprite VRAM
+  cache: the first line of message windows drew as noise. With 9 trophies plus both NPCs at
+  16 x 32 text is clean, but the margin is unknown; the lobby shows 28 placed rows of 58.
+- **Rows:** `ACTOR_TROPHY_FIRST` to `ACTOR_TROPHY_LAST`, added to both placement tables before
+  the party rows (party rows have sprite ids below 8 and take no placed id). Not shared sprites
+  (`ACTOR_PLACEMENT_SHARE_PREVIOUS_SPRITE` dereferences the previous actor unchecked).
+
+## 33. Champion and scout (patch 0033)
+
+- Placed actors `ACTOR_CHAMPION` (sprite 0x71, after cup 7) and `ACTOR_SCOUT` (0x87, after cup
+  3) beside the door, conditioned on the trophy flags. Talk is a `MSGNO` trigger row, no
+  handler: `MsgArenaChampion` and `MsgArenaScout` (2 pages each) above the generated cups
+  block; `gen-cups.py` re-run (ids moved by two). Test: `npcs.txt`, `npc_scout.txt`.
+
+## 34. The file list shows cups (patch 0034)
+
+- `SaveFileSummary.djinn[4]` is now `cups[4]`: cups cleared per tier (bronze 0-1, silver 2-3,
+  gold 4-6, side cups), counted by `Save_BuildFileSummary` from the trophy flags. The file
+  list draws four trophy sprites (309, 310, 311, 313) over two-digit counts; none for a tier
+  at 0, no window when all are 0. Functions renamed `FileList_*TrophySprites/Counts`. Same code
+  for Continue and the Pause-menu Save. No paging (the four tiers need none; L and R are free
+  in the list if wanted). Tests: `filelist_cups.txt`, `filelist_cups_all.txt`.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

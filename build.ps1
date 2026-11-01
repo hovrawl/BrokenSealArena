@@ -7,7 +7,8 @@ $dest = Join-Path $PSScriptRoot 'build\tbs-en.gba'
 # the ROM is 20 KB longer than the original's 8 MB (main.ld moves the last
 # region on by 0x5000 to make room, and the image is padded to match).
 $gen = 'python3 /mnt/c/Dev/NahFarn/BrokenSealArena/scripts/gen-opponent-sprites.py ~/alchemy/games/tbs/src/graphics/sprite'
-$cmd = "$gen && cd ~/alchemy && make -j`$(nproc) tbs-en ROM_END_tbs=0x08805000"
+$genTrophies = 'python3 /mnt/c/Dev/NahFarn/BrokenSealArena/scripts/gen-trophy-sprites.py ~/alchemy/games/tbs/src/graphics/sprite'
+$cmd = "$gen && $genTrophies && cd ~/alchemy && make -j`$(nproc) tbs-en ROM_END_tbs=0x08805000"
 if ($Verify) { $cmd += ' && make compare-tbs-en' }
 wsl -d Ubuntu -- bash -lc $cmd
 if ($LASTEXITCODE -ne 0) { throw "Build failed" }

@@ -1,0 +1,13 @@
+# Is stock text still clean with trophies standing (sprite VRAM pressure)? Two
+# trophies, then talk to the old man by the door.
+include to_lobby.txt
+poke 0x0200013E 1 2
+poke 0x02000132 1 3
+include save_continue.txt
+press U 90
+press R 30
+press U 15
+shot /tmp/shots/x0.png
+tap A
+wait 200
+shot /tmp/shots/x1.png

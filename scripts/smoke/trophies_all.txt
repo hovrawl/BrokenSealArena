@@ -1,0 +1,8 @@
+# All nine cups cleared (seven main and the two side cups): every trophy stands.
+include to_lobby.txt
+poke 0x0200013E 1 7
+poke 0x0200013D 1 3
+poke 0x02000132 1 255
+poke 0x02000133 1 1
+include save_continue.txt
+shot /tmp/shots/t9_lobby.png
