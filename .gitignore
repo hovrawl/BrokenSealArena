@@ -4,3 +4,10 @@ build/
 
 # Third-party mod files kept for reference only (never committed)
 reloaded/
+
+# Build kit: the upstream working copy, its choice, and release output
+work/
+.alchemy-dir
+dist/
+__pycache__/
+*.pyc

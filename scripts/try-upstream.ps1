@@ -1,9 +1,9 @@
 # Try a newer upstream without touching anything real. Rebases a copy of the
-# `arena` branch onto the target on a scratch branch (arena-trial) in ~/alchemy,
+# `arena` branch onto the target on a scratch branch (arena-trial) in the work directory,
 # builds it, and says what broke and which upstream commit did it. If it builds,
 # runs a few smoke scripts. Afterwards the working copy is back on `arena`.
 #   .\scripts\try-upstream.ps1                      # origin/main, after a fetch
-#   .\scripts\try-upstream.ps1 -Target some-ref     # any ref known to ~/alchemy
+#   .\scripts\try-upstream.ps1 -Target some-ref     # any ref known to the work directory
 #   .\scripts\try-upstream.ps1 -NoSmoke
 # To adopt a good trial for real, run update-upstream.ps1 -Apply.
 param(
@@ -14,21 +14,20 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+. "$PSScriptRoot\wsl.ps1"
 $branch = if ($Game -eq 'tbs') { 'arena' } else { "arena-$Game" }
 & "$PSScriptRoot\check-submodule.ps1"
 $pinned = ((git -C $root ls-files -s alchemy) -split '\s+')[1]
 
-# C:\a\b -> /mnt/c/a/b (wslpath loses the backslashes when called from here)
-$sh = Join-Path $PSScriptRoot 'try-upstream.sh'
-$wslSh = '/mnt/' + $sh.Substring(0, 1).ToLower() + $sh.Substring(2).Replace('\', '/')
+$wslSh = "$WslRoot/scripts/try-upstream.sh"
 
-wsl -d Ubuntu -- bash -lc "cd ~/alchemy && git fetch -q origin"
+wsl @WslArgs -- bash -lc "cd '$AlchemyDir' && git fetch -q origin"
 try {
-  wsl -d Ubuntu -- bash $wslSh run $pinned $Target $branch
+  wsl @WslArgs -- bash $wslSh run $pinned $Target $branch
   $code = $LASTEXITCODE
   switch ($code) {
     0 { Write-Host "`nResult: builds." }
-    2 { Write-Host "`nResult: ~/alchemy has uncommitted changes." }
+    2 { Write-Host "`nResult: the work directory has uncommitted changes." }
     3 { Write-Host "`nResult: rebase conflict (nothing was changed)." }
     4 { Write-Host "`nResult: our patches break the build; upstream alone is fine." }
     5 { Write-Host "`nResult: upstream itself does not build." }
@@ -45,6 +44,6 @@ try {
     Write-Host "`nLook at the sheets before trusting the trial."
   }
 } finally {
-  wsl -d Ubuntu -- bash $wslSh restore $branch
+  wsl @WslArgs -- bash $wslSh restore $branch
 }
-Write-Host "Report: \\wsl.localhost\Ubuntu\home\nathan\try-upstream-report.txt"
+Write-Host "Report: $(wsl @WslArgs -- wslpath -w ~/try-upstream-report.txt)"

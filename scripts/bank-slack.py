@@ -3,7 +3,8 @@
 symbol below the next bank's start (a lower bound on use, so the slack is an
 upper bound). Usage: bank-slack.py [MAP]"""
 import re, sys
-mp = sys.argv[1] if len(sys.argv) > 1 else '/home/nathan/alchemy/out/tbs-en/tbs-en.map'
+from alchemy_dir import ALCHEMY, GAME  # noqa: E402
+mp = sys.argv[1] if len(sys.argv) > 1 else ALCHEMY + '/out/tbs-en/tbs-en.map'
 starts = [0x08015000 - 0, 0x08077000, 0x0808a000, 0x080a1000, 0x080b0000, 0x080b6000,
           0x080c9000, 0x080f0000, 0x080f2000, 0x080f4000, 0x080f6000, 0x080f9000]
 names = ['02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13']

@@ -2,7 +2,7 @@
 #   .\scripts\try-upstream.ps1              # first: trial-rebase, build, smoke on a scratch branch
 #   .\scripts\update-upstream.ps1           # look: what is new upstream, what could clash
 #   .\scripts\update-upstream.ps1 -Apply    # rebase the working copy's patches onto it
-# Look first. -Apply rebases the `arena` branch in ~/alchemy onto upstream's main,
+# Look first. -Apply rebases the `arena` branch in the work directory onto upstream's main,
 # stops at the first conflict (resolve in WSL, `git rebase --continue`, then run
 # this again with -Finish), and never edits the `alchemy` submodule's files.
 param(
@@ -12,6 +12,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+. "$PSScriptRoot\wsl.ps1"
 & "$PSScriptRoot\check-submodule.ps1"
 $branch = if ($Game -eq 'tbs') { 'arena' } else { "arena-$Game" }
 $pinned = ((git -C $root ls-files -s alchemy) -split '\s+')[1]
@@ -27,7 +28,7 @@ if (-not $Apply -and -not $Finish) {
   Write-Host "`nNew upstream commits:"
   git -C "$root\alchemy" log --oneline "$pinned..$head" | Select-Object -First 30
   # Files both sides touch are where a rebase will ask for help.
-  $ours = git -C "$root\alchemy" diff --name-only $pinned (wsl -d Ubuntu -- bash -lc "cd ~/alchemy && git rev-parse $branch").Trim() 2>$null
+  $ours = git -C "$root\alchemy" diff --name-only $pinned (wsl @WslArgs -- bash -lc "cd '$AlchemyDir' && git rev-parse $branch").Trim() 2>$null
   $theirs = git -C "$root\alchemy" diff --name-only $pinned $head
   $both = $ours | Where-Object { $theirs -contains $_ }
   Write-Host "`nFiles changed by both upstream and our patches: $(@($both).Count)"
@@ -37,9 +38,9 @@ if (-not $Apply -and -not $Finish) {
 }
 
 if ($Apply) {
-  wsl -d Ubuntu -- bash -lc "cd ~/alchemy && git status --short | grep -q . && { echo 'Uncommitted changes in ~/alchemy'; exit 1; }; git fetch origin && git rebase origin/main $branch"
+  wsl @WslArgs -- bash -lc "cd '$AlchemyDir' && git status --short | grep -q . && { echo 'Uncommitted changes in $AlchemyDir'; exit 1; }; git fetch origin && git rebase origin/main $branch"
   if ($LASTEXITCODE -ne 0) {
-    Write-Host "`nThe rebase stopped. Resolve it in WSL (cd ~/alchemy), run 'git rebase --continue', then run this script with -Finish."
+    Write-Host "`nThe rebase stopped. Resolve it in WSL (cd $AlchemyDir), run 'git rebase --continue', then run this script with -Finish."
     return
   }
 }

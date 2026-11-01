@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Trial run of a newer upstream, in the WSL working copy (~/alchemy). Called by
+# Trial run of a newer upstream, in the WSL working copy (see alchemy-dir.sh). Called by
 # scripts/try-upstream.ps1; it can be run by hand:
 #   try-upstream.sh run OLD NEW [BRANCH]   rebase BRANCH (default arena) from the
 #                                          pin OLD onto NEW on a scratch branch
@@ -11,7 +11,7 @@
 # Exit: 0 builds, 2 dirty tree, 3 rebase conflict, 4 our patches break the build,
 #       5 upstream itself does not build.
 set -u
-cd ~/alchemy || exit 2
+cd "$(bash "$(dirname "${BASH_SOURCE[0]}")/alchemy-dir.sh")" || exit 2
 REPORT=~/try-upstream-report.txt
 
 if [ "${1:-}" = restore ]; then
@@ -27,7 +27,7 @@ BRANCH=${4:-arena}
 say() { echo "$@" | tee -a "$REPORT"; }
 
 if [ -n "$(git status --short)" ]; then
-  say "Uncommitted changes in ~/alchemy: commit or stash them first."
+  say "Uncommitted changes in $PWD: commit or stash them first."
   exit 2
 fi
 NEWSHA=$(git rev-parse --short=10 "$NEW")

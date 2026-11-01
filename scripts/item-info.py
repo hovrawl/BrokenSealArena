@@ -3,7 +3,10 @@ import os
 import re
 import sys
 
-t = open(os.path.expanduser("~/alchemy/games/tbs/src/game/item_table.c"), encoding="utf-8").read()
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import alchemy_dir
+
+t = open(os.path.join(alchemy_dir.GAME, "src/game/item_table.c"), encoding="utf-8").read()
 for want in sys.argv[1:]:
     m = re.search(r"\n    // ([^\n]*)\n    \{\n(.*?)\n    \},", t, re.S) and None
     for m in re.finditer(r"\n    // ([^\n]*)\n    \{\n(.*?)\n    \},", t, re.S):

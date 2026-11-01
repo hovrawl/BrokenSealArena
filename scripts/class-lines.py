@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Lists the class lines (series) of class_table.c: class id, requirements, count of abilities."""
 import re, sys
-path = sys.argv[1] if len(sys.argv) > 1 else '/home/nathan/alchemy/games/tbs/src/game/class_table.c'
+from alchemy_dir import ALCHEMY, GAME  # noqa: E402
+path = sys.argv[1] if len(sys.argv) > 1 else GAME + '/src/game/class_table.c'
 text = open(path).read()
 rows = re.split(r'\n    // ', text)[1:]
 lines = {}

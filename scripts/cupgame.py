@@ -1,10 +1,14 @@
 """Reads the game tables the cup scripts need (enemy rows, which enemies are
 small, item names, Djinn names). Shared by gen-cups.py, cup-check.py and
-cup-gear.py. The game tree is ~/alchemy/games/tbs unless CUP_GAME is set."""
+cup-gear.py. The game tree is the alchemy working copy (alchemy_dir.py) unless CUP_GAME is set."""
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import alchemy_dir
 import re
 
-GAME = os.path.expanduser(os.environ.get("CUP_GAME", "~/alchemy/games/tbs"))
+GAME = os.path.expanduser(os.environ.get("CUP_GAME", "")) or alchemy_dir.GAME
 
 
 def read(rel):

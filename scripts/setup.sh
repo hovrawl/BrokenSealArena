@@ -4,13 +4,13 @@
 #   + the patch series in patches/<game>/ applied on a branch.
 # Usage (from WSL):
 #   bash /mnt/c/Dev/NahFarn/BrokenSealArena/scripts/setup.sh [GAME [DEST]]
-# GAME is tbs (default) or tla; DEST defaults to ~/alchemy. Set SKIP_BOOTSTRAP=1
+# GAME is tbs (default) or tla; DEST defaults to the work directory (alchemy-dir.sh). Set SKIP_BOOTSTRAP=1
 # to skip building the compilers (about 10 minutes), for checking patches only.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GAME="${1:-tbs}"
-DEST="${2:-$HOME/alchemy}"
+DEST="${2:-$(bash "$(dirname "${BASH_SOURCE[0]}")/alchemy-dir.sh")}"
 BRANCH="arena"
 [ "$GAME" = "tbs" ] || BRANCH="arena-$GAME"
 BASE="$(git -C "$ROOT" ls-files -s alchemy | awk '{print $2}')"
