@@ -125,3 +125,8 @@
   open-ended (an endless run later; Crossbone Isle as a post-game model). The Psynergy shop is
   retired; the stat shop stays and Luck/ailments are to be explored separately. See
   `docs/CUPS.md` and the revision at the top of `docs/CUP-SPEC.md`.
+- **Cup details** (2026-11-01): the Monster Gauntlet is retired and the Boss Rush is one of the
+  first extra cups, after the base progression; a cup start changes nothing about the party;
+  start purse 1500 coins; the first-clear reward is gear tied to the cup's region; cups are
+  named by place, one per boss early and grouped later; regions with no story boss are capped
+  by their Djinn battle. See `docs/CUP-SPEC.md` (revision).

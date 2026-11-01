@@ -35,7 +35,29 @@ answer is different, and simpler:
   and immunities work around it, is to be explored separately before it is touched (D6
   deferred, D7 onwards open).
 
-Still open: D2's content for 50 to 99 (now "later"), D3, D5, D7, D8 and D9.
+Answers to the rest (owner, 2026-11-01):
+
+- **D3, Gauntlet and Boss Rush:** both are just examples of cups. **The Monster Gauntlet is
+  retired** (it was basic). **The Boss Rush becomes one of the first extra (side) cups,
+  unlocked after the base progression is finished.**
+- **D5, resets:** **none.** Starting a cup does not change the party in any way: no gear
+  or Djinn reset, no level change.
+- **D7, money:** the **start purse stays 1500 coins** (enough for a Djinni and some items).
+  **The first-clear bonus is gear**, tied to the cup's region (the research in this spec
+  says what the region offers).
+- **D8, names:** by place, as in 2.2 (Vault Cup, Kolima Cup, Mercury Cup ...). **Each boss
+  can be a cup; later cups group several bosses** so there are not too many.
+- **D9, regions with no scripted boss:** the check below found why: **the story has no
+  boss fight in those places.** In Goma Cave, Suhalla Gate, Altmiller Cave and Babi
+  Lighthouse the only scripted battle is a **Djinn battle** (`Field_RequestDjinnBattle`:
+  Forge, Dew, Squall and Luff); Kolima Forest, Bilibin, Fuchin and the lower Venus
+  Lighthouse have random mobs only. So the guessed caps in 1.3 are replaced by a better
+  rule: **cap such a cup with its region's Djinn battle** (the Djinn enemies are rows #150
+  to #163) or with the strongest mob trio, and let the later bosses (Tret, Saturos, Killer
+  Ape, Hydros, Kraken, Toadonpa, the Lizards, Menardi and Saturos, Fusion Dragon) cap the
+  cups they already own. The builder should check the Djinn-battle scenes first.
+
+Still open: what 50 to 99 contains (later), and the exact cup list and order.
 
 ## 0. Summary
 

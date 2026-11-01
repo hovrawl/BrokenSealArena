@@ -63,3 +63,9 @@ lobby signature (patch 14) which should also carry the PvP bracket.
 - **The Psynergy shop is retired.** The **stat shop stays** for now (not level-99-only); Luck
   and status ailments will be explored separately.
 - **4v4 PvP** keeps the 50 and 99 brackets.
+- **The Monster Gauntlet is retired** (basic). The **Boss Rush** is one of the first extra
+  cups, unlocked after the base progression. Starting a cup changes nothing about the party
+  (no gear, Djinn or level reset). Start purse 1500 coins. **The first-clear reward is gear**
+  tied to the cup's region. Cups are named by place (Vault Cup, Kolima Cup, Mercury Cup ...);
+  each boss can be a cup, later ones grouping several. Regions with no story boss are capped
+  by their Djinn battle (Forge, Dew, Squall, Luff) or the strongest mob team.
