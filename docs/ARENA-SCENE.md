@@ -1,6 +1,6 @@
 # How the arena scene and the file list work: notes for trophies, cup NPCs and the file display
 
-STATUS 2026-11-01: built in patches 0032 to 0034 (trophies, champion and scout, file list cups); see CHANGES 32 to 34.
+STATUS 2026-11-01: built in patches 0032 to 0036 (trophies, champion and scout, file list cups, 16 x 16 trophies, display cases in the lower wings); see CHANGES 32 to 36. Depth rule: actors sort by z in steps of about 8 pixels; `height` lifts a picture without changing the sort (CHANGES 36).
 
 Research read from `~/alchemy/games/tbs` on 2026-11-01 (read-only, while the cup spec agent
 works), to be moved into the docs after that branch is merged. Nothing here is built.

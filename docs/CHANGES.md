@@ -591,6 +591,28 @@ party or its level.
   for Continue and the Pause-menu Save. No paging (the four tiers need none; L and R are free
   in the list if wanted). Tests: `filelist_cups.txt`, `filelist_cups_all.txt`.
 
+## 36. Display cases in the lower wings (patch 0036)
+
+- **Behaviour:** nine always-present display cases (sprite 314, 16 x 32, art by
+  `gen-trophy-sprites.py`: wooden frame, glass, low plinth) stand in a row along the south edge
+  of the two lower wings: four on the left (x 70, 88, 106, 124) and five on the right (x 303,
+  318, 333, 348, 363), z 280. Left = main cups 1 to 4, right = main cups 5 to 7 and the two side
+  cups. The nine trophy actors moved into them (the old row above the pits is gone); an empty
+  case is a goal, a won cup shows inside the glass.
+- **Rows:** the cases are the last nine rows of both placement tables (`ACTOR_CASE_FIRST` on,
+  after the party rows) so no enum number changed. The first case loads the sprite and the other
+  eight use `ACTOR_PLACEMENT_SHARE_PREVIOUS_SPRITE`; with 9 separate loads the champion's
+  first message line drew as noise again, with sharing it is clean. No talk.
+- **Depth:** actors sort by z in coarse steps (about 8 pixels: z 285 against 284 tied and the case
+  hid the trophy), and `height` lifts the picture without changing the sort. So the trophy is at
+  z 288 with height 7 (drawn 4 pixels above the case's foot, in front), the case at z 280. Do not
+  put a case at z 270: the map's barrels (z <= 262, x 71 to 88 and 340 to 368) push it away.
+- **Moved NPCs:** only the wary visitor (sprite 0x74, was (72, 288) in the corner) moved, to (84, 124), the upper left landing, in both tables, same row (patch 0037; (172, 228) beside the attendant blocked the link script's route to her and the 4v4 never started). The man at (104, 248) and the girl at (328, 248) stand
+  above the cases and stay. The right wing's last case must not be right of x 363.
+- Sprite memory: one extra 16 x 32 picture; text windows clean in `onboarding.txt`, `npcs.txt`.
+- Tests: `cases_0/3/9.txt` (walk into both wings; `build\smoke\shots\cases_N.png` joins the left
+  and right views, `scripts/compose-shots.py`). Port notes: depth and sharing rules above.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

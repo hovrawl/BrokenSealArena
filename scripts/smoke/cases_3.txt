@@ -1,0 +1,14 @@
+# Three cups: walk into the lower left wing, then the lower right wing; shots of the
+# display cases (cases_3_L, cases_3_R) and the whole lobby at the start.
+include to_lobby.txt
+poke 0x0200013E 1 3
+poke 0x02000132 1 7
+include save_continue.txt
+shot /tmp/shots/cases_3_start.png
+press U 30
+press L 400
+wait 10
+shot /tmp/shots/cases_3_L.png
+press R 700
+wait 10
+shot /tmp/shots/cases_3_R.png

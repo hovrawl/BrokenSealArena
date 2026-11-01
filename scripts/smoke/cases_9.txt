@@ -1,0 +1,16 @@
+# All nine cups: walk into the lower left wing, then the lower right wing; shots of the
+# display cases (cases_9_L, cases_9_R) and the whole lobby at the start.
+include to_lobby.txt
+poke 0x0200013E 1 7
+poke 0x0200013D 1 3
+poke 0x02000132 1 255
+poke 0x02000133 1 1
+include save_continue.txt
+shot /tmp/shots/cases_9_start.png
+press U 30
+press L 400
+wait 10
+shot /tmp/shots/cases_9_L.png
+press R 700
+wait 10
+shot /tmp/shots/cases_9_R.png
