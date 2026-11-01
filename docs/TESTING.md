@@ -20,7 +20,7 @@ way. The driver is `scripts/smoke/smoke.c`.
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke.ps1 pause.txt -Fresh
 ```
 
-- Runs `scripts/smoke/<script>` against `~/alchemy/out/tbs-en/tbs-en.gba` in WSL
+- Runs `scripts/smoke/<script>` against the work directory's `out/tbs-en/tbs-en.gba` (`~/alchemy` for the developer; `scripts/alchemy-dir.sh`) in WSL
   (build first with `build.ps1`, which leaves that file in place).
 - Screenshots land in `build\smoke\shots`, with `sheet.png`, all of them on one
   page, which is the cheapest way to look at a run.

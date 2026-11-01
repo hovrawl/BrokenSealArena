@@ -11,13 +11,29 @@ explains the model.
 Target: **The Broken Seal, English (`tbs-en`)**. Edition-specific work (other
 languages) is not done; each change below has a switch that turns it off.
 
+## Build kit (no patch number)
+
+Not a patch: tooling so that others can build the hack and so releases can be
+cut. `scripts/build.sh` (Linux, macOS, WSL) clones upstream at the pinned commit,
+applies `patches/tbs` with `git am`, bootstraps the compilers once, generates the
+git-ignored sprite sheets and builds `tbs-en` with one `ROM_END_tbs`; an existing
+clone (the developer's `~/alchemy`, whose `arena` branch already has the patches
+as commits) is built as it is. `build.ps1` is a thin WSL wrapper. The work
+directory comes from `$ALCHEMY_DIR`, the git-ignored `.alchemy-dir`, or
+`work/alchemy`, in every script (`alchemy-dir.sh`, `alchemy_dir.py`, `wsl.ps1`).
+`docs/BUILDING.md` gives the raw commands. `scripts/make-release.sh` zips the
+patches, scripts and docs (never a ROM or an asset; it checks) and
+`.github/workflows/release.yml` replaces the `alpha` prerelease with it on every
+push to main. Verified: the kit build in a fresh clone gives a ROM with the same
+SHA-1 as the developer's.
+
 ## Workflow
 
 | Task | How |
 |---|---|
-| Set up from scratch (WSL) | `bash /mnt/c/Dev/NahFarn/BrokenSealArena/scripts/setup.sh` |
+| Set up from scratch (WSL) | `bash scripts/build.sh` (clone, patches, compilers, build) |
 | Build | `powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1` (ROM to `build\tbs-en.gba`) |
-| Edit | work in `~/alchemy` (WSL), branch `arena`, and commit there |
+| Edit | work in the work directory (`~/alchemy` in WSL), branch `arena`, and commit there |
 | Save the work | `scripts\export-patches.ps1`, then commit this repo |
 | Try a newer upstream | `scripts\try-upstream.ps1` (trial rebase, build, smoke), then `scripts\update-upstream.ps1 -Apply`; see `docs/WORKFLOW.md` |
 

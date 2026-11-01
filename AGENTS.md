@@ -35,7 +35,9 @@ format-patch` files. Nothing destructive happens to upstream or to a ROM.
 | `build/` | build output and smoke screenshots (git-ignored) |
 | `.claude/agents/` | subagent definitions for recurring jobs |
 
-The working copy is `~/alchemy` inside WSL (Ubuntu). It builds on WSL's own disk
+The working copy (the "work directory") is `~/alchemy` inside WSL (Ubuntu), named
+in the git-ignored file `.alchemy-dir` in the repo root; every script reads that
+file (or `$ALCHEMY_DIR`; default `work/alchemy`). It builds on WSL's own disk
 (the `/mnt/c` mount is far too slow and breaks file modes). Windows tools reach it
 at `\\wsl.localhost\Ubuntu\home\nathan\alchemy`.
 
@@ -45,7 +47,8 @@ at `\\wsl.localhost\Ubuntu\home\nathan\alchemy`.
    (`ARENA_BOOT`, `ARENA_LADDER`, `ARENA_TRAINING`, `ARENA_PAUSE_MENU`, all in
    `include/arena_config.h`).
 2. Build: `powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1`
-   (output `build\tbs-en.gba`; if the emulator holds it open it writes
+   (a thin wrapper over `scripts/build.sh`, which also builds on Linux and macOS;
+   `docs/BUILDING.md`; output `build\tbs-en.gba`; if the emulator holds it open it writes
    `tbs-en.new.gba`). **Check the build log for `***` or the ROM's timestamp;
    do not trust an exit code echoed through `wsl`.**
 3. Smoke-test headless and **look at the screenshots** before saying it works:

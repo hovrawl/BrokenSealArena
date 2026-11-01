@@ -17,6 +17,7 @@
 #   * make bootstrap runs once, if the old compilers are not built yet.
 #   * The sprite sheets that are not kept in git are generated, then make runs.
 #
+# SKIP_BOOTSTRAP=1 skips make bootstrap (for checking the patches apply).
 # --verify also runs upstream's compare (only passes for unmodified source).
 # No ROM is needed to build The Broken Seal: upstream builds it from source.
 # (Only The Lost Age would want a dump, as roms/tla-en.gba.)
@@ -72,6 +73,11 @@ if ! git -C "$WORK" rev-parse --git-dir >/dev/null 2>&1; then
   git -C "$WORK" submodule update --init --recursive alchemy-gcc
   git -C "$WORK" config user.name "$(git config --global user.name || echo romhack)"
   git -C "$WORK" config user.email "$(git config --global user.email || echo romhack@localhost)"
+  # The generated sheets derive from the game's art: keep them out of git status.
+  for n in 304 306 307 308; do echo "games/tbs/src/graphics/sprite/spr_$n.png"; done >> "$WORK/.git/info/exclude"
+  for n in 309 310 311 312 313 314 315 316 317 318; do
+    echo "games/tbs/src/graphics/sprite/spr_$n.png"; echo "games/tbs/src/graphics/sprite/spr_$n.tsv"
+  done >> "$WORK/.git/info/exclude"
   say "Applying the patches"
   PATCHES=("$ROOT"/patches/tbs/*.patch)
   [ -e "${PATCHES[0]}" ] || { echo "No patches in $ROOT/patches/tbs" >&2; exit 1; }
@@ -80,7 +86,7 @@ else
   say "Using the existing clone $WORK (branch $(git -C "$WORK" branch --show-current)); its commits are left alone"
 fi
 
-if [ ! -d "$WORK/tools/out/compilers" ]; then
+if [ ! -d "$WORK/tools/out/compilers" ] && [ -z "${SKIP_BOOTSTRAP:-}" ]; then
   say "make bootstrap (first build only)"
   cat <<'MSG'
 This builds the old compilers the game was matched with (GCC 2.95.2 and others).
