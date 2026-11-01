@@ -607,8 +607,7 @@ party or its level.
   hid the trophy), and `height` lifts the picture without changing the sort. So the trophy is at
   z 288 with height 7 (drawn 4 pixels above the case's foot, in front), the case at z 280. Do not
   put a case at z 270: the map's barrels (z <= 262, x 71 to 88 and 340 to 368) push it away.
-- **Moved NPCs:** only the wary visitor (sprite 0x74, was (72, 288) in the corner) moved, to
-  (172, 228), in both tables, same row. The man at (104, 248) and the girl at (328, 248) stand
+- **Moved NPCs:** only the wary visitor (sprite 0x74, was (72, 288) in the corner) moved, to (84, 124), the upper left landing, in both tables, same row (patch 0037; (172, 228) beside the attendant blocked the link script's route to her and the 4v4 never started). The man at (104, 248) and the girl at (328, 248) stand
   above the cases and stay. The right wing's last case must not be right of x 363.
 - Sprite memory: one extra 16 x 32 picture; text windows clean in `onboarding.txt`, `npcs.txt`.
 - Tests: `cases_0/3/9.txt` (walk into both wings; `build\smoke\shots\cases_N.png` joins the left

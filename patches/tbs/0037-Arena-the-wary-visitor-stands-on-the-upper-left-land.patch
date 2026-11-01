@@ -1,0 +1,38 @@
+From b4380c12f4e939a3e3f5425b5d2982160c2dc275 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sun, 1 Nov 2026 16:34:09 +1100
+Subject: [PATCH] Arena: the wary visitor stands on the upper left landing
+
+At (172, 228) he blocked the walk to the attendant (the 4v4 link script never reached her).
+He now stands at (84, 124), clear of every route.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/scene/battle_arena.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
+index 1a7b6526e4..c23270400e 100644
+--- a/games/tbs/src/scene/battle_arena.c
++++ b/games/tbs/src/scene/battle_arena.c
+@@ -1969,7 +1969,7 @@ struct ActorPlacement gBattleArenaActorPlacements[] = {
+     { 0x6a, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
+         PIXELS(328), 0, PIXELS(88), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+     { 0x74, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
+-        PIXELS(172), 0, PIXELS(228), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
++        PIXELS(84), 0, PIXELS(124), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
+     // Trophies (ACTOR_TROPHY_FIRST on), one for each cup, once it is cleared.
+     { 309, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 0), MOVEMENT_TYPE_STAND,
+         PIXELS(70), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+@@ -2061,7 +2061,7 @@ struct ActorPlacement gBattleArenaBattleActorPlacements[] = {
+     { 0x6a, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
+         PIXELS(328), 0, PIXELS(88), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+     { 0x74, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
+-        PIXELS(172), 0, PIXELS(228), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
++        PIXELS(84), 0, PIXELS(124), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
+     // Trophies (ACTOR_TROPHY_FIRST on), one for each cup, once it is cleared.
+     { 309, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 0), MOVEMENT_TYPE_STAND,
+         PIXELS(70), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-- 
+2.53.0
+
