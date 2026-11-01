@@ -206,7 +206,7 @@ Screenshots worth showing are copied into `build\smoke\keep\` by hand (the drive
 `to_scholar.txt` (prefix): all cups poked cleared, Continue, up the left stairs, talk to the
 scholar; ends with the character picker open (it opens on Isaac each time; the party order is
 Isaac, Garet, Mia, Ivan). Keys here: `r` and `l` are the shoulders (line), `R` and `L` the D-pad,
-`S` Select (Now/All). Tests: `class_viewer.txt` (Isaac: lines, highlight, Psynergy, filter, back
+`S` Select (Now/All). Tests: `mechanics_npc.txt` (the teacher: list, every page of every topic, back; prefix `to_mech.txt`), `npc_position2.txt` (the lobby with him), `class_viewer.txt` (Isaac: lines, highlight, Psynergy, filter, back
 out), `class_viewer_all.txt` (Garet, Ivan, Mia), `class_viewer_djinn.txt` (pokes Djinn bits:
 Isaac's `djinnHeld[0]` 0x020005f8 and Garet's `djinnHeld[2]` 0x0200074C; units are at 0x02000500 +
 id * 0x14c, `djinnHeld` at +0xf8), `npc_position.txt` (the scholar's spot, full size).

@@ -12,7 +12,7 @@ item is an agent task, run one at a time. Status is kept in `CHANGES.md`.
 | 5 | Warn when the next round is a boss or mini-boss | a marker per round in `cupdata.py`, one extra message page | polish (5) |
 | 6 | Stat boosts by round wins | see below | done: patch 0043 (CHANGES 43) |
 | 7 | An NPC in the back shows each character's classes (class viewer) | see below | done: patch 0044 (CHANGES 44), branch `class-viewer` |
-| 8 | An NPC that explains general mechanics | one NPC with a topic menu | queued |
+| 8 | An NPC that explains general mechanics | one NPC with a topic menu | done: patch 0045 (CHANGES 45), branch `mechanics-npc` |
 
 ## Stat boosts by round wins (replaces the coin stat shop)
 

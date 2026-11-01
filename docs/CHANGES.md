@@ -760,6 +760,37 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
   strongest elements, so a mixed class like Brute for a Jupiter character needs more than the
   counts shown); the Now filter counts the Djinn as one pool.
 
+## 45. A mechanics teacher with a topic menu (patch 0045, branch `mechanics-npc`)
+
+- A teacher (field sprite 0x66, already loaded by the lobby: no extra sprite memory; 350 of 512
+  blocks as before) stands at (64, 208) facing east, against the west wall of the corridor below
+  the upper hall (`ACTOR_MECHANICS_GUIDE`, a row after the scholar in both placement tables). A
+  talk trigger runs `BattleArena_MechanicsGuide` (`scene/arena_menu.c`): `MechanicsGuide_Choose`
+  (`shop/shop/arena_class_viewer.c`, far call) shows a 22 by 15 list of six topics with the shops'
+  hand; A opens the topic's message (field message window, 4 or 5 pages), the list returns on it,
+  B leaves.
+- Topics and what each states, all read from the code: weaknesses ("!!!" marks the target's weakest
+  element, a dot its strongest; Djinn bonus chance Power - Resist + 30 percent; +25 to an effect
+  the target is weak to); element power (each set Djinni about +5 Power and Resist, gear adds,
+  cap 255; the difference changes magic by 50 percent per 100 and physical by 25; healing
+  = power x (1 + (Power - 100) / 200)); damage (physical (Attack - Defense) / 2 x power / 10 x
+  element factor; magic (power + max PP / 8) x (1 + max PP / 1024) x factor; Ward 85 to 110
+  percent; summons 2, 4, 6, 8 percent of max HP in place of the PP bonus and Ward); unleash chance
+  (swords and axes 30, maces 25, rods and staves 35 percent plus Criticals gear; delusion stops
+  it; rod unleashes are magic); status chance ((level / 4 - Luck / 2) x 3 + base + Ailment, +25
+  weakness, x 100/60/30 by distance, roll 0 to 99 must be below; Luck 40 or more is immune to
+  Paralyze, Sleep, Charm, Haunt, Curse, Condemn, Taint, Poison); physical or magic (what is which,
+  the stats each uses, Defend halves, Total Defense a third, Agility turn order, Luck status).
+- 12 new messages (`MsgArenaMechTopic0..5`, `MsgArenaMechText0..5`) above the generated cups block,
+  added by `scripts/add-mech-messages.py` (edit the pages there); `gen-cups.py` re-run.
+- The list waits 30 frames before opening, or the message window that has just closed left a ghost
+  over its top-left corner.
+- Tests: `mechanics_npc.txt` (every page of every topic), `npc_position2.txt`, prefix `to_mech.txt`;
+  cup_menu, onboarding, trophies_all, npcs, class_viewer and the linked `full` run unchanged
+  (p0_d1 shows the enemy team battle). Shots `build/smoke/keep/mech_*.png`.
+- Left out because the code does not state it: that bosses are the high-Luck units (not checked in
+  the enemy table); that a class adds element power (only the Djinn it needs do).
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.
