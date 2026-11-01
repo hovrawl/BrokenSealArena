@@ -336,3 +336,21 @@ looking at the screenshots (`class_viewer.txt`, `class_viewer_all.txt`, `class_v
 - Select works as designed; on a character with no Djinn owned, Now shows the classes whose
   needs the character's own element bonus already covers (Isaac: Squire; Garet: Guard).
 
+---
+
+## Mechanics teacher (patch 0045)
+
+```
+Screen:        Mechanics topics
+Job:           Pick a topic of the general mechanics to read.
+Closest model: The class viewer's list window (hand and anchor window as ClassViewer_Run).
+Opened from:   Talking to the teacher at (64, 208) (ACTOR_MECHANICS_GUIDE).
+Window:        List (4, 2, 22, 15): six rows of 16 pixels, text 24 pixels in, hand at x 2.
+Topics:        Weaknesses, Element power, Damage, Unleash chance, Status chance, Physical or
+               magic (MsgArenaMechTopic0..5).
+Input:         Up/Down (wraps), A reads the topic, B leaves. Sounds: stock.
+Text:          MsgArenaMechText0..5: 4 or 5 pages of at most four lines (about 24 characters),
+               {page_break} between, {end_wait} last; A turns the page, then the list returns.
+```
+
+Pages are edited in `scripts/add-mech-messages.py`. Shots: `mechanics_npc.txt`.

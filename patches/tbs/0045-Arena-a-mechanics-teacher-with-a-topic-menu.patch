@@ -1,0 +1,1057 @@
+From 4c5fd36affba65e3f38f9d4e36e0bb726c54b4f2 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Mon, 2 Nov 2026 10:08:48 +1100
+Subject: [PATCH] Arena: a mechanics teacher with a topic menu
+
+A teacher (sprite 0x66, which the lobby already loads: no extra sprite
+memory) stands at (64, 208) facing east against the west wall of the corridor
+below the upper hall, a new row after the scholar in both placement tables
+(ACTOR_MECHANICS_GUIDE) and a talk trigger to BattleArena_MechanicsGuide
+(scene/arena_menu.c). It loops MechanicsGuide_Choose (shop/shop/arena_class_viewer.c,
+far call, import row): a 22 by 15 list window of six topics with the shops'
+hand, A picks, B leaves; the topic's message is shown with the field message
+window (2 to 5 pages, {page_break} and {end_wait}) and the list returns on it.
+
+Topics: weaknesses, element power, damage, unleash chance, status chance,
+physical or magic. Every statement was read from the code (battle_arithmetic.c,
+arena_rules.c, ability.c, units.c, classes.c, the item and ability tables).
+12 new messages above the generated cups block (scripts/add-mech-messages.py,
+gen-cups.py re-run).
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/module/arena.h             |   6 +
+ games/tbs/include/module/arena_cups.h        |   2 +-
+ games/tbs/src/gamepak/far_call/SHOP.S        |   1 +
+ games/tbs/src/scene/arena_cup_info.inc       |  82 +++---
+ games/tbs/src/scene/arena_menu.c             |  19 ++
+ games/tbs/src/scene/battle_arena.c           |  12 +-
+ games/tbs/src/scene/import/battle_arena.s    |   1 +
+ games/tbs/src/shop/shop/arena_class_viewer.c |  70 +++++
+ games/tbs/src/system/overlay/imports.inc     |   1 +
+ games/tbs/text/en.po                         | 265 ++++++++++++++-----
+ 10 files changed, 355 insertions(+), 104 deletions(-)
+
+diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
+index 2d09a2fa61..e4ce4dc4c8 100644
+--- a/games/tbs/include/module/arena.h
++++ b/games/tbs/include/module/arena.h
+@@ -63,6 +63,9 @@ s32 ArenaCup_Heals(void);
+ s32 BattleArena_PartyManager(s32 actorId);
+ /// Talking to the scholar: the class viewer (scene/arena_menu.c).
+ s32 BattleArena_ClassViewer(s32 actorId);
++/// Talking to the mechanics teacher: a topic menu, a few pages of text each
++/// (scene/arena_menu.c).
++s32 BattleArena_MechanicsGuide(s32 actorId);
+ 
+ // File screen overlay (scene/arena_boot.c)
+ 
+@@ -86,5 +89,8 @@ s32 ArenaShop_Run(s32 kind, s32 unitId);
+ /// The class viewer for one character: lines of classes, the Djinn and stats of
+ /// each, its Psynergy (shop/shop/arena_class_viewer.c).
+ s32 ClassViewer_Run(s32 unitId);
++/// The mechanics teacher's topic list: six topics in a list window; the topic
++/// chosen, or -1 for B (shop/shop/arena_class_viewer.c).
++s32 MechanicsGuide_Choose(s32 first);
+ 
+ #endif
+diff --git a/games/tbs/include/module/arena_cups.h b/games/tbs/include/module/arena_cups.h
+index a98cad1723..412a96359b 100644
+--- a/games/tbs/include/module/arena_cups.h
++++ b/games/tbs/include/module/arena_cups.h
+@@ -70,6 +70,6 @@ extern const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT];
+ extern const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3];
+ extern const u8 gArenaCrossboneRows[3];
+ 
+-#define MSG_ARENA_CUP_NAME 10808
++#define MSG_ARENA_CUP_NAME 10820
+ 
+ #endif
+diff --git a/games/tbs/src/gamepak/far_call/SHOP.S b/games/tbs/src/gamepak/far_call/SHOP.S
+index ce9139dcc3..46134ff408 100644
+--- a/games/tbs/src/gamepak/far_call/SHOP.S
++++ b/games/tbs/src/gamepak/far_call/SHOP.S
+@@ -19,3 +19,4 @@ FarCall_ShopTable:
+ 	export ItemPicker_ChooseMemberFar, ItemPicker_ChooseMember
+ 	export ArenaShop_RunFar, ArenaShop_Run
+ 	export ClassViewer_RunFar, ClassViewer_Run
++	export MechanicsGuide_ChooseFar, MechanicsGuide_Choose
+diff --git a/games/tbs/src/scene/arena_cup_info.inc b/games/tbs/src/scene/arena_cup_info.inc
+index bf7722592b..3793d982ad 100644
+--- a/games/tbs/src/scene/arena_cup_info.inc
++++ b/games/tbs/src/scene/arena_cup_info.inc
+@@ -2,66 +2,66 @@
+ // Included by arena_menu.c. Global const data: a scene overlay has no static data of its own.
+ 
+ const struct ArenaCupReward gArenaCup0Rewards[] = {
+-    {2, 2, 0, 0, 0, 10826},
+-    {3, 2, 1, 2, 0, 10828},
+-    {4, 1, 0, 14, 0, 10835},
++    {2, 2, 0, 0, 0, 10838},
++    {3, 2, 1, 2, 0, 10840},
++    {4, 1, 0, 14, 0, 10847},
+     {5, 0, 1, 0, 91, 0},
+     {6, 0, 2, 0, 265, 0},
+-    {7, 1, 3, 22, 0, 10836},
++    {7, 1, 3, 22, 0, 10848},
+ };
+ const struct ArenaCupReward gArenaCup1Rewards[] = {
+-    {2, 2, 2, 3, 0, 10829},
++    {2, 2, 2, 3, 0, 10841},
+     {3, 0, 4, 0, 22, 0},
+-    {4, 2, 3, 3, 0, 10829},
+-    {5, 1, 5, 8, 0, 10840},
++    {4, 2, 3, 3, 0, 10841},
++    {5, 1, 5, 8, 0, 10852},
+     {6, 0, 6, 0, 76, 0},
+ };
+ const struct ArenaCupReward gArenaCup2Rewards[] = {
+-    {1, 2, 4, 5, 0, 10831},
++    {1, 2, 4, 5, 0, 10843},
+     {2, 0, 7, 0, 266, 0},
+-    {3, 1, 8, 23, 0, 10844},
++    {3, 1, 8, 23, 0, 10856},
+     {3, 0, 9, 0, 8, 0},
+-    {4, 2, 5, 2, 0, 10828},
+-    {5, 1, 10, 2, 0, 10845},
++    {4, 2, 5, 2, 0, 10840},
++    {5, 1, 10, 2, 0, 10857},
+     {5, 0, 11, 0, 93, 0},
+ };
+ const struct ArenaCupReward gArenaCup3Rewards[] = {
+-    {1, 2, 6, 1, 0, 10827},
+-    {2, 2, 7, 0, 0, 10826},
++    {1, 2, 6, 1, 0, 10839},
++    {2, 2, 7, 0, 0, 10838},
+     {3, 0, 12, 0, 36, 0},
+-    {4, 1, 13, 10, 0, 10849},
+-    {4, 2, 8, 5, 0, 10831},
+-    {5, 2, 9, 4, 0, 10830},
++    {4, 1, 13, 10, 0, 10861},
++    {4, 2, 8, 5, 0, 10843},
++    {5, 2, 9, 4, 0, 10842},
+     {6, 0, 14, 0, 130, 0},
+-    {7, 2, 10, 4, 0, 10830},
+-    {8, 2, 11, 4, 0, 10830},
++    {7, 2, 10, 4, 0, 10842},
++    {8, 2, 11, 4, 0, 10842},
+ };
+ const struct ArenaCupReward gArenaCup4Rewards[] = {
+-    {1, 2, 12, 2, 0, 10828},
++    {1, 2, 12, 2, 0, 10840},
+     {2, 0, 15, 0, 132, 0},
+-    {3, 2, 13, 0, 0, 10826},
+-    {4, 1, 16, 26, 0, 10853},
+-    {5, 2, 14, 1, 0, 10827},
++    {3, 2, 13, 0, 0, 10838},
++    {4, 1, 16, 26, 0, 10865},
++    {5, 2, 14, 1, 0, 10839},
+     {6, 0, 17, 0, 163, 0},
+ };
+ const struct ArenaCupReward gArenaCup5Rewards[] = {
+-    {1, 2, 15, 2, 0, 10828},
++    {1, 2, 15, 2, 0, 10840},
+     {2, 0, 18, 0, 95, 0},
+     {3, 0, 19, 0, 170, 0},
+-    {3, 2, 16, 0, 0, 10826},
++    {3, 2, 16, 0, 0, 10838},
+     {4, 0, 20, 0, 141, 0},
+     {4, 0, 21, 0, 134, 0},
+-    {4, 2, 17, 3, 0, 10829},
+-    {5, 1, 22, 19, 0, 10857},
++    {4, 2, 17, 3, 0, 10841},
++    {5, 1, 22, 19, 0, 10869},
+     {6, 0, 23, 0, 259, 0},
+-    {7, 1, 24, 13, 0, 10858},
+-    {8, 2, 18, 1, 0, 10827},
++    {7, 1, 24, 13, 0, 10870},
++    {8, 2, 18, 1, 0, 10839},
+ };
+ const struct ArenaCupReward gArenaCup6Rewards[] = {
+     {1, 0, 25, 0, 164, 0},
+     {2, 0, 26, 0, 113, 0},
+     {3, 0, 27, 0, 161, 0},
+-    {4, 1, 28, 27, 0, 10862},
++    {4, 1, 28, 27, 0, 10874},
+     {5, 0, 29, 0, 85, 0},
+     {5, 0, 30, 0, 162, 0},
+     {6, 0, 31, 0, 112, 0},
+@@ -74,38 +74,38 @@ const struct ArenaCupReward gArenaCup6Rewards[] = {
+ const struct ArenaCupReward gArenaCup8Rewards[] = {
+     {1, 0, 37, 0, 151, 0},
+     {2, 0, 38, 0, 267, 0},
+-    {2, 2, 19, 5, 0, 10831},
++    {2, 2, 19, 5, 0, 10843},
+     {3, 0, 39, 0, 268, 0},
+     {4, 0, 40, 0, 24, 0},
+     {5, 0, 41, 0, 96, 0},
+-    {5, 2, 20, 1, 0, 10827},
++    {5, 2, 20, 1, 0, 10839},
+     {6, 0, 42, 0, 98, 0},
+     {7, 0, 43, 0, 50, 0},
+     {8, 0, 44, 0, 83, 0},
+-    {8, 2, 21, 3, 0, 10829},
++    {8, 2, 21, 3, 0, 10841},
+     {9, 0, 45, 0, 11, 0},
+     {10, 0, 46, 0, 38, 0},
+ };
+ 
+ const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT] = {
+     // Tret Cup
+-    {8, 2, 0, 15, 6, 0, 0x0, gArenaCup0Rewards, 10832, 10833, 10834, 0x80},
++    {8, 2, 0, 15, 6, 0, 0x0, gArenaCup0Rewards, 10844, 10845, 10846, 0x80},
+     // Mercury Cup
+-    {8, 2, 1, 18, 5, 0, 0x0, gArenaCup1Rewards, 10837, 10838, 10839, 0x80},
++    {8, 2, 1, 18, 5, 0, 0x0, gArenaCup1Rewards, 10849, 10850, 10851, 0x80},
+     // Mogall Cup
+-    {7, 2, 2, 20, 7, 0, 0x0, gArenaCup2Rewards, 10841, 10842, 10843, 0x40},
++    {7, 2, 2, 20, 7, 0, 0x0, gArenaCup2Rewards, 10853, 10854, 10855, 0x40},
+     // Altin Cup
+-    {9, 2, 3, 25, 9, 0, 0x80, gArenaCup3Rewards, 10846, 10847, 10848, 0x100},
++    {9, 2, 3, 25, 9, 0, 0x80, gArenaCup3Rewards, 10858, 10859, 10860, 0x100},
+     // Tolbi Cup
+-    {8, 2, 4, 27, 6, 0, 0x40, gArenaCup4Rewards, 10850, 10851, 10852, 0x80},
++    {8, 2, 4, 27, 6, 0, 0x40, gArenaCup4Rewards, 10862, 10863, 10864, 0x80},
+     // Lunpa Cup
+-    {10, 2, 5, 35, 11, 0, 0x100, gArenaCup5Rewards, 10854, 10855, 10856, 0x200},
++    {10, 2, 5, 35, 11, 0, 0x100, gArenaCup5Rewards, 10866, 10867, 10868, 0x200},
+     // Lighthouse Cup
+-    {10, 2, 6, 50, 12, 0, 0x100, gArenaCup6Rewards, 10859, 10860, 10861, 0x200},
++    {10, 2, 6, 50, 12, 0, 0x100, gArenaCup6Rewards, 10871, 10872, 10873, 0x200},
+     // Boss Rush
+-    {6, 1, 7, 0, 0, 0, 0x0, 0, 10863, 10864, 10865, 0x3f},
++    {6, 1, 7, 0, 0, 0, 0x0, 0, 10875, 10876, 10877, 0x3f},
+     // Crossbone Isle
+-    {10, 3, 7, 0, 13, 0, 0x0, gArenaCup8Rewards, 10866, 10867, 10868, 0x200},
++    {10, 3, 7, 0, 13, 0, 0x0, gArenaCup8Rewards, 10878, 10879, 10880, 0x200},
+ };
+ 
+ const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3] = {
+diff --git a/games/tbs/src/scene/arena_menu.c b/games/tbs/src/scene/arena_menu.c
+index 067946293d..ef75508ad6 100644
+--- a/games/tbs/src/scene/arena_menu.c
++++ b/games/tbs/src/scene/arena_menu.c
+@@ -291,3 +291,22 @@ s32 BattleArena_ClassViewer(s32 actorId) {
+   Event_End();
+   return 0;
+ }
++
++/// Talking to the mechanics teacher (ACTOR_MECHANICS_GUIDE): a list of six
++/// topics (MechanicsGuide_Choose); each opens a few pages of text, then the
++/// list returns on the topic read. B leaves. Nothing about the party changes.
++s32 BattleArena_MechanicsGuide(s32 actorId) {
++  s32 topic = 0;
++
++  Event_Start();
++  Actor_SetAngleToward(actorId, gMainRoutineWork.leaderActorId, 0);
++  for (;;) {
++    topic = MechanicsGuide_Choose(topic);
++    if (topic < 0)
++      break;
++    Event_SetMessageId(MsgArenaMechText0 + topic);
++    FieldMessage_ShowAtActor(actorId, 0);
++  }
++  Event_End();
++  return 0;
++}
+diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
+index d14c07928a..29466dcf47 100644
+--- a/games/tbs/src/scene/battle_arena.c
++++ b/games/tbs/src/scene/battle_arena.c
+@@ -216,7 +216,9 @@ enum BattleArenaActorId {
+   /// Hints at the side cups, from the third cup on (MsgArenaScout).
+   ACTOR_SCOUT,
+   /// Arena romhack: the scholar in the upper hall, who opens the class viewer.
+-  ACTOR_CLASS_VIEWER
++  ACTOR_CLASS_VIEWER,
++  /// Arena romhack: the teacher of the general mechanics (a topic menu).
++  ACTOR_MECHANICS_GUIDE
+ };
+ 
+ /// The words of gBattleArena_SlotValues, by slot: the signature, then the state
+@@ -2000,6 +2002,9 @@ struct ActorPlacement gBattleArenaActorPlacements[] = {
+     // Arena romhack: the scholar of the class viewer (ACTOR_CLASS_VIEWER).
+     { 0x6f, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
+         PIXELS(56), 0, PIXELS(168), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
++    // Arena romhack: the mechanics teacher (ACTOR_MECHANICS_GUIDE).
++    { 0x66, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
++        PIXELS(64), 0, PIXELS(208), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
+     { GARET, IF_FLAG_SET(0x1), MOVEMENT_TYPE_STAND,
+         PIXELS(352), 0, PIXELS(108), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+     { IVAN, IF_FLAG_SET(0x2), MOVEMENT_TYPE_STAND,
+@@ -2095,6 +2100,9 @@ struct ActorPlacement gBattleArenaBattleActorPlacements[] = {
+     // Arena romhack: the scholar of the class viewer (ACTOR_CLASS_VIEWER).
+     { 0x6f, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
+         PIXELS(56), 0, PIXELS(168), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
++    // Arena romhack: the mechanics teacher (ACTOR_MECHANICS_GUIDE).
++    { 0x66, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
++        PIXELS(64), 0, PIXELS(208), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
+     { GARET, IF_FLAG_SET(0x1), MOVEMENT_TYPE_STAND,
+         PIXELS(104), 0, PIXELS(144), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
+     { IVAN, IF_FLAG_SET(0x2), MOVEMENT_TYPE_STAND,
+@@ -2139,6 +2147,8 @@ struct Trigger gBattleArenaTriggers[] = {
+     {TRIGGER_TALK, ACTOR_SCOUT, CONDITION_ALWAYS, MSGNO(MsgArenaScout)},
+     {TRIGGER_TALK, ACTOR_CLASS_VIEWER, CONDITION_ALWAYS,
+      EVENT(BattleArena_ClassViewer)},
++    {TRIGGER_TALK, ACTOR_MECHANICS_GUIDE, CONDITION_ALWAYS,
++     EVENT(BattleArena_MechanicsGuide)},
+ #if ARENA_TRAINING
+     {TRIGGER_TALK, ACTOR_LINKED_WINS_TELLER, CONDITION_ALWAYS,
+      EVENT(BattleArena_PartyManager)},
+diff --git a/games/tbs/src/scene/import/battle_arena.s b/games/tbs/src/scene/import/battle_arena.s
+index 5c45840660..760f371311 100644
+--- a/games/tbs/src/scene/import/battle_arena.s
++++ b/games/tbs/src/scene/import/battle_arena.s
+@@ -44,6 +44,7 @@
+ 	.set import.ItemPicker_ChooseMember, 1
+ 	.set import.ArenaShop_Run, 1
+ 	.set import.ClassViewer_Run, 1
++	.set import.MechanicsGuide_Choose, 1
+ 	.set import.WindowSprite_CreateFromResource, 1
+ 	.set import.Sprite_Create, 1
+ 	.set import.Sprite_Destroy, 1
+diff --git a/games/tbs/src/shop/shop/arena_class_viewer.c b/games/tbs/src/shop/shop/arena_class_viewer.c
+index 6d26e5f214..aed96eb31a 100644
+--- a/games/tbs/src/shop/shop/arena_class_viewer.c
++++ b/games/tbs/src/shop/shop/arena_class_viewer.c
+@@ -469,3 +469,73 @@ s32 ClassViewer_Run(s32 unitId) {
+   Shop_ReleaseWork();
+   return 0;
+ }
++
++/// Topics the mechanics teacher offers, one row of sixteen pixels each.
++#define MG_TOPIC_COUNT 6
++
++/// Arena romhack: the mechanics teacher's topic list. A window of six rows
++/// (MsgArenaMechTopic0 on) with the hand on `first`; Up and Down move (and
++/// wrap), A returns the row, B returns -1. The window closes before returning,
++/// so the topic's text can be shown. Far-called from the Battle Arena overlay.
++s32 MechanicsGuide_Choose(s32 first) {
++  struct ShopWork *shop;
++  struct Window *anchorWindow;
++  struct Window *list;
++  struct WindowSprite *anchor;
++  s32 cursor = first;
++  s32 result = -1;
++  s32 redraw = 1;
++  s32 i;
++
++  while (gKeysHeld != 0)
++    wait(1);
++  // Let a message window that has just closed finish clearing.
++  wait(30);
++  Shop_InitializeWork();
++  shop = gMenuWork;
++  anchorWindow = Window_CreateFar(-5, 0, 5, 5, WINDOW_FLAG_INSTANT);
++  anchor = WindowSprite_CreateFar(shop->cursorIcon, OUTPUT_SIZE_16X16,
++                                  anchorWindow, 0, 0);
++  anchor->motion = WINDOW_SPRITE_MOTION_WOBBLE;
++  anchor->kind = 0;
++  MenuCursor_SetPositionImmediate(&shop->cursor, -32, 112);
++  shop->cursor.anchor = anchor;
++  list = Window_CreateFar(4, 2, 22, 15, WINDOW_FLAG_INSTANT);
++  shop->mode = 12;
++
++  for (;;) {
++    if (redraw != 0) {
++      redraw = 0;
++      WindowSprite_PrepareForRedrawFar(list);
++      for (i = 0; i < MG_TOPIC_COUNT; i++)
++        Text_DrawMessageAsTilesFar(MsgArenaMechTopic0 + i, list, 24, i * 16 + 8);
++      MenuCursor_Place(list, 2, cursor * 16 + 8);
++    }
++    wait(1);
++    if ((gKeysPressed & KEY_B) != 0) {
++      Sound_PlayFar(SE_MENU_CANCEL);
++      break;
++    }
++    if ((gKeysPressed & KEY_A) != 0) {
++      Sound_PlayFar(SE_MENU_CONFIRM);
++      result = cursor;
++      break;
++    }
++    if ((gKeysRepeat & KEY_UP) != 0) {
++      Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++      cursor = (cursor + MG_TOPIC_COUNT - 1) % MG_TOPIC_COUNT;
++      redraw = 1;
++    }
++    if ((gKeysRepeat & KEY_DOWN) != 0) {
++      Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++      cursor = (cursor + 1) % MG_TOPIC_COUNT;
++      redraw = 1;
++    }
++  }
++
++  Window_CloseFar(list, 2);
++  Window_CloseFar(anchorWindow, 2);
++  wait(1);
++  Shop_ReleaseWork();
++  return result;
++}
+diff --git a/games/tbs/src/system/overlay/imports.inc b/games/tbs/src/system/overlay/imports.inc
+index 6242a4be36..1f621e0992 100644
+--- a/games/tbs/src/system/overlay/imports.inc
++++ b/games/tbs/src/system/overlay/imports.inc
+@@ -368,6 +368,7 @@
+ 	import ItemPicker_ChooseMember, ItemPicker_ChooseMemberFar
+ 	import ArenaShop_Run, ArenaShop_RunFar
+ 	import ClassViewer_Run, ClassViewer_RunFar
++	import MechanicsGuide_Choose, MechanicsGuide_ChooseFar
+ @ Battle bank (far_call/BATTLE.S)
+ 	import DjinnRecovery_CountDownTwenty, DjinnRecovery_CountDownTwentyFar
+ 	import DebugParameterSet_Load, DebugParameterSet_LoadFar
+diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
+index c1e62530a3..8e7d77467c 100644
+--- a/games/tbs/text/en.po
++++ b/games/tbs/text/en.po
+@@ -65409,114 +65409,257 @@ msgctxt "MsgArenaCvLegend"
+ msgid "10807"
+ msgstr "Red: not learned yet"
+ 
++msgctxt "MsgArenaMechTopic0"
++msgid "10808"
++msgstr "Weaknesses"
++
++msgctxt "MsgArenaMechTopic1"
++msgid "10809"
++msgstr "Element power"
++
++msgctxt "MsgArenaMechTopic2"
++msgid "10810"
++msgstr "Damage"
++
++msgctxt "MsgArenaMechTopic3"
++msgid "10811"
++msgstr "Unleash chance"
++
++msgctxt "MsgArenaMechTopic4"
++msgid "10812"
++msgstr "Status chance"
++
++msgctxt "MsgArenaMechTopic5"
++msgid "10813"
++msgstr "Physical or magic"
++
++msgctxt "MsgArenaMechText0"
++msgid "10814"
++msgstr ""
++"Foes resist some\n"
++"elements less than\n"
++"others. Hit the\n"
++"weakest one.{page_break}"
++"A hit that ends in\n"
++"!!! struck its weakest\n"
++"element. A hit that\n"
++"ends in a dot, its best.{page_break}"
++"A Djinni hitting a\n"
++"weakness may earn extra\n"
++"coins and exp: Power -\n"
++"Resist + 30 percent.{page_break}"
++"Foes can be weak to\n"
++"an effect, such as\n"
++"sleep. That adds 25 to\n"
++"the chance to land it.{end_wait}"
++
++msgctxt "MsgArenaMechText1"
++msgid "10815"
++msgstr ""
++"Power is how hard\n"
++"you hit with an element.\n"
++"Resist is how well you\n"
++"take a hit of it.{page_break}"
++"Each Djinni set adds\n"
++"about 5 Power and Resist\n"
++"of its element. Gear\n"
++"adds more. Cap: 255.{page_break}"
++"Power - Resist is the\n"
++"difference. Magic: each\n"
++"100 adds 50 percent.\n"
++"Physical: 25 percent.{page_break}"
++"Healing counts only\n"
++"your Power: the spell's\n"
++"power x (1 + (Power\n"
++"- 100) / 200).{end_wait}"
++
++msgctxt "MsgArenaMechText2"
++msgid "10816"
++msgstr ""
++"Physical: (Attack -\n"
++"Defense) / 2 x the\n"
++"move's power / 10,\n"
++"then x element factor.{page_break}"
++"Magic: (move power +\n"
++"max PP / 8) x (1 + max\n"
++"PP / 1024), then x\n"
++"the element factor.{page_break}"
++"Ward: a party class\n"
++"takes 85 to 110\n"
++"percent of magic\n"
++"damage.{page_break}"
++"Summons add 2, 4, 6 or\n"
++"8 percent of max HP for\n"
++"1 to 4 Djinn, instead\n"
++"of PP bonus and Ward.{end_wait}"
++
++msgctxt "MsgArenaMechText3"
++msgid "10817"
++msgstr ""
++"Each Attack may\n"
++"unleash. Swords and\n"
++"axes: 30 percent. Maces\n"
++"25. Rods and staves 35.{page_break}"
++"Gear with Criticals\n"
++"adds its percent to\n"
++"the chance. 30 plus 10\n"
++"gives 40 percent.{page_break}"
++"Delusion stops all\n"
++"unleashes. Sword, axe\n"
++"and mace ones are\n"
++"physical; rod ones magic.{end_wait}"
++
++msgctxt "MsgArenaMechText4"
++msgid "10818"
++msgstr ""
++"Chance in percent:\n"
++"(level / 4 - Luck / 2)\n"
++"x 3 + base chance\n"
++"+ Ailment bonus.{page_break}"
++"Level is the caster's,\n"
++"Luck the target's.\n"
++"Add 25 if the target\n"
++"is weak to the effect.{page_break}"
++"Then x 100, 60 or 30\n"
++"percent by distance\n"
++"from the aim. Roll 0 to\n"
++"99: it must be below.{page_break}"
++"Luck 40+ is immune to\n"
++"Paralyze, Sleep, Charm,\n"
++"Haunt, Curse, Condemn,\n"
++"Taint and Poison.{end_wait}"
++
++msgctxt "MsgArenaMechText5"
++msgid "10819"
++msgstr ""
++"Physical: Attack, sword,\n"
++"axe and mace unleashes,\n"
++"most Djinn, PP moves\n"
++"like Dragon Cloud.{page_break}"
++"Magic: Psynergy,\n"
++"summons and the unleash\n"
++"of a rod or staff.{page_break}"
++"Physical hits use your\n"
++"Attack against its\n"
++"Defense. An element also\n"
++"uses Power vs Resist.{page_break}"
++"Magic ignores Defense.\n"
++"It uses your max PP,\n"
++"element Power, its\n"
++"Resist, and Ward.{page_break}"
++"Defend halves any hit,\n"
++"Total Defense takes a\n"
++"third. Agility: turn\n"
++"order. Luck: status.{end_wait}"
++
+ # BEGIN GENERATED CUPS (scripts/gen-cups.py; do not edit by hand)
+ 
+ msgctxt "MsgArenaCupName0"
+-msgid "10808"
++msgid "10820"
+ msgstr ""
+ "Tret Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName1"
+-msgid "10809"
++msgid "10821"
+ msgstr ""
+ "Mercury Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName2"
+-msgid "10810"
++msgid "10822"
+ msgstr ""
+ "Mogall Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName3"
+-msgid "10811"
++msgid "10823"
+ msgstr ""
+ "Altin Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName4"
+-msgid "10812"
++msgid "10824"
+ msgstr ""
+ "Tolbi Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName5"
+-msgid "10813"
++msgid "10825"
+ msgstr ""
+ "Lunpa Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName6"
+-msgid "10814"
++msgid "10826"
+ msgstr ""
+ "Lighthouse Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName7"
+-msgid "10815"
++msgid "10827"
+ msgstr ""
+ "Boss Rush"
+ 
+ 
+ msgctxt "MsgArenaCupName8"
+-msgid "10816"
++msgid "10828"
+ msgstr ""
+ "Crossbone Isle"
+ 
+ 
+ msgctxt "MsgArenaCupNext"
+-msgid "10817"
++msgid "10829"
+ msgstr ""
+ "Next cup"
+ 
+ 
+ msgctxt "MsgArenaCupReplay"
+-msgid "10818"
++msgid "10830"
+ msgstr ""
+ "Replay"
+ 
+ 
+ msgctxt "MsgArenaCupSide"
+-msgid "10819"
++msgid "10831"
+ msgstr ""
+ "Side cups"
+ 
+ 
+ msgctxt "MsgArenaCupReplayPrompt"
+-msgid "10820"
++msgid "10832"
+ msgstr ""
+ "Replay which cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupGroupEarly"
+-msgid "10821"
++msgid "10833"
+ msgstr ""
+ "Early cups"
+ 
+ 
+ msgctxt "MsgArenaCupGroupLate"
+-msgid "10822"
++msgid "10834"
+ msgstr ""
+ "Later cups"
+ 
+ 
+ msgctxt "MsgArenaCupSidePrompt"
+-msgid "10823"
++msgid "10835"
+ msgstr ""
+ "Which side cup\n"
+ "will you enter?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaGearReward"
+-msgid "10824"
++msgid "10836"
+ msgstr ""
+ "A find from the\n"
+ "dungeon! It is yours.{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaDjinnNoRoom"
+-msgid "10825"
++msgid "10837"
+ msgstr ""
+ "Your Djinn are full!\n"
+ "Make room, then win\n"
+@@ -65524,56 +65667,56 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaBoostGetHP"
+-msgid "10826"
++msgid "10838"
+ msgstr ""
+ "You can boost\n"
+ "HP once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetPP"
+-msgid "10827"
++msgid "10839"
+ msgstr ""
+ "You can boost\n"
+ "PP once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetAttack"
+-msgid "10828"
++msgid "10840"
+ msgstr ""
+ "You can boost\n"
+ "Attack once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetDefense"
+-msgid "10829"
++msgid "10841"
+ msgstr ""
+ "You can boost\n"
+ "Defense once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetAgility"
+-msgid "10830"
++msgid "10842"
+ msgstr ""
+ "You can boost\n"
+ "Agility once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetLuck"
+-msgid "10831"
++msgid "10843"
+ msgstr ""
+ "You can boost\n"
+ "Luck once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaCupConfirm0"
+-msgid "10832"
++msgid "10844"
+ msgstr ""
+ "Enter the\n"
+ "Tret Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared0"
+-msgid "10833"
++msgid "10845"
+ msgstr ""
+ "You cleared the\n"
+ "Tret Cup!\n"
+@@ -65581,7 +65724,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst0"
+-msgid "10834"
++msgid "10846"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65595,7 +65738,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup0DjinnForge"
+-msgid "10835"
++msgid "10847"
+ msgstr ""
+ "You won the Djinni\n"
+ "Forge!\n"
+@@ -65603,7 +65746,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup0DjinnBreeze"
+-msgid "10836"
++msgid "10848"
+ msgstr ""
+ "You won the Djinni\n"
+ "Breeze!\n"
+@@ -65611,14 +65754,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm1"
+-msgid "10837"
++msgid "10849"
+ msgstr ""
+ "Enter the\n"
+ "Mercury Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared1"
+-msgid "10838"
++msgid "10850"
+ msgstr ""
+ "You cleared the\n"
+ "Mercury Cup!\n"
+@@ -65626,7 +65769,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst1"
+-msgid "10839"
++msgid "10851"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65638,7 +65781,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup1DjinnSleet"
+-msgid "10840"
++msgid "10852"
+ msgstr ""
+ "You won the Djinni\n"
+ "Sleet!\n"
+@@ -65646,14 +65789,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm2"
+-msgid "10841"
++msgid "10853"
+ msgstr ""
+ "Enter the\n"
+ "Mogall Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared2"
+-msgid "10842"
++msgid "10854"
+ msgstr ""
+ "You cleared the\n"
+ "Mogall Cup!\n"
+@@ -65661,7 +65804,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst2"
+-msgid "10843"
++msgid "10855"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65673,7 +65816,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup2DjinnZephyr"
+-msgid "10844"
++msgid "10856"
+ msgstr ""
+ "You won the Djinni\n"
+ "Zephyr!\n"
+@@ -65681,7 +65824,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup2DjinnQuartz"
+-msgid "10845"
++msgid "10857"
+ msgstr ""
+ "You won the Djinni\n"
+ "Quartz!\n"
+@@ -65689,14 +65832,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm3"
+-msgid "10846"
++msgid "10858"
+ msgstr ""
+ "Enter the\n"
+ "Altin Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared3"
+-msgid "10847"
++msgid "10859"
+ msgstr ""
+ "You cleared the\n"
+ "Altin Cup!\n"
+@@ -65704,7 +65847,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst3"
+-msgid "10848"
++msgid "10860"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65719,7 +65862,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup3DjinnSpritz"
+-msgid "10849"
++msgid "10861"
+ msgstr ""
+ "You won the Djinni\n"
+ "Spritz!\n"
+@@ -65727,14 +65870,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm4"
+-msgid "10850"
++msgid "10862"
+ msgstr ""
+ "Enter the\n"
+ "Tolbi Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared4"
+-msgid "10851"
++msgid "10863"
+ msgstr ""
+ "You cleared the\n"
+ "Tolbi Cup!\n"
+@@ -65742,7 +65885,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst4"
+-msgid "10852"
++msgid "10864"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65756,7 +65899,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup4DjinnSquall"
+-msgid "10853"
++msgid "10865"
+ msgstr ""
+ "You won the Djinni\n"
+ "Squall!\n"
+@@ -65764,14 +65907,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm5"
+-msgid "10854"
++msgid "10866"
+ msgstr ""
+ "Enter the\n"
+ "Lunpa Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared5"
+-msgid "10855"
++msgid "10867"
+ msgstr ""
+ "You cleared the\n"
+ "Lunpa Cup!\n"
+@@ -65779,7 +65922,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst5"
+-msgid "10856"
++msgid "10868"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65795,7 +65938,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup5DjinnFlash"
+-msgid "10857"
++msgid "10869"
+ msgstr ""
+ "You won the Djinni\n"
+ "Flash!\n"
+@@ -65803,7 +65946,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup5DjinnDew"
+-msgid "10858"
++msgid "10870"
+ msgstr ""
+ "You won the Djinni\n"
+ "Dew!\n"
+@@ -65811,14 +65954,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm6"
+-msgid "10859"
++msgid "10871"
+ msgstr ""
+ "Enter the\n"
+ "Lighthouse Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared6"
+-msgid "10860"
++msgid "10872"
+ msgstr ""
+ "You cleared the\n"
+ "Lighthouse Cup!\n"
+@@ -65826,7 +65969,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst6"
+-msgid "10861"
++msgid "10873"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65842,7 +65985,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup6DjinnLuff"
+-msgid "10862"
++msgid "10874"
+ msgstr ""
+ "You won the Djinni\n"
+ "Luff!\n"
+@@ -65850,14 +65993,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm7"
+-msgid "10863"
++msgid "10875"
+ msgstr ""
+ "Enter the\n"
+ "Boss Rush?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared7"
+-msgid "10864"
++msgid "10876"
+ msgstr ""
+ "You cleared the\n"
+ "Boss Rush!\n"
+@@ -65865,7 +66008,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst7"
+-msgid "10865"
++msgid "10877"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65873,14 +66016,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm8"
+-msgid "10866"
++msgid "10878"
+ msgstr ""
+ "Enter the\n"
+ "Crossbone Isle?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared8"
+-msgid "10867"
++msgid "10879"
+ msgstr ""
+ "You cleared the\n"
+ "Crossbone Isle!\n"
+@@ -65888,7 +66031,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst8"
+-msgid "10868"
++msgid "10880"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+-- 
+2.53.0
+
