@@ -10,6 +10,12 @@ wait 40
 tap A
 wait 40
 tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 40
+tap A
 wait 60
 # TEST: swap party places 3 and 4 (Mia and Ivan) on both consoles
 poke 0x0200043A 1 2
