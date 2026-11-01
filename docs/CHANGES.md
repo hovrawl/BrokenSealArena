@@ -488,6 +488,20 @@ stock-data caveats of patch 17 (Isaac's HP halved, Confuse as Delude) are gone.
   recovery list is emptied (`ArenaMenu_RestoreDjinn`). Checked with `scripts/smoke/djinn_reset.txt`
   (a Djinni poked onto standby is set again after the win) and `cup_reward_item.txt` (Fur Coat).
 
+### 30. Cup gear spread over each cup's whole stretch of the story
+- Patch: `0030-Arena-cup-gear-is-spread-over-the-whole-story-stretc.patch`
+- A cup pays the equipment of everything between the previous cup's boss dungeon and its own
+  (chests, gifts, and the rare drops of the stretch's mobs), in story order, at most two a
+  round, each piece dearer than the earlier one of its type. The stretch table is
+  `scripts/cupstretch.py` (scenes in story order and encounter regions per cup); `cup-gear.py
+  --equip` and `cup-drops.py` list by it. Added: Vambrace (Altin), Turtle Boots (Lunpa), Lure
+  Cap, Lucky Cap, Thunder Crown, Dragon Scales and Gaia Blade (Lighthouse); the Lighthouse
+  gear now runs over rounds 1 to 9. 47 of the 64 reward flags are used. Checked with
+  `cup_reward_item.txt` (Fur Coat, round 5) and `cup_reward_item2.txt` (Lighthouse round 6:
+  Feathered Robe and Asura's Armor, once). Left out: Colosso prizes (weak) and Bandit's Sword.
+  The story position of Vault, Vault Cave, Hammet Palace and Xian is a guess (marked in
+  `cupstretch.py`).
+
 ## Dropped on the way
 
 - The first training menu was a full-screen canvas-text window with its own list

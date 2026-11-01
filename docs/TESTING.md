@@ -159,5 +159,6 @@ The Gauntlet and Boss Rush scripts (`clear`, `rungs`, `rungs_rush`, `tournaments
 - `cup_clear.txt`: first clear of the Tret Cup (win count poked to 7 mid-battle): victory,
   the unlock scene, level 15.
 - `cup_reward_item.txt`, `cup_reward_djinn.txt`: a gear round (Power Bread) and the Forge round.
+- `cup_reward_item2.txt`: the Lighthouse Cup (cup byte poked to 6), round 6: two gear messages.
 - `cup_rungs.txt`: the first frame of all 76 rounds of the 9 cups (generated; cup byte 0x0200013F).
 Poke map: cup 0x0200013F, progress 0x0200013E, side bits 0x0200013D, streak 0x020004EA.

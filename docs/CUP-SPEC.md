@@ -129,6 +129,11 @@ gear that the story finds in **chests** is the reward, and two mechanisms delive
    the story only passes by) is earned in side cups, themed on a dungeon: the chest contents
    of that dungeon are the first-clear rewards.
 
+**Gear spread (patch 0030).** A cup pays the gear of its whole stretch of the story (the
+previous cup's boss dungeon up to its own), not only its own region: the table is
+`scripts/cupstretch.py`, the rewards `GEAR` in `scripts/cupdata.py`; `cup-gear.py --equip` and
+`cup-drops.py` list the equipment by stretch. Equipment only, at most two a round.
+
 Research for the builder: list each scene's chests and their items. Chests are
 `TreasureSpot` actors (`include/field/field_work.h:24`) in the scene tables, 34 scenes mention
 them; write `scripts/cup-gear.py` to join scene, chest id and item (as `cup-candidates.py` does
