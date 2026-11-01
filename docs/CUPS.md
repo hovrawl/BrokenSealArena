@@ -51,6 +51,9 @@ lobby signature (patch 14) which should also carry the PvP bracket.
 
 ## Revision, 2026-11-01 (supersedes the items above where they differ)
 
+- **Stat boosts:** the story's stat-boost items (Power Bread, Cookie, Apple, Hard Nut, Mint,
+  Lucky Pepper) in a cup's stretch are won as boosts, not items (`BOOSTS` in `cupdata.py`; one
+  party-wide pool per stat, spent free at the party manager's Stats; docs/CHANGES.md 43).
 - **Cups are data** (rounds, teams, rewards, requirements). They do not set the party or its
   level.
 - **The level is a gate.** New Game starts the party at level 10 with only the first cup

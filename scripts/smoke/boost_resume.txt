@@ -1,0 +1,38 @@
+# Save mid-series with boosts earned (HP 3, Attack 2, Luck 1 poked into the flag bytes 0x02000128...), restart, Continue, and read the pool back: it survives the save. The reward bit (0x0200012E) too.
+# through the Pause menu, restart the console, choose Continue, read the win count
+# and the series flag, then talk to the attendant: the give-up question should say
+# round 6.
+include to_solo.txt
+poke 0x020004EA 2 5
+poke 0x02000128 1 3
+poke 0x0200012A 1 2
+poke 0x0200012D 1 1
+poke 0x0200012E 1 5
+tap T
+wait 60
+tap A
+wait 90
+shot /tmp/shots/q00.png
+tap A
+wait 90
+shot /tmp/shots/q01.png
+tap A
+wait 120
+shot /tmp/shots/q02.png
+reset
+wait 900
+tap D
+wait 20
+tap A
+wait 120
+shot /tmp/shots/q03.png
+tap A
+wait 200
+tap A
+wait 300
+shot /tmp/shots/q04.png
+peek 0x02000128 1
+peek 0x02000129 1
+peek 0x0200012A 1
+peek 0x0200012D 1
+peek 0x0200012E 1

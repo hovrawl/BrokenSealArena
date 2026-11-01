@@ -1,0 +1,1188 @@
+From b4062c1971ec1c457a4c1d45cefae7f1cd44102d Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Mon, 2 Nov 2026 09:24:28 +1100
+Subject: [PATCH] Arena: stat boosts won by rounds replace the coin stat shop
+
+The story's stat-boost items (Power Bread HP +8, Cookie PP +4, Apple Attack +5,
+Hard Nut Defense +3, Mint Agility +4, Lucky Pepper Luck +1; menu/menu/use.c says
+which raises what) are no longer given. cupdata.py BOOSTS attaches the ones
+from each cup's story stretch to rounds ("boost" rewards, 22 in all); the first
+win of the round adds one to a party-wide pool of that stat (a persistent byte
+flag per stat at 0x740 + 8 * stat, once-only bits at 0x770 to 0x78f) and the
+attendant says "You can boost HP once more!". New reward kind
+ARENA_REWARD_BOOST in ArenaSeries_GiveRewards.
+
+The party manager's Stats counter (arena_shop.c) now spends the pool for free:
+the tag under each icon and the right window show the boosts left, the price
+window the boosts used; a Reset entry gives every applied boost back. Applied
+boosts are not stored: Unit_GetLevelBase (levels.c, far call
+Unit_GetLevelBaseFar) is the closed form of the base stats from levelling
+alone, and a unit's boosts applied = (base stat - that) / the boost's amount;
+Reset sets the base stats back to it. The stat icons are fixed to the items'
+real stats. Messages above the generated block; gen-cups.py re-run.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/gamepak/far_call/game.h |   4 +
+ games/tbs/include/module/arena.h          |   9 +
+ games/tbs/include/module/arena_cups.h     |   4 +-
+ games/tbs/include/module/game/game.h      |   1 +
+ games/tbs/src/game/game/levels.c          |  41 +++++
+ games/tbs/src/gamepak/far_call/GAME.S     |   1 +
+ games/tbs/src/scene/arena_cup_info.inc    |  60 ++++---
+ games/tbs/src/scene/arena_series.c        |  17 +-
+ games/tbs/src/shop/shop/arena_shop.c      | 192 +++++++++++++++++-----
+ games/tbs/src/system/overlay/imports.inc  |   1 +
+ games/tbs/text/en.po                      | 176 +++++++++++++-------
+ 11 files changed, 383 insertions(+), 123 deletions(-)
+
+diff --git a/games/tbs/include/gamepak/far_call/game.h b/games/tbs/include/gamepak/far_call/game.h
+index fdd6baa038..ae60983de5 100644
+--- a/games/tbs/include/gamepak/far_call/game.h
++++ b/games/tbs/include/gamepak/far_call/game.h
+@@ -161,6 +161,10 @@ const struct SummonDefinition *SummonDefinition_Get(u32 summon_id);
+ s32 Djinn_GetAbilityIdFar(u32 group, u32 index);
+ /// Raises a character a level at a time up to `lv`, then recomputes its stats.
+ void Unit_LevelUpToFar(s32 unit, s32 lv);
++/// Arena romhack: the base stats from levelling alone at `level`, six s32 in
++/// `out` (HP, PP, Attack, Defense, Agility, Luck). The stat counter's boosts
++/// are what a unit's base stats hold above this.
++void Unit_GetLevelBaseFar(s32 unit, s32 level, s32 *out);
+ /// Returns the unit's whole element level in one element, 0 for ELEMENT_NONE;
+ /// the Status screens show it.
+ s32 Unit_GetElementLevelFar(s32 owner, s32 index);
+diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
+index 62b5b82be6..847f65ce1d 100644
+--- a/games/tbs/include/module/arena.h
++++ b/games/tbs/include/module/arena.h
+@@ -27,6 +27,15 @@
+ //                                 (ARENA_REWARD_FLAG_FIRST in arena_cups.h)
+ //   0x790 to 0x79f                trophy of cup n (n 0 to 15) stands in the lobby,
+ //                                 set at the first clear (FLAG_ARENA_TROPHY_FIRST)
++//   0x770 to 0x78f                one bit for each stat boost reward given
++//                                 (ARENA_BOOST_REWARD_FLAG_FIRST in arena_cups.h)
++//   0x740 to 0x76f                six bytes, one for each stat (HP, PP, Attack,
++//                                 Defense, Agility, Luck): the boosts earned so
++//                                 far, which the stat counter spends across the
++//                                 party (FLAG_ARENA_BOOSTS + 8 * stat). The
++//                                 boosts applied are not stored: they are read
++//                                 off the units' base stats (Unit_GetLevelBase).
++#define FLAG_ARENA_BOOSTS 0x740
+ #define FLAG_ARENA_TROPHY_FIRST 0x790
+ #define FLAG_ARENA_TOURNAMENT 0x7f8
+ #define FLAG_ARENA_PROGRESS 0x7f0
+diff --git a/games/tbs/include/module/arena_cups.h b/games/tbs/include/module/arena_cups.h
+index da34204815..34fd23386f 100644
+--- a/games/tbs/include/module/arena_cups.h
++++ b/games/tbs/include/module/arena_cups.h
+@@ -20,6 +20,8 @@
+ #define ARENA_CUP_HEALS 0x02 /* the party is healed after each win */
+ #define ARENA_REWARD_ITEM 0
+ #define ARENA_REWARD_DJINN 1
++#define ARENA_REWARD_BOOST 2 /* value = the stat; its flag is in the boost block */
++#define ARENA_BOOST_REWARD_FLAG_FIRST 0x770
+ 
+ #include "battle/formations.h"
+ 
+@@ -68,6 +70,6 @@ extern const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT];
+ extern const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3];
+ extern const u8 gArenaCrossboneRows[3];
+ 
+-#define MSG_ARENA_CUP_NAME 10783
++#define MSG_ARENA_CUP_NAME 10789
+ 
+ #endif
+diff --git a/games/tbs/include/module/game/game.h b/games/tbs/include/module/game/game.h
+index 1a52bebc4e..30d39f6097 100644
+--- a/games/tbs/include/module/game/game.h
++++ b/games/tbs/include/module/game/game.h
+@@ -79,6 +79,7 @@ u32 Unit_GetExperienceForLevel(s32 unitId, s32 level);
+ struct LevelUpResult *Unit_LevelUp(s32 unitId, struct LevelUpResult *gains);
+ struct LevelUpResult *Unit_TryLevelUp(s32 unitId, struct LevelUpResult *gains);
+ void Unit_LevelUpTo(s32 unitId, s32 targetLevel);
++void Unit_GetLevelBase(s32 unitId, s32 level, s32 *out);
+ 
+ s32 GameFlag_Get(s32 flag);
+ s32 GameFlag_Set(s32 flag);
+diff --git a/games/tbs/src/game/game/levels.c b/games/tbs/src/game/game/levels.c
+index 0b67ecadeb..48674471bb 100644
+--- a/games/tbs/src/game/game/levels.c
++++ b/games/tbs/src/game/game/levels.c
+@@ -423,6 +423,47 @@ struct LevelUpResult *Unit_LevelUp(s32 unitId, struct LevelUpResult *gains) {
+   return gains;
+ }
+ 
++#if ARENA_RULES_LEVELUP
++/// Arena romhack: the base stats a character has at `level` from levelling
++/// alone, as Unit_LevelUp adds them without the random part, written to
++/// out[0..5] in the stat counter's order (HP, PP, Attack, Defense, Agility,
++/// Luck). A stat boost raises a base stat above this, so the stat counter
++/// takes boosts applied = (base now - this) / the boost's amount, and Reset sets
++/// the base back to this.
++void Unit_GetLevelBase(s32 unitId, s32 level, s32 *out) {
++  struct CharacterDefinition *growth = Character_GetDefinition(unitId);
++  s32 l;
++  s32 band;
++  s32 span;
++
++  for (l = 0; l < 6; l++)
++    out[l] = 0;
++  for (l = 1; l <= level; l++) {
++    if (l == 1) {
++      out[0] += growth->hp[0];
++      out[1] += growth->pp[0];
++      out[2] += growth->atk[0];
++      out[3] += growth->def[0];
++      out[4] += growth->agi[0];
++      out[5] += growth->luck[0];
++    }
++    band = l / 20;
++    CLAMP(band, 0, 4);
++    span = l >= 20 ? 20 : 19;
++#define ARENA_BASE_GAIN(stat, i)                                               \
++  out[i] += l * (growth->stat[band + 1] - growth->stat[band]) / span -        \
++            (l - 1) * (growth->stat[band + 1] - growth->stat[band]) / span
++    ARENA_BASE_GAIN(hp, 0);
++    ARENA_BASE_GAIN(pp, 1);
++    ARENA_BASE_GAIN(atk, 2);
++    ARENA_BASE_GAIN(def, 3);
++    ARENA_BASE_GAIN(agi, 4);
++    ARENA_BASE_GAIN(luck, 5);
++#undef ARENA_BASE_GAIN
++  }
++}
++#endif
++
+ /// Levels the character up once if its experience reaches the next level.
+ /// Returns `gains` filled with the gains, or NULL. Called after a battle by
+ /// Battle_AwardSpoils, once for each level a party member reaches. At level 99
+diff --git a/games/tbs/src/gamepak/far_call/GAME.S b/games/tbs/src/gamepak/far_call/GAME.S
+index 9119065c9f..178090fb86 100644
+--- a/games/tbs/src/gamepak/far_call/GAME.S
++++ b/games/tbs/src/gamepak/far_call/GAME.S
+@@ -102,3 +102,4 @@ FarCall_GameTable:
+ 	export PartyInventory_CountFreeSlotsFar, PartyInventory_CountFreeSlots
+ 	export InventorySnapshot_SaveFar, InventorySnapshot_Save
+ 	export InventorySnapshot_RestoreFar, InventorySnapshot_Restore
++	export Unit_GetLevelBaseFar, Unit_GetLevelBase
+diff --git a/games/tbs/src/scene/arena_cup_info.inc b/games/tbs/src/scene/arena_cup_info.inc
+index 4338148605..57e08e1c5d 100644
+--- a/games/tbs/src/scene/arena_cup_info.inc
++++ b/games/tbs/src/scene/arena_cup_info.inc
+@@ -2,47 +2,66 @@
+ // Included by arena_menu.c. Global const data: a scene overlay has no static data of its own.
+ 
+ const struct ArenaCupReward gArenaCup0Rewards[] = {
+-    {4, 1, 0, 14, 0, 10804},
++    {2, 2, 0, 0, 0, 10807},
++    {3, 2, 1, 2, 0, 10809},
++    {4, 1, 0, 14, 0, 10816},
+     {5, 0, 1, 0, 91, 0},
+     {6, 0, 2, 0, 265, 0},
+-    {7, 1, 3, 22, 0, 10805},
++    {7, 1, 3, 22, 0, 10817},
+ };
+ const struct ArenaCupReward gArenaCup1Rewards[] = {
++    {2, 2, 2, 3, 0, 10810},
+     {3, 0, 4, 0, 22, 0},
+-    {5, 1, 5, 8, 0, 10809},
++    {4, 2, 3, 3, 0, 10810},
++    {5, 1, 5, 8, 0, 10821},
+     {6, 0, 6, 0, 76, 0},
+ };
+ const struct ArenaCupReward gArenaCup2Rewards[] = {
++    {1, 2, 4, 5, 0, 10812},
+     {2, 0, 7, 0, 266, 0},
+-    {3, 1, 8, 23, 0, 10813},
++    {3, 1, 8, 23, 0, 10825},
+     {3, 0, 9, 0, 8, 0},
+-    {5, 1, 10, 2, 0, 10814},
++    {4, 2, 5, 2, 0, 10809},
++    {5, 1, 10, 2, 0, 10826},
+     {5, 0, 11, 0, 93, 0},
+ };
+ const struct ArenaCupReward gArenaCup3Rewards[] = {
++    {1, 2, 6, 1, 0, 10808},
++    {2, 2, 7, 0, 0, 10807},
+     {3, 0, 12, 0, 36, 0},
+-    {4, 1, 13, 10, 0, 10818},
++    {4, 1, 13, 10, 0, 10830},
++    {4, 2, 8, 5, 0, 10812},
++    {5, 2, 9, 4, 0, 10811},
+     {6, 0, 14, 0, 130, 0},
++    {7, 2, 10, 4, 0, 10811},
++    {8, 2, 11, 4, 0, 10811},
+ };
+ const struct ArenaCupReward gArenaCup4Rewards[] = {
++    {1, 2, 12, 2, 0, 10809},
+     {2, 0, 15, 0, 132, 0},
+-    {4, 1, 16, 26, 0, 10822},
++    {3, 2, 13, 0, 0, 10807},
++    {4, 1, 16, 26, 0, 10834},
++    {5, 2, 14, 1, 0, 10808},
+     {6, 0, 17, 0, 163, 0},
+ };
+ const struct ArenaCupReward gArenaCup5Rewards[] = {
++    {1, 2, 15, 2, 0, 10809},
+     {2, 0, 18, 0, 95, 0},
+     {3, 0, 19, 0, 170, 0},
++    {3, 2, 16, 0, 0, 10807},
+     {4, 0, 20, 0, 141, 0},
+     {4, 0, 21, 0, 134, 0},
+-    {5, 1, 22, 19, 0, 10826},
++    {4, 2, 17, 3, 0, 10810},
++    {5, 1, 22, 19, 0, 10838},
+     {6, 0, 23, 0, 259, 0},
+-    {7, 1, 24, 13, 0, 10827},
++    {7, 1, 24, 13, 0, 10839},
++    {8, 2, 18, 1, 0, 10808},
+ };
+ const struct ArenaCupReward gArenaCup6Rewards[] = {
+     {1, 0, 25, 0, 164, 0},
+     {2, 0, 26, 0, 113, 0},
+     {3, 0, 27, 0, 161, 0},
+-    {4, 1, 28, 27, 0, 10831},
++    {4, 1, 28, 27, 0, 10843},
+     {5, 0, 29, 0, 85, 0},
+     {5, 0, 30, 0, 162, 0},
+     {6, 0, 31, 0, 112, 0},
+@@ -55,35 +74,38 @@ const struct ArenaCupReward gArenaCup6Rewards[] = {
+ const struct ArenaCupReward gArenaCup8Rewards[] = {
+     {1, 0, 37, 0, 151, 0},
+     {2, 0, 38, 0, 267, 0},
++    {2, 2, 19, 5, 0, 10812},
+     {3, 0, 39, 0, 268, 0},
+     {4, 0, 40, 0, 24, 0},
+     {5, 0, 41, 0, 96, 0},
++    {5, 2, 20, 1, 0, 10808},
+     {6, 0, 42, 0, 98, 0},
+     {7, 0, 43, 0, 50, 0},
+     {8, 0, 44, 0, 83, 0},
++    {8, 2, 21, 3, 0, 10810},
+     {9, 0, 45, 0, 11, 0},
+     {10, 0, 46, 0, 38, 0},
+ };
+ 
+ const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT] = {
+     // Tret Cup
+-    {8, 2, 0, 15, 4, 0, 0x0, gArenaCup0Rewards, 10801, 10802, 10803, 0x80},
++    {8, 2, 0, 15, 6, 0, 0x0, gArenaCup0Rewards, 10813, 10814, 10815, 0x80},
+     // Mercury Cup
+-    {8, 2, 1, 18, 3, 0, 0x0, gArenaCup1Rewards, 10806, 10807, 10808, 0x80},
++    {8, 2, 1, 18, 5, 0, 0x0, gArenaCup1Rewards, 10818, 10819, 10820, 0x80},
+     // Mogall Cup
+-    {7, 2, 2, 20, 5, 0, 0x0, gArenaCup2Rewards, 10810, 10811, 10812, 0x40},
++    {7, 2, 2, 20, 7, 0, 0x0, gArenaCup2Rewards, 10822, 10823, 10824, 0x40},
+     // Altin Cup
+-    {9, 2, 3, 25, 3, 0, 0x80, gArenaCup3Rewards, 10815, 10816, 10817, 0x100},
++    {9, 2, 3, 25, 9, 0, 0x80, gArenaCup3Rewards, 10827, 10828, 10829, 0x100},
+     // Tolbi Cup
+-    {8, 2, 4, 27, 3, 0, 0x40, gArenaCup4Rewards, 10819, 10820, 10821, 0x80},
++    {8, 2, 4, 27, 6, 0, 0x40, gArenaCup4Rewards, 10831, 10832, 10833, 0x80},
+     // Lunpa Cup
+-    {10, 2, 5, 35, 7, 0, 0x100, gArenaCup5Rewards, 10823, 10824, 10825, 0x200},
++    {10, 2, 5, 35, 11, 0, 0x100, gArenaCup5Rewards, 10835, 10836, 10837, 0x200},
+     // Lighthouse Cup
+-    {10, 2, 6, 50, 12, 0, 0x100, gArenaCup6Rewards, 10828, 10829, 10830, 0x200},
++    {10, 2, 6, 50, 12, 0, 0x100, gArenaCup6Rewards, 10840, 10841, 10842, 0x200},
+     // Boss Rush
+-    {6, 1, 7, 0, 0, 0, 0x0, 0, 10832, 10833, 10834, 0x3f},
++    {6, 1, 7, 0, 0, 0, 0x0, 0, 10844, 10845, 10846, 0x3f},
+     // Crossbone Isle
+-    {10, 3, 7, 0, 10, 0, 0x0, gArenaCup8Rewards, 10835, 10836, 10837, 0x200},
++    {10, 3, 7, 0, 13, 0, 0x0, gArenaCup8Rewards, 10847, 10848, 10849, 0x200},
+ };
+ 
+ const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3] = {
+diff --git a/games/tbs/src/scene/arena_series.c b/games/tbs/src/scene/arena_series.c
+index 2001b836f7..0a42a45c7a 100644
+--- a/games/tbs/src/scene/arena_series.c
++++ b/games/tbs/src/scene/arena_series.c
+@@ -89,10 +89,21 @@ static void ArenaSeries_GiveRewards(const struct ArenaCupInfo *info, s32 won) {
+   for (i = 0; i < info->rewardCount; i++) {
+     const struct ArenaCupReward *reward = &info->rewards[i];
+ 
+-    if (reward->afterRound != won ||
+-        GameFlag_Get(ARENA_REWARD_FLAG_FIRST + reward->flag))
++    s32 flagBase = reward->kind == ARENA_REWARD_BOOST
++                       ? ARENA_BOOST_REWARD_FLAG_FIRST
++                       : ARENA_REWARD_FLAG_FIRST;
++
++    if (reward->afterRound != won || GameFlag_Get(flagBase + reward->flag))
+       continue;
+-    if (reward->kind == ARENA_REWARD_ITEM) {
++    if (reward->kind == ARENA_REWARD_BOOST) {
++      // One more boost of the stat (`value`) for the whole party to spend.
++      s32 byteFlag = FLAG_ARENA_BOOSTS + reward->value * 8;
++
++      GameFlag_Set(flagBase + reward->flag);
++      FieldGameFlag_SetByte(byteFlag, FieldGameFlag_GetByte(byteFlag) + 1);
++      Event_SetMessageId(reward->message);
++      FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++    } else if (reward->kind == ARENA_REWARD_ITEM) {
+       GameFlag_Set(ARENA_REWARD_FLAG_FIRST + reward->flag);
+       Event_SetMessageId(MsgArenaGearReward);
+       FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+diff --git a/games/tbs/src/shop/shop/arena_shop.c b/games/tbs/src/shop/shop/arena_shop.c
+index 14c054f3c2..4786b144d0 100644
+--- a/games/tbs/src/shop/shop/arena_shop.c
++++ b/games/tbs/src/shop/shop/arena_shop.c
+@@ -301,7 +301,13 @@ enum ArenaShopKind {
+ #define ARENA_SHOP_DJINN_COUNT 28
+ #define ARENA_SHOP_DJINN_PRICE 500
+ 
+-/// The stats the stat counter sells, in stock order, which is the order of the
++/// The stat counter spends boosts, which the cups give (the story's stat-boost
++/// items are won as boosts, scripts/cupdata.py BOOSTS): each stat has one pool
++/// for the whole party, the boosts earned (a persistent byte flag, written by
++/// ArenaSeries_GiveRewards), of which some are applied to the characters. A
++/// boost adds ArenaStat_Step to a character's base stat, as the item did. Free;
++/// the last stock entry takes them all back.
++/// The stats, in stock order, which is the order of the
+ /// MsgArenaStatUp* and MsgArenaStatInfo* messages.
+ enum ArenaStat {
+   ARENA_STAT_HP,
+@@ -310,13 +316,16 @@ enum ArenaStat {
+   ARENA_STAT_DEFENSE,
+   ARENA_STAT_AGILITY,
+   ARENA_STAT_LUCK,
+-  ARENA_STAT_COUNT
++  ARENA_STAT_COUNT,
++  ARENA_STAT_RESET = ARENA_STAT_COUNT ///< the stock entry after the stats
+ };
+ 
+-/// Each stat's icon is the item that raises it for good.
+-static const u8 sArenaStatItems[ARENA_STAT_COUNT] = {
+-    ITEM_APPLE, ITEM_MINT, ITEM_POWER_BREAD, ITEM_COOKIE, ITEM_HARD_NUT,
+-    ITEM_LUCKY_PEPPER};
++/// Each stat's icon is the item that raises it for good (menu/menu/use.c), and
++/// the Reset entry's a water.
++static const u8 sArenaStatItems[ARENA_STAT_COUNT + 1] = {
++    ITEM_POWER_BREAD, ITEM_COOKIE,        ITEM_APPLE,
++    ITEM_HARD_NUT,    ITEM_MINT,          ITEM_LUCKY_PEPPER,
++    ITEM_HERMES_WATER};
+ 
+ /// The base value of a stat of a unit.
+ static s32 ArenaStat_Value(struct Unit *unit, s32 stat) {
+@@ -336,17 +345,22 @@ static s32 ArenaStat_Value(struct Unit *unit, s32 stat) {
+   }
+ }
+ 
+-/// How much one purchase adds to a stat.
++/// How much one boost adds to a stat: what the item gives (the power of its
++/// ability, ability_table.c).
+ static s32 ArenaStat_Step(s32 stat) {
+   switch (stat) {
+   case ARENA_STAT_HP:
+-    return 20;
++    return 8;
+   case ARENA_STAT_PP:
+-    return 10;
+-  case ARENA_STAT_LUCK:
+-    return 1;
+-  default:
++    return 4;
++  case ARENA_STAT_ATTACK:
+     return 5;
++  case ARENA_STAT_DEFENSE:
++    return 3;
++  case ARENA_STAT_AGILITY:
++    return 4;
++  default:
++    return 1;
+   }
+ }
+ 
+@@ -363,24 +377,6 @@ static s32 ArenaStat_Cap(s32 stat) {
+   }
+ }
+ 
+-/// A stat's price, which rises with its value.
+-static s32 ArenaStat_Cost(struct Unit *unit, s32 stat) {
+-  s32 value = ArenaStat_Value(unit, stat);
+-
+-  switch (stat) {
+-  case ARENA_STAT_HP:
+-    return value;
+-  case ARENA_STAT_PP:
+-    return value * 2;
+-  case ARENA_STAT_ATTACK:
+-    return value * 3;
+-  case ARENA_STAT_LUCK:
+-    return (value + 1) * 100;
+-  default:
+-    return value * 4;
+-  }
+-}
+-
+ static void ArenaStat_Add(struct Unit *unit, s32 stat, s32 amount) {
+   switch (stat) {
+   case ARENA_STAT_HP:
+@@ -404,12 +400,71 @@ static void ArenaStat_Add(struct Unit *unit, s32 stat, s32 amount) {
+   }
+ }
+ 
+-/// A stock entry is a stat's number or a Djinni's: its element times seven plus
+-/// its place among that element's. (The Psynergy counter is retired: after the
+-/// Reloaded changes no Psynergy is limited to a shop.)
++/// The boosts of a stat the cups have given so far.
++static s32 ArenaBoost_Earned(s32 stat) {
++  return GameFlag_GetByteFar(FLAG_ARENA_BOOSTS + stat * 8);
++}
++
++/// The boosts of a stat applied to one character: what its base stat holds
++/// above the stat from levelling alone, in boosts.
++static s32 ArenaBoost_Applied(s32 unitId, s32 stat) {
++  s32 base[6];
++  s32 extra;
++
++  Unit_GetLevelBaseFar(unitId, Unit_GetFar(unitId)->level, base);
++  extra = ArenaStat_Value(Unit_GetFar(unitId), stat) - base[stat];
++  return extra > 0 ? extra / ArenaStat_Step(stat) : 0;
++}
++
++/// The boosts of a stat applied across the party.
++static s32 ArenaBoost_Used(s32 stat) {
++  struct ShopWork *shop = gMenuWork;
++  s32 used = 0;
++  s32 i;
++
++  for (i = 0; i < shop->partyMemberCount; i++)
++    used += ArenaBoost_Applied(shop->partyMemberIds[i], stat);
++  return used;
++}
++
++/// The boosts of a stat still to spend.
++static s32 ArenaBoost_Left(s32 stat) {
++  s32 left = ArenaBoost_Earned(stat) - ArenaBoost_Used(stat);
++
++  return left > 0 ? left : 0;
++}
++
++/// Takes every boost back: each base stat of the party goes to the stat from
++/// levelling alone.
++static void ArenaBoost_Reset(void) {
++  struct ShopWork *shop = gMenuWork;
++  s32 base[6];
++  s32 i;
++  s32 stat;
++
++  for (i = 0; i < shop->partyMemberCount; i++) {
++    s32 unitId = shop->partyMemberIds[i];
++
++    Unit_GetLevelBaseFar(unitId, Unit_GetFar(unitId)->level, base);
++    for (stat = 0; stat < ARENA_STAT_COUNT; stat++) {
++      s32 extra = ArenaStat_Value(Unit_GetFar(unitId), stat) - base[stat];
++
++      if (extra > 0)
++        ArenaStat_Add(Unit_GetFar(unitId), stat,
++                      -(extra / ArenaStat_Step(stat)) * ArenaStat_Step(stat));
++    }
++    Unit_CalculateFar(unitId);
++  }
++}
++
++/// A stock entry is a stat's number (or ARENA_STAT_RESET) or a Djinni's: its
++/// element times seven plus its place among that element's. (The Psynergy
++/// counter is retired: after the Reloaded changes no Psynergy is limited to a
++/// shop.) The number under an entry's icon: a Djinni's price, or the boosts a
++/// stat has left.
+ static s32 ArenaShop_Price(s32 kind, s32 unitId, s32 entry) {
+   if (kind == ARENA_SHOP_STATS)
+-    return ArenaStat_Cost(Unit_GetFar(unitId), entry);
++    return ArenaBoost_Left(entry);
+   return ARENA_SHOP_DJINN_PRICE;
+ }
+ 
+@@ -432,7 +487,8 @@ static s32 ArenaShop_DjinnOnSale(s32 entry) {
+ 
+ static s32 ArenaShop_NameMessage(s32 kind, s32 entry) {
+   if (kind == ARENA_SHOP_STATS)
+-    return MsgArenaStatUpHp + entry;
++    return entry == ARENA_STAT_RESET ? MsgArenaResetName
++                                     : MsgArenaStatUpHp + entry;
+   return MsgDjinnName + (entry / ARENA_DJINN_PER_ELEMENT) * DJINN_PER_ELEMENT +
+          entry % ARENA_DJINN_PER_ELEMENT;
+ }
+@@ -442,6 +498,8 @@ static s32 ArenaShop_NameMessage(s32 kind, s32 entry) {
+ /// that follows.
+ static s32 ArenaShop_DescriptionMessage(s32 kind, s32 unitId, s32 entry) {
+   if (kind == ARENA_SHOP_STATS) {
++    if (entry == ARENA_STAT_RESET)
++      return MsgArenaResetInfo;
+     MessageArgument_ClearAllFar();
+     MessageArgument_PushFar(ArenaStat_Step(entry), MESSAGE_ARGUMENT_NUMBER);
+     MessageArgument_PushFar(ArenaStat_Value(Unit_GetFar(unitId), entry),
+@@ -461,8 +519,10 @@ static s32 ArenaShop_Owned(s32 kind, s32 unitId, s32 entry) {
+ 
+   // A stat is "owned" at its cap, when a purchase would add nothing.
+   if (kind == ARENA_SHOP_STATS)
+-    return ArenaStat_Value(Unit_GetFar(unitId), entry) + ArenaStat_Step(entry) >
+-           ArenaStat_Cap(entry);
++    return entry != ARENA_STAT_RESET &&
++           ArenaStat_Value(Unit_GetFar(unitId), entry) +
++                   ArenaStat_Step(entry) >
++               ArenaStat_Cap(entry);
+   if (kind == ARENA_SHOP_DJINN) {
+     for (i = 0; i < shop->partyMemberCount; i++) {
+       if (Unit_GetFar(shop->partyMemberIds[i])
+@@ -480,13 +540,25 @@ static s32 ArenaShop_Owned(s32 kind, s32 unitId, s32 entry) {
+ static s32 ArenaShop_Buy(s32 kind, s32 unitId, s32 entry) {
+   s32 price = ArenaShop_Price(kind, unitId, entry);
+ 
++  if (kind == ARENA_SHOP_STATS) {
++    // A boost costs no coins: it is taken from the party's pool of the stat.
++    if (entry == ARENA_STAT_RESET) {
++      ArenaBoost_Reset();
++      return MsgArenaResetDone;
++    }
++    if (ArenaShop_Owned(kind, unitId, entry))
++      return 0;
++    if (ArenaBoost_Left(entry) <= 0)
++      return MsgArenaNoBoosts;
++    ArenaStat_Add(Unit_GetFar(unitId), entry, ArenaStat_Step(entry));
++    Unit_CalculateFar(unitId);
++    return 0;
++  }
+   if (ArenaShop_Owned(kind, unitId, entry))
+     return 0;
+   if (price > gMainRoutineWork.coins)
+     return MsgArenaNoCoins;
+-  if (kind == ARENA_SHOP_STATS) {
+-    ArenaStat_Add(Unit_GetFar(unitId), entry, ArenaStat_Step(entry));
+-  } else if (kind == ARENA_SHOP_DJINN) {
++  if (kind == ARENA_SHOP_DJINN) {
+     s32 element = entry / ARENA_DJINN_PER_ELEMENT;
+     s32 index = entry % ARENA_DJINN_PER_ELEMENT;
+ 
+@@ -499,13 +571,42 @@ static s32 ArenaShop_Buy(s32 kind, s32 unitId, s32 entry) {
+   return 0;
+ }
+ 
++/// The window at the right: the coins, or at the stat counter the boosts the
++/// party has left of the stat chosen (of every stat for Reset).
++static void ArenaShop_DrawMoney(s32 kind, s32 entry) {
++  struct ShopWork *shop = gMenuWork;
++  s32 left = 0;
++  s32 stat;
++
++  if (kind != ARENA_SHOP_STATS) {
++    Shop_DrawMoney();
++    return;
++  }
++  if (entry == ARENA_STAT_RESET) {
++    for (stat = 0; stat < ARENA_STAT_COUNT; stat++)
++      left += ArenaBoost_Left(stat);
++  } else {
++    left = ArenaBoost_Left(entry);
++  }
++  Text_DrawMessageAsTilesFar(MsgArenaBoostLeft, shop->moneyWindow, 0, 0);
++  Text_DrawNumberInWindowFar(left, 6, shop->moneyWindow, 32, 8);
++}
++
+ /// Draws the name and below it the price, or what the entry is when owned, in
+ /// the price window, as Shop_DrawItemPrice does.
+ static void ArenaShop_DrawPrice(struct Window *window, s32 kind, s32 unitId,
+                                 s32 entry) {
+   WindowSprite_RedrawSavedRectFar(window);
+   Text_DrawMessageAsTilesFar(ArenaShop_NameMessage(kind, entry), window, 0, 0);
+-  if (ArenaShop_Owned(kind, unitId, entry)) {
++  if (kind == ARENA_SHOP_STATS && entry == ARENA_STAT_RESET) {
++    // nothing under the name
++  } else if (kind == ARENA_SHOP_STATS &&
++             !ArenaShop_Owned(kind, unitId, entry)) {
++    // The boosts of the stat applied across the party.
++    Text_DrawMessageAsTilesFar(MsgArenaBoostUsed, window, SHOP_ITEM_NOTE_X, 8);
++    Text_DrawNumberInWindowFar(ArenaBoost_Used(entry), 5, window,
++                               SHOP_PRICE_NUMBER_X, 8);
++  } else if (ArenaShop_Owned(kind, unitId, entry)) {
+     Text_DrawMessageAsTilesFar(kind == ARENA_SHOP_DJINN
+                                    ? MsgArenaOwned
+                                    : MsgArenaMax,
+@@ -568,6 +669,8 @@ static void ArenaShop_DrawStock(struct Window *window, s32 kind, s32 unitId,
+         }
+       }
+     }
++    if (kind == ARENA_SHOP_STATS && entry == ARENA_STAT_RESET)
++      continue;
+     icon = Shop_CreatePriceSprite(ArenaShop_Price(kind, unitId, entry), window,
+                                   slot * 32 + 16, 0);
+     if (icon != 0)
+@@ -607,7 +710,7 @@ s32 ArenaShop_Run(s32 kind, s32 unitId) {
+         shop->stockItemIds[count++] = i;
+     }
+   } else {
+-    count = ARENA_STAT_COUNT;
++    count = ARENA_STAT_COUNT + 1;
+     for (i = 0; i < count; i++)
+       shop->stockItemIds[i] = i;
+   }
+@@ -630,7 +733,6 @@ s32 ArenaShop_Run(s32 kind, s32 unitId) {
+   shop->itemWindow = 0;
+   shop->moneyWindow = Window_CreateFar(
+       30 - SHOP_MONEY_WIDTH, 7, SHOP_MONEY_WIDTH, 4, WINDOW_FLAG_INSTANT);
+-  Shop_DrawMoney();
+   priceWindow =
+       Window_CreateFar(0, 8, SHOP_PRICE_WIDTH, 4, WINDOW_FLAG_INSTANT);
+   stockWindow = Window_CreateFar(0, 12, 30, 4, WINDOW_FLAG_INSTANT);
+@@ -662,6 +764,7 @@ s32 ArenaShop_Run(s32 kind, s32 unitId) {
+       MenuCursor_Place(stockWindow, selected % SHOP_STOCK_PAGE_ITEMS * 32 - 8,
+                        8);
+       shop->mode = 4;
++      ArenaShop_DrawMoney(kind, shop->stockItemIds[selected]);
+       ArenaShop_DrawStock(stockWindow, kind, unitId, selected, figures);
+       Shop_DrawMessage(
+           messageWindow,
+@@ -684,9 +787,8 @@ s32 ArenaShop_Run(s32 kind, s32 unitId) {
+     if ((gKeysPressed & KEY_A) != 0) {
+       Sound_PlayFar(SE_MENU_CONFIRM);
+       notice = ArenaShop_Buy(kind, unitId, shop->stockItemIds[selected]);
+-      if (notice != 0)
++      if (notice != 0 && notice != MsgArenaResetDone)
+         Sound_PlayFar(SE_MENU_CANCEL);
+-      Shop_DrawMoney();
+       redraw = 1;
+     }
+     if ((gKeysPressed & KEY_B) != 0) {
+diff --git a/games/tbs/src/system/overlay/imports.inc b/games/tbs/src/system/overlay/imports.inc
+index 69fbf3cfd1..489761293a 100644
+--- a/games/tbs/src/system/overlay/imports.inc
++++ b/games/tbs/src/system/overlay/imports.inc
+@@ -218,6 +218,7 @@
+ 	import PartyInventory_CountFreeSlots, PartyInventory_CountFreeSlotsFar
+ 	import InventorySnapshot_Save, InventorySnapshot_SaveFar
+ 	import InventorySnapshot_Restore, InventorySnapshot_RestoreFar
++	import Unit_GetLevelBase, Unit_GetLevelBaseFar
+ @ Field sequence bank (far_call/FIELD_SEQUENCE.S)
+ 	import Event_Wait, Event_WaitFar
+ 	import Event_Start, Event_StartFar
+diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
+index d28ec88c48..dc6a7919f8 100644
+--- a/games/tbs/text/en.po
++++ b/games/tbs/text/en.po
+@@ -65309,129 +65309,195 @@ msgstr ""
+ "Careful! A tough\n"
+ "opponent is next!{end_wait}"
+ 
++msgctxt "MsgArenaBoostLeft"
++msgid "10783"
++msgstr "Boosts left"
++
++msgctxt "MsgArenaBoostUsed"
++msgid "10784"
++msgstr "Used"
++
++msgctxt "MsgArenaNoBoosts"
++msgid "10785"
++msgstr "No boosts left"
++
++msgctxt "MsgArenaResetName"
++msgid "10786"
++msgstr "Reset"
++
++msgctxt "MsgArenaResetInfo"
++msgid "10787"
++msgstr "Returns all boosts used by the party."
++
++msgctxt "MsgArenaResetDone"
++msgid "10788"
++msgstr "All boosts are back."
++
+ # BEGIN GENERATED CUPS (scripts/gen-cups.py; do not edit by hand)
+ 
+ msgctxt "MsgArenaCupName0"
+-msgid "10783"
++msgid "10789"
+ msgstr ""
+ "Tret Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName1"
+-msgid "10784"
++msgid "10790"
+ msgstr ""
+ "Mercury Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName2"
+-msgid "10785"
++msgid "10791"
+ msgstr ""
+ "Mogall Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName3"
+-msgid "10786"
++msgid "10792"
+ msgstr ""
+ "Altin Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName4"
+-msgid "10787"
++msgid "10793"
+ msgstr ""
+ "Tolbi Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName5"
+-msgid "10788"
++msgid "10794"
+ msgstr ""
+ "Lunpa Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName6"
+-msgid "10789"
++msgid "10795"
+ msgstr ""
+ "Lighthouse Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName7"
+-msgid "10790"
++msgid "10796"
+ msgstr ""
+ "Boss Rush"
+ 
+ 
+ msgctxt "MsgArenaCupName8"
+-msgid "10791"
++msgid "10797"
+ msgstr ""
+ "Crossbone Isle"
+ 
+ 
+ msgctxt "MsgArenaCupNext"
+-msgid "10792"
++msgid "10798"
+ msgstr ""
+ "Next cup"
+ 
+ 
+ msgctxt "MsgArenaCupReplay"
+-msgid "10793"
++msgid "10799"
+ msgstr ""
+ "Replay"
+ 
+ 
+ msgctxt "MsgArenaCupSide"
+-msgid "10794"
++msgid "10800"
+ msgstr ""
+ "Side cups"
+ 
+ 
+ msgctxt "MsgArenaCupReplayPrompt"
+-msgid "10795"
++msgid "10801"
+ msgstr ""
+ "Replay which cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupGroupEarly"
+-msgid "10796"
++msgid "10802"
+ msgstr ""
+ "Early cups"
+ 
+ 
+ msgctxt "MsgArenaCupGroupLate"
+-msgid "10797"
++msgid "10803"
+ msgstr ""
+ "Later cups"
+ 
+ 
+ msgctxt "MsgArenaCupSidePrompt"
+-msgid "10798"
++msgid "10804"
+ msgstr ""
+ "Which side cup\n"
+ "will you enter?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaGearReward"
+-msgid "10799"
++msgid "10805"
+ msgstr ""
+ "A find from the\n"
+ "dungeon! It is yours.{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaDjinnNoRoom"
+-msgid "10800"
++msgid "10806"
+ msgstr ""
+ "Your Djinn are full!\n"
+ "Make room, then win\n"
+ "this round again.{end_wait}"
+ 
+ 
++msgctxt "MsgArenaBoostGetHP"
++msgid "10807"
++msgstr ""
++"You can boost\n"
++"HP once more!{end_wait}"
++
++
++msgctxt "MsgArenaBoostGetPP"
++msgid "10808"
++msgstr ""
++"You can boost\n"
++"PP once more!{end_wait}"
++
++
++msgctxt "MsgArenaBoostGetAttack"
++msgid "10809"
++msgstr ""
++"You can boost\n"
++"Attack once more!{end_wait}"
++
++
++msgctxt "MsgArenaBoostGetDefense"
++msgid "10810"
++msgstr ""
++"You can boost\n"
++"Defense once more!{end_wait}"
++
++
++msgctxt "MsgArenaBoostGetAgility"
++msgid "10811"
++msgstr ""
++"You can boost\n"
++"Agility once more!{end_wait}"
++
++
++msgctxt "MsgArenaBoostGetLuck"
++msgid "10812"
++msgstr ""
++"You can boost\n"
++"Luck once more!{end_wait}"
++
++
+ msgctxt "MsgArenaCupConfirm0"
+-msgid "10801"
++msgid "10813"
+ msgstr ""
+ "Enter the\n"
+ "Tret Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared0"
+-msgid "10802"
++msgid "10814"
+ msgstr ""
+ "You cleared the\n"
+ "Tret Cup!\n"
+@@ -65439,7 +65505,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst0"
+-msgid "10803"
++msgid "10815"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65453,7 +65519,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup0DjinnForge"
+-msgid "10804"
++msgid "10816"
+ msgstr ""
+ "You won the Djinni\n"
+ "Forge!\n"
+@@ -65461,7 +65527,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup0DjinnBreeze"
+-msgid "10805"
++msgid "10817"
+ msgstr ""
+ "You won the Djinni\n"
+ "Breeze!\n"
+@@ -65469,14 +65535,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm1"
+-msgid "10806"
++msgid "10818"
+ msgstr ""
+ "Enter the\n"
+ "Mercury Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared1"
+-msgid "10807"
++msgid "10819"
+ msgstr ""
+ "You cleared the\n"
+ "Mercury Cup!\n"
+@@ -65484,7 +65550,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst1"
+-msgid "10808"
++msgid "10820"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65496,7 +65562,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup1DjinnSleet"
+-msgid "10809"
++msgid "10821"
+ msgstr ""
+ "You won the Djinni\n"
+ "Sleet!\n"
+@@ -65504,14 +65570,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm2"
+-msgid "10810"
++msgid "10822"
+ msgstr ""
+ "Enter the\n"
+ "Mogall Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared2"
+-msgid "10811"
++msgid "10823"
+ msgstr ""
+ "You cleared the\n"
+ "Mogall Cup!\n"
+@@ -65519,7 +65585,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst2"
+-msgid "10812"
++msgid "10824"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65531,7 +65597,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup2DjinnZephyr"
+-msgid "10813"
++msgid "10825"
+ msgstr ""
+ "You won the Djinni\n"
+ "Zephyr!\n"
+@@ -65539,7 +65605,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup2DjinnQuartz"
+-msgid "10814"
++msgid "10826"
+ msgstr ""
+ "You won the Djinni\n"
+ "Quartz!\n"
+@@ -65547,14 +65613,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm3"
+-msgid "10815"
++msgid "10827"
+ msgstr ""
+ "Enter the\n"
+ "Altin Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared3"
+-msgid "10816"
++msgid "10828"
+ msgstr ""
+ "You cleared the\n"
+ "Altin Cup!\n"
+@@ -65562,7 +65628,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst3"
+-msgid "10817"
++msgid "10829"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65577,7 +65643,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup3DjinnSpritz"
+-msgid "10818"
++msgid "10830"
+ msgstr ""
+ "You won the Djinni\n"
+ "Spritz!\n"
+@@ -65585,14 +65651,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm4"
+-msgid "10819"
++msgid "10831"
+ msgstr ""
+ "Enter the\n"
+ "Tolbi Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared4"
+-msgid "10820"
++msgid "10832"
+ msgstr ""
+ "You cleared the\n"
+ "Tolbi Cup!\n"
+@@ -65600,7 +65666,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst4"
+-msgid "10821"
++msgid "10833"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65614,7 +65680,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup4DjinnSquall"
+-msgid "10822"
++msgid "10834"
+ msgstr ""
+ "You won the Djinni\n"
+ "Squall!\n"
+@@ -65622,14 +65688,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm5"
+-msgid "10823"
++msgid "10835"
+ msgstr ""
+ "Enter the\n"
+ "Lunpa Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared5"
+-msgid "10824"
++msgid "10836"
+ msgstr ""
+ "You cleared the\n"
+ "Lunpa Cup!\n"
+@@ -65637,7 +65703,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst5"
+-msgid "10825"
++msgid "10837"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65653,7 +65719,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup5DjinnFlash"
+-msgid "10826"
++msgid "10838"
+ msgstr ""
+ "You won the Djinni\n"
+ "Flash!\n"
+@@ -65661,7 +65727,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup5DjinnDew"
+-msgid "10827"
++msgid "10839"
+ msgstr ""
+ "You won the Djinni\n"
+ "Dew!\n"
+@@ -65669,14 +65735,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm6"
+-msgid "10828"
++msgid "10840"
+ msgstr ""
+ "Enter the\n"
+ "Lighthouse Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared6"
+-msgid "10829"
++msgid "10841"
+ msgstr ""
+ "You cleared the\n"
+ "Lighthouse Cup!\n"
+@@ -65684,7 +65750,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst6"
+-msgid "10830"
++msgid "10842"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65700,7 +65766,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup6DjinnLuff"
+-msgid "10831"
++msgid "10843"
+ msgstr ""
+ "You won the Djinni\n"
+ "Luff!\n"
+@@ -65708,14 +65774,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm7"
+-msgid "10832"
++msgid "10844"
+ msgstr ""
+ "Enter the\n"
+ "Boss Rush?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared7"
+-msgid "10833"
++msgid "10845"
+ msgstr ""
+ "You cleared the\n"
+ "Boss Rush!\n"
+@@ -65723,7 +65789,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst7"
+-msgid "10834"
++msgid "10846"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65731,14 +65797,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm8"
+-msgid "10835"
++msgid "10847"
+ msgstr ""
+ "Enter the\n"
+ "Crossbone Isle?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared8"
+-msgid "10836"
++msgid "10848"
+ msgstr ""
+ "You cleared the\n"
+ "Crossbone Isle!\n"
+@@ -65746,7 +65812,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst8"
+-msgid "10837"
++msgid "10849"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+-- 
+2.53.0
+

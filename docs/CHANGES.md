@@ -671,6 +671,40 @@ party or its level.
   Tolbi, Lunpa, Lighthouse last rounds, minis: Altin 8, Tolbi 7, Lunpa 9, Lighthouse 9; Boss
   Rush all; Crossbone 10. Tests `boss_warning.txt` (Tret, round 8) and `boss_warning_mini.txt`.
 
+## 43. Stat boosts won by rounds replace the coin stat shop (patch 0043)
+
+- **Which items.** Power Bread (HP +8), Cookie (PP +4), Apple (Attack +5), Hard Nut (Defense +3),
+  Mint (Agility +4), Lucky Pepper (Luck +1): `menu/menu/use.c` says which raises what (the old
+  shop's icons were wrong; fixed) and `ability_table.c` the amount. They are no longer given as
+  items. `cupdata.py` `BOOSTS` attaches the ones the story put in each cup's stretch (chests,
+  jars, gifts; `cup-gear.py` lists them) to rounds as `("boost", stat)` rewards, 22 in all: Tret
+  HP r2, Attack r3; Mercury Defense r2, r4; Mogall Luck r1, Attack r4; Altin PP r1, HP r2, Luck r4,
+  Agility r5, r7, r8; Tolbi Attack r1, HP r3, PP r5; Lunpa Attack r1, HP r3, Defense r4, PP r8;
+  Crossbone Luck r2, PP r5, Defense r8. Left out: one Hard Nut in `cottage_rooms_b` (no cup's
+  stretch names the scene). The two Mints in `log_rooms_a` and `_b` share a cell behaviour, so
+  they may be one box in the story; both are counted.
+- **Pool.** One pool per stat for the whole party. The EARNED count is a persistent byte flag per
+  stat, `FLAG_ARENA_BOOSTS + 8 * stat` (0x740 to 0x76f, `module/arena.h`); the once-only reward
+  bits are in their own block 0x770 to 0x78f (`ARENA_BOOST_REWARD_FLAG_FIRST`), since the main
+  block of 64 was nearly full. Winning the round the first time bumps the byte and the attendant
+  says "You can boost HP once more!" (`MsgArenaBoostGet*`, generated). New games start at zero.
+- **Spending.** The party manager's Stats counter (same place, same screens) is free: the tag
+  under each icon and the right window ("Boosts left") show what is left of the stat, the price
+  window shows "Used" (applied across the party). A is "apply to this character" (+ the item's
+  amount to the base stat), "No boosts left" when the pool is empty, MAX at the stat cap
+  (`ArenaStat_Cap`, unchanged). A new last entry, Reset, gives every applied boost back and
+  restores the stats ("All boosts are back.").
+- **Applied is derived, not stored.** `Unit_GetLevelBase` (`levels.c`; far call
+  `Unit_GetLevelBaseFar`) sums `ArenaRules_LevelGain` over levels 1 to the unit's level: the base
+  stats from levelling alone. Applied = (base now - that) / amount; used = the sum over the
+  party. Cup level raises (`Unit_LevelUpTo`) add the same gains, so it stays valid; equipment and
+  Djinn are not in the base. Reset writes the closed form back to the base and recalculates.
+  Checked at level 10 (new game) and level 15 (after a Tret clear). If a later patch adds
+  base-stat changes of another kind (class change, a Lost Age port with other growth), it breaks.
+- Tests: `boost_reward.txt` (message and pool), `boost_shop.txt` (screens, Isaac, Garet, empty
+  pool, Reset), `boost_resume.txt` (save, restart, Continue: pool kept), `boost_level.txt` (level
+  15). The screens are in `build\smoke\keepoost_*.png`.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

@@ -1,0 +1,64 @@
+# The stat counter with boosts: poke the pools (HP 3, PP 2, Attack 4, Defense 0, Agility 3,
+# Luck 1), apply one to Isaac, try Garet until the pool is empty, then Reset.
+include to_lobby.txt
+press U 80
+press R 50
+press R 8
+tap A
+wait 150
+poke 0x02000128 1 3
+poke 0x02000129 1 2
+poke 0x0200012A 1 4
+poke 0x0200012B 1 0
+poke 0x0200012C 1 3
+poke 0x0200012D 1 1
+tap A
+wait 150
+tap A
+wait 150
+shot /tmp/shots/s0.png
+peek 0x02000510 2
+tap A
+wait 30
+shot /tmp/shots/s1.png
+tap R
+wait 30
+shot /tmp/shots/s2.png
+tap R
+tap R
+wait 30
+shot /tmp/shots/s3.png
+tap A
+wait 30
+shot /tmp/shots/s4.png
+tap B
+wait 120
+tap A
+wait 150
+tap R
+wait 30
+tap A
+wait 150
+shot /tmp/shots/s5.png
+tap A
+wait 20
+tap A
+wait 20
+shot /tmp/shots/s6.png
+tap A
+wait 20
+shot /tmp/shots/s7.png
+tap L
+wait 20
+shot /tmp/shots/s8.png
+tap A
+wait 30
+shot /tmp/shots/s9.png
+tap R
+wait 30
+shot /tmp/shots/s10.png
+tap B
+wait 120
+shot /tmp/shots/s11.png
+peek 0x02000510 2
+peek 0x0200065C 2
