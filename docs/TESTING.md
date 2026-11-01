@@ -172,3 +172,9 @@ is rebuilt from poked flags (trophy bits are bytes 0x02000132 and 0x02000133; pr
 0x0200013E; side cups 0x0200013D). Tests: `trophies_none/some/all.txt`, `trophies_reach.txt`
 (counter still reachable), `trophies_text.txt`, `npcs.txt`, `npc_scout.txt`, `npc_all.txt`,
 `filelist_cups.txt`, `filelist_cups_all.txt`.
+
+`cases_0/3/9.txt` (no, three and all cups): the lobby, then Isaac walks into the lower left and
+lower right wings (`press U 30`, `press L 400`, `press R 700`); shots `cases_N_start/_L/_R.png`.
+`scripts/compose-shots.py` joins L and R into `cases_N.png` (the smoke run wipes the shots
+folder each time, so copy them out between runs). Check the champion's first message line in
+`npcs.txt` for sprite-memory noise.

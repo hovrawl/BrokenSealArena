@@ -4,6 +4,9 @@ spr_309 bronze, 310 silver, 311 gold, 312 gold with a crown and a red gem,
 313 blue (side cups). Each is one 16 x 16 picture of a cup standing on a plinth
 (16 x 16 costs a quarter of the sprite memory of a person's 32 x 32), and an
 animation file whose every animation holds that picture.
+spr_314 is the display case the trophies stand in: 16 x 32, a wooden frame with a
+glass front on a stone pedestal. A trophy actor is placed 4 pixels above the
+case's foot and one pixel in front of it, so the cup sits inside the glass.
 
 Usage: gen-trophy-sprites.py SPRITE_DIR   (games/tbs/src/graphics/sprite)
 
@@ -89,6 +92,50 @@ def build(tier, crown):
     return mask
 
 
+def build_case():
+    """The display case, 16 x 32: cap (y 1-3), glass (4-27), shelf, a low plinth."""
+    mask = {}
+    CH = 32
+    WOOD_L, WOOD_M, WOOD_D = 52, 211, 18
+    BACK, BACK_D, GLASS_L, GLASS_H = 80, 37, 202, 209
+    STONE_L, STONE_M, STONE_D = 223, 222, 219
+
+    def put(x, y, c):
+        mask[(x, y)] = c
+
+    for x in range(0, 16):  # cornice
+        put(x, 1, WOOD_L)
+        put(x, 2, WOOD_M if 0 < x < 15 else WOOD_D)
+    for x in range(1, 15):
+        put(x, 3, WOOD_D)
+    for y in range(4, 28):  # sides and the glass
+        for x in (1, 2):
+            put(x, y, WOOD_L if x == 1 else WOOD_M)
+        for x in (13, 14):
+            put(x, y, WOOD_M if x == 13 else WOOD_D)
+        for x in range(3, 13):
+            put(x, y, BACK_D if y == 4 else BACK)
+    for k in range(4):  # glints on the glass
+        put(10 + k // 2 + (k % 2), 6 - k // 2 + (k % 2), GLASS_H)
+    for dy in range(5):
+        put(3, 6 + dy, GLASS_L)
+    for x in range(1, 15):  # shelf and the frame's foot
+        put(x, 28, WOOD_L)
+        put(x, 29, WOOD_D)
+    for x in range(0, 16):  # pedestal lip and body
+        put(x, 30, STONE_L)
+    for y in range(31, 32):
+        for x in range(1, 15):
+            put(x, y, STONE_L if x < 5 else (STONE_D if x > 10 else STONE_M))
+    solid = set(mask)
+    for (x, y) in list(solid):
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            p = (x + dx, y + dy)
+            if p not in solid and 0 <= p[0] < W and 0 <= p[1] < CH:
+                mask[p] = OUTLINE
+    return mask
+
+
 def main():
     directory = sys.argv[1]
     palette = Image.open("%s/spr_106.png" % directory).getpalette()
@@ -103,6 +150,16 @@ def main():
             for _ in range(6):
                 f.write("anim\tpicture 0 4, hold\n")
         print("spr_%03d" % tier)
+    image = Image.new("P", (W, 32), 0)
+    image.putpalette(palette)
+    px = image.load()
+    for (x, y), c in build_case().items():
+        px[x, y] = c
+    image.save("%s/spr_314.png" % directory)
+    with open("%s/spr_314.tsv" % directory, "w", newline="\n") as f:
+        for _ in range(6):
+            f.write("anim\tpicture 0 4, hold\n")
+    print("spr_314")
 
 
 main()
