@@ -118,3 +118,10 @@
   deluded, luck 40 immunity and the ward are intended, per the author's post
   (`docs/RELOADED-DESIGN.md`). The lobby signature is `BSR4` so builds with different rules
   do not link.
+- **Cups are data; the level is an unlock** (2026-11-01, revises the cups entry): a cup does
+  not set the party or its level. New Game starts at level 10 with the first cup only; the
+  first win of a main cup plays an event scene announcing the unlocks (the next level, Djinn,
+  shops, cups); older cups stay playable over-levelled. 10-50 is the base progression, 50-99
+  open-ended (an endless run later; Crossbone Isle as a post-game model). The Psynergy shop is
+  retired; the stat shop stays and Luck/ailments are to be explored separately. See
+  `docs/CUPS.md` and the revision at the top of `docs/CUP-SPEC.md`.

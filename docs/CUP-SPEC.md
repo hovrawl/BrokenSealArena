@@ -9,6 +9,34 @@ Reloaded retune). Paths below are relative to `games/tbs` unless they start with
 Contents: 1 Areas, 2 Brackets and cups, 3 Level setting, 4 Data format, 5 Unlock state and saves,
 6 Menus, 7 Balance hooks and risks, 8 Implementation plan, 9 Decisions for the owner, 10 Unknowns.
 
+## Revision by the owner, 2026-11-01 (read this first; it supersedes the text below where they differ)
+
+The spec below was written with cups that **set** the party and its level. The owner's
+answer is different, and simpler:
+
+- **A cup is data**: rounds, teams, rewards and what it requires. **It does not set or
+  control the party or its level.** (So `ArenaCup` has no party level, and `KEEP_LEVEL`
+  and the "per bracket or per cup" question D1 go away.)
+- **Level is a gate the player earns.** The party starts at level 10 (New Game). Only the
+  first cup is open at first. **Beating a main cup for the first time plays an event
+  scene** that congratulates the player and tells what it unlocks: **the next level (the
+  party is raised to it), Djinn to buy, shops and cups.** The party's level therefore
+  only ever goes up, so section 3's `ArenaCup_SetLevel` reduces to "raise to level N"
+  (`Unit_LevelUpTo`), at the unlock event and at New Game; lowering is not needed, and the
+  risk that setting a level wipes stat-shop boosts disappears.
+- **Older cups can be replayed while over-levelled**, if the player wants.
+- **10 to 50 is the base progression** and should cover the story mobs, which (section 0)
+  stop at level 43, so this holds. **50 to 99 is not designed and can stay open-ended**: an
+  endless run that picks and scales mobs at random is the idea; **Crossbone Isle** (the
+  story's super-dungeon) is a good model for a post-game challenge; medium term.
+- **The Psynergy shop is retired** (D4: yes). After the Reloaded changes no Psynergy is
+  limited to the shop.
+- **The stat shop stays as it is for now** (not level-99-only). Luck, and how statuses
+  and immunities work around it, is to be explored separately before it is touched (D6
+  deferred, D7 onwards open).
+
+Still open: D2's content for 50 to 99 (now "later"), D3, D5, D7, D8 and D9.
+
 ## 0. Summary
 
 - **Area data exists, but not on the formations.** `struct Formation` has no area field
