@@ -1,0 +1,91 @@
+From 179965bc6d6886140c85e9d8c6c4688ca0135d95 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sun, 1 Nov 2026 15:06:35 +1100
+Subject: [PATCH] Arena: the cup framework (seven main cups, side cups,
+ unlocks, gear)
+
+A cup is data (scripts/cupdata.py, generated into the game tree by
+scripts/gen-cups.py): rounds of enemy teams with a target level, a boss round,
+rewards, what it requires and a heal flag. It never sets the party or its level.
+
+- battle: src/battle/arena_cups.c (generated, its own object in rom_tail_00)
+  holds every cup's teams; arena_ladder.c picks the round by win count. The
+  Monster Gauntlet is gone; the Boss Rush is the first side cup (opens after the
+  seventh main cup); Crossbone Isle (Deadbeard) is the second.
+- state: FLAG_ARENA_PROGRESS 0x7f0 (main cups cleared), FLAG_ARENA_SIDE_CLEARED
+  0x7e8, reward-given bits 0x7a0 to 0x7df; all persistent, so the Pause-menu save
+  keeps them.
+- attendant: Solo opens Next cup / Replay / Side cups (icon rows of at most four,
+  Early and Later groups when more than four are open), then "Enter the X Cup?".
+  Only open cups are offered.
+- series: the first clear of a main cup plays the unlock scene (what it opens),
+  raises the party (Unit_LevelUpTo, never lowers) and advances the progress; a
+  replay only congratulates. A reward round gives its Djinni or gear item once
+  (PartyInventory_GiveItem).
+- party manager: the Djinn counter lists only the Djinn on sale (a gate per Djinni
+  by cups cleared); the item shops follow the last cup cleared (gArenaShopRows);
+  the Psynergy shop is removed. New Game starts at level 10 (ARENA_START_LEVEL).
+- objects.tsv: a row for arena_cups.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/scene/arena_series.c | 9 +++------
+ games/tbs/src/shop/shop/stock.c    | 6 ++++++
+ 2 files changed, 9 insertions(+), 6 deletions(-)
+
+diff --git a/games/tbs/src/scene/arena_series.c b/games/tbs/src/scene/arena_series.c
+index ea4a227442..46ceddec0a 100644
+--- a/games/tbs/src/scene/arena_series.c
++++ b/games/tbs/src/scene/arena_series.c
+@@ -21,21 +21,18 @@ static void ArenaSeries_End(void) {
+   GameFlag_Clear(FLAG_BATTLE_ARENA_PLAYER_AGREED);
+   FieldGameFlag_SetByte(FLAG_MONSTER_BATTLE_WINS, -1);
+   MessageArgument_ClearAll();
+-  MessageArgument_Push(gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK],
+-                       MESSAGE_ARGUMENT_NUMBER);
+   if (gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK] == 0) {
+     // Quit before winning a round: they did not want to compete. (The stock line
+     // would say "You won 0 battle.")
+     Event_SetMessageId(MsgArenaTryAgain);
++    FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+   } else if (gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] <
+              gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK]) {
++    // The streak is not told: it means nothing until the endless challenge
++    // (the first clear scene already congratulates). The best is still kept.
+     gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] =
+         gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK];
+-    Event_SetMessageId(MsgLobbyWonNumberBattleBroke);
+-  } else {
+-    Event_SetMessageId(MsgLobbyWonNumberBattle);
+   }
+-  FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+   BattleArena_WriteSlotValue(LOBBY_SLOT_SIGNATURE);
+ }
+ 
+diff --git a/games/tbs/src/shop/shop/stock.c b/games/tbs/src/shop/shop/stock.c
+index 93b3d5da86..a6960f2196 100644
+--- a/games/tbs/src/shop/shop/stock.c
++++ b/games/tbs/src/shop/shop/stock.c
+@@ -3,6 +3,7 @@
+ // Part of shop.c.
+ 
+ #include "../shop_internal.h"
++#include "arena_config.h"
+ 
+ /// The shop credit each Game Ticket costs, by how many have been given: five
+ /// at each price: 300, then 500 doubling to 8000. The gift count stops at 28
+@@ -47,6 +48,11 @@ void Shop_BuySpecialItem(struct Window *window, struct Window *itemWindow) {
+   creditCost = sGameTicketCreditCosts[gMainRoutineWork.shopGifts];
+   memberIndex = 0;
+ 
++#if ARENA_TRAINING
++  // Arena romhack: there is no Game Ticket to win in the arena, so the shops give
++  // none.
++  return;
++#endif
+   // Gifts spend accumulated shop credit; they do not debit the party's coins.
+   if (creditCost > gMainRoutineWork.shopCredit)
+     return;
+-- 
+2.53.0
+
