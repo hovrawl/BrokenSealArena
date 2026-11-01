@@ -633,6 +633,41 @@ def main():
                                                     " / ".join(str(x) for x in pm), ratio))
     w("")
 
+    # early-cup check: region mobs and bosses moved to the first brackets' party levels
+    w("## Early cups: mobs and bosses moved to party level 10 and 20")
+    w("")
+    w("The party level-10 start of `CUPS.md`, with enemy rows from the early regions moved to the")
+    w("cup level by `BattleEnemy_AdjustLevel` (never below 70 percent of base). Party figure is the")
+    w("mean base stat of the four characters (no Djinn, class or gear, which add to it).")
+    w("")
+    w("| Enemy (own level) | Cup level | Enemy HP / Atk / Def / Agi | Party base HP / Atk / Def / Agi | Ratio HP, Atk, Def, Agi |")
+    w("|---|---|---|---|---|")
+    for row in (1, 4, 10, 18, 24, 39, 45, 51, 54, 119, 139, 115):
+        e = en[row]
+        for lv in (10, 20):
+            es = adjust(e, lv - e["level"])
+            pb = [party_base(c, lv) for c in chars[:4]]
+            pm = [sum(p[i] for p in pb) // 4 for i in (0, 2, 3, 4)]
+            ratio = ", ".join("%.1f" % (a / b) for a, b in zip(es, pm))
+            w("| %s (L%d) | %d | %s | %s | %s |" % (e["name"], e["level"], lv,
+                                                    " / ".join(str(x) for x in es),
+                                                    " / ".join(str(x) for x in pm), ratio))
+    w("")
+
+    # party base stats per character at the cup levels (what ArenaCup_SetLevel would write)
+    w("## Party base stats by level (the closed form, before Djinn, class and gear)")
+    w("")
+    w("What `ArenaCup_SetLevel(level)` would write into `baseHp` ... `baseLuck`, from the growth")
+    w("curves in `character_table.c` by the rule of `ArenaRules_LevelGain`. Character order is the")
+    w("table's (Isaac, Garet, Ivan, Mia, unit ids 0 to 3).")
+    w("")
+    w("| Level | Character | HP | PP | Atk | Def | Agi | Luck |")
+    w("|---|---|---|---|---|---|---|---|")
+    for lv in (10, 20, 30, 40, 50, 99):
+        for name, c in zip(("Isaac", "Garet", "Ivan", "Mia"), chars[:4]):
+            w("| %d | %s | %s |" % (lv, name, " | ".join(str(x) for x in party_base(c, lv))))
+    w("")
+
     # enemy table by level
     w("## The enemy table by level")
     w("")

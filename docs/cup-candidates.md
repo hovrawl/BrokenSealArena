@@ -1052,6 +1052,72 @@ means margin-scaling keeps the fight's shape; 999 means the cap is reached.
 | Deadbeard (L43) | 80 | 8908 / 999 / 325 / 402 | 671 / 274 / 125 / 284 | 13.3, 3.6, 2.6, 1.4 |
 | Deadbeard (L43) | 99 | 9093 / 999 / 387 / 499 | 796 / 322 / 145 / 336 | 11.4, 3.1, 2.7, 1.5 |
 
+## Early cups: mobs and bosses moved to party level 10 and 20
+
+The party level-10 start of `CUPS.md`, with enemy rows from the early regions moved to the
+cup level by `BattleEnemy_AdjustLevel` (never below 70 percent of base). Party figure is the
+mean base stat of the four characters (no Djinn, class or gear, which add to it).
+
+| Enemy (own level) | Cup level | Enemy HP / Atk / Def / Agi | Party base HP / Atk / Def / Agi | Ratio HP, Atk, Def, Agi |
+|---|---|---|---|---|
+| Vermin (L1) | 10 | 112 / 135 / 35 / 55 | 119 / 47 / 22 / 45 | 0.9, 2.9, 1.6, 1.2 |
+| Vermin (L1) | 20 | 209 / 258 / 68 / 106 | 207 / 85 / 40 / 84 | 1.0, 3.0, 1.7, 1.3 |
+| Bat (L1) | 10 | 108 / 136 / 35 / 60 | 119 / 47 / 22 / 45 | 0.9, 2.9, 1.6, 1.3 |
+| Bat (L1) | 20 | 205 / 259 / 68 / 111 | 207 / 85 / 40 / 84 | 1.0, 3.0, 1.7, 1.3 |
+| Slime (L2) | 10 | 108 / 122 / 33 / 50 | 119 / 47 / 22 / 45 | 0.9, 2.6, 1.5, 1.1 |
+| Slime (L2) | 20 | 205 / 245 / 66 / 101 | 207 / 85 / 40 / 84 | 1.0, 2.9, 1.6, 1.2 |
+| Zombie (L4) | 10 | 132 / 119 / 29 / 36 | 119 / 47 / 22 / 45 | 1.1, 2.5, 1.3, 0.8 |
+| Zombie (L4) | 20 | 229 / 242 / 62 / 87 | 207 / 85 / 40 / 84 | 1.1, 2.8, 1.6, 1.0 |
+| Skeleton (L5) | 10 | 134 / 120 / 30 / 53 | 119 / 47 / 22 / 45 | 1.1, 2.6, 1.4, 1.2 |
+| Skeleton (L5) | 20 | 231 / 243 / 63 / 104 | 207 / 85 / 40 / 84 | 1.1, 2.9, 1.6, 1.2 |
+| Troll (L7) | 10 | 173 / 123 / 29 / 40 | 119 / 47 / 22 / 45 | 1.5, 2.6, 1.3, 0.9 |
+| Troll (L7) | 20 | 270 / 246 / 62 / 91 | 207 / 85 / 40 / 84 | 1.3, 2.9, 1.6, 1.1 |
+| Gnome (L8) | 10 | 121 / 101 / 24 / 56 | 119 / 47 / 22 / 45 | 1.0, 2.1, 1.1, 1.2 |
+| Gnome (L8) | 20 | 218 / 224 / 57 / 107 | 207 / 85 / 40 / 84 | 1.1, 2.6, 1.4, 1.3 |
+| Grizzly (L9) | 10 | 164 / 120 / 30 / 43 | 119 / 47 / 22 / 45 | 1.4, 2.6, 1.4, 1.0 |
+| Grizzly (L9) | 20 | 261 / 243 / 63 / 94 | 207 / 85 / 40 / 84 | 1.3, 2.9, 1.6, 1.1 |
+| Cuttle (L10) | 10 | 124 / 110 / 25 / 48 | 119 / 47 / 22 / 45 | 1.0, 2.3, 1.1, 1.1 |
+| Cuttle (L10) | 20 | 221 / 233 / 58 / 99 | 207 / 85 / 40 / 84 | 1.1, 2.7, 1.4, 1.2 |
+| Lizard Man (L10) | 10 | 184 / 126 / 35 / 36 | 119 / 47 / 22 / 45 | 1.5, 2.7, 1.6, 0.8 |
+| Lizard Man (L10) | 20 | 281 / 249 / 68 / 87 | 207 / 85 / 40 / 84 | 1.4, 2.9, 1.7, 1.0 |
+| Tret (L14) | 10 | 974 / 74 / 21 / 30 | 119 / 47 / 22 / 45 | 8.2, 1.6, 1.0, 0.7 |
+| Tret (L14) | 20 | 1070 / 179 / 50 / 74 | 207 / 85 / 40 / 84 | 5.2, 2.1, 1.2, 0.9 |
+| Saturos (L18) | 10 | 1633 / 104 / 28 / 42 | 119 / 47 / 22 / 45 | 13.7, 2.2, 1.3, 0.9 |
+| Saturos (L18) | 20 | 1729 / 173 / 46 / 71 | 207 / 85 / 40 / 84 | 8.4, 2.0, 1.1, 0.8 |
+
+## Party base stats by level (the closed form, before Djinn, class and gear)
+
+What `ArenaCup_SetLevel(level)` would write into `baseHp` ... `baseLuck`, from the growth
+curves in `character_table.c` by the rule of `ArenaRules_LevelGain`. Character order is the
+table's (Isaac, Garet, Ivan, Mia, unit ids 0 to 3).
+
+| Level | Character | HP | PP | Atk | Def | Agi | Luck |
+|---|---|---|---|---|---|---|---|
+| 10 | Isaac | 123 | 52 | 50 | 23 | 47 | 5 |
+| 10 | Garet | 129 | 50 | 49 | 25 | 41 | 6 |
+| 10 | Ivan | 112 | 57 | 45 | 20 | 51 | 6 |
+| 10 | Mia | 115 | 58 | 44 | 21 | 43 | 7 |
+| 20 | Isaac | 211 | 86 | 89 | 41 | 86 | 9 |
+| 20 | Garet | 222 | 82 | 88 | 43 | 77 | 10 |
+| 20 | Ivan | 195 | 92 | 83 | 38 | 93 | 10 |
+| 20 | Mia | 200 | 94 | 82 | 38 | 81 | 11 |
+| 30 | Isaac | 298 | 117 | 126 | 57 | 124 | 11 |
+| 30 | Garet | 313 | 112 | 124 | 60 | 112 | 12 |
+| 30 | Ivan | 277 | 124 | 118 | 53 | 133 | 12 |
+| 30 | Mia | 283 | 127 | 116 | 53 | 117 | 13 |
+| 40 | Isaac | 385 | 147 | 164 | 73 | 163 | 14 |
+| 40 | Garet | 404 | 142 | 161 | 77 | 148 | 15 |
+| 40 | Ivan | 358 | 156 | 153 | 68 | 173 | 15 |
+| 40 | Mia | 366 | 159 | 150 | 69 | 154 | 16 |
+| 50 | Isaac | 462 | 172 | 196 | 87 | 196 | 16 |
+| 50 | Garet | 485 | 165 | 192 | 92 | 178 | 17 |
+| 50 | Ivan | 430 | 182 | 183 | 81 | 208 | 17 |
+| 50 | Mia | 439 | 185 | 179 | 82 | 185 | 18 |
+| 99 | Isaac | 812 | 269 | 338 | 147 | 344 | 23 |
+| 99 | Garet | 854 | 259 | 331 | 158 | 311 | 25 |
+| 99 | Ivan | 751 | 288 | 314 | 138 | 367 | 25 |
+| 99 | Mia | 770 | 294 | 306 | 140 | 325 | 26 |
+
 ## The enemy table by level
 
 All 165 rows, sorted by level, for hand-built teams and side cups. HP/ATK/DEF/AGI are the
