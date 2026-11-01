@@ -48,3 +48,24 @@ lobby signature (patch 14) which should also carry the PvP bracket.
 4. **PvP brackets**: the lobby asks for 50 or 99, both parties are set to it, the signature
    carries it, a linked test at each.
 5. **Balance pass** over the cups with Reloaded's rules (data-only changes).
+
+## Revision, 2026-11-01 (supersedes the items above where they differ)
+
+- **Cups are data** (rounds, teams, rewards, requirements). They do not set the party or its
+  level.
+- **The level is a gate.** New Game starts the party at level 10 with only the first cup
+  open. **The first win of a main cup plays an event scene** that congratulates the player
+  and announces the unlocks: the next level (the party is raised to it), Djinn to buy,
+  shops, cups. Older cups can be replayed while over-levelled.
+- **10 to 50** is the base progression (the story's mobs stop at level 43). **50 to 99** is
+  open-ended: an endless run with randomly picked, scaled mobs; Crossbone Isle is the model
+  for a post-game challenge. Medium term.
+- **The Psynergy shop is retired.** The **stat shop stays** for now (not level-99-only); Luck
+  and status ailments will be explored separately.
+- **4v4 PvP** keeps the 50 and 99 brackets.
+- **The Monster Gauntlet is retired** (basic). The **Boss Rush** is one of the first extra
+  cups, unlocked after the base progression. Starting a cup changes nothing about the party
+  (no gear, Djinn or level reset). Start purse 1500 coins. **The first-clear reward is gear**
+  tied to the cup's region. Cups are named by place (Vault Cup, Kolima Cup, Mercury Cup ...);
+  each boss can be a cup, later ones grouping several. Regions with no story boss are capped
+  by their Djinn battle (Forge, Dew, Squall, Luff) or the strongest mob team.

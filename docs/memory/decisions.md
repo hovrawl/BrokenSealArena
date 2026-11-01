@@ -118,3 +118,34 @@
   deluded, luck 40 immunity and the ward are intended, per the author's post
   (`docs/RELOADED-DESIGN.md`). The lobby signature is `BSR4` so builds with different rules
   do not link.
+- **Cups are data; the level is an unlock** (2026-11-01, revises the cups entry): a cup does
+  not set the party or its level. New Game starts at level 10 with the first cup only; the
+  first win of a main cup plays an event scene announcing the unlocks (the next level, Djinn,
+  shops, cups); older cups stay playable over-levelled. 10-50 is the base progression, 50-99
+  open-ended (an endless run later; Crossbone Isle as a post-game model). The Psynergy shop is
+  retired; the stat shop stays and Luck/ailments are to be explored separately. See
+  `docs/CUPS.md` and the revision at the top of `docs/CUP-SPEC.md`.
+- **Cup details** (2026-11-01): the Monster Gauntlet is retired and the Boss Rush is one of the
+  first extra cups, after the base progression; a cup start changes nothing about the party;
+  start purse 1500 coins; the first-clear reward is gear tied to the cup's region; cups are
+  named by place, one per boss early and grouped later; regions with no story boss are capped
+  by their Djinn battle. See `docs/CUP-SPEC.md` (revision).
+- **Five main cups (proposal, 2026-11-01)**: bosses grouped by level into five cups (Tret; Saturos
+  and Killer Ape; Hydros and Manticore; Kraken, Toadonpa and the Lizards; Saturos, Menardi and
+  the Fusion Dragon), party level before each 10, 20, 30, 40, 50. Deadbeard/Crossbone Isle is
+  the first post-game challenge; the caped strangers are too strong an opener. See
+  `docs/CUP-SPEC.md`.
+- **Seven main cups, levels follow the enemies** (2026-11-01, revises the five-cup proposal): Saturos
+  and Killer Ape are single-boss cups; the old level-40 cup is split in two; the party level need not
+  always rise (a cup's reward is Djinn and shop stock, from Reloaded's shop list); levels follow the
+  enemy levels (a 5-level award is allowed). See `docs/CUP-SPEC.md` (revised proposal): Tret, Mercury,
+  Mogall, Altin, Tolbi, Lunpa and Lighthouse cups; Crossbone Isle post-game.
+- **Gear rewards come from the dungeons** (2026-11-01): the seven cups and their level disparity are
+  accepted (Djinn carry the power balance; cup F's seven Djinn at once is fine). Gear that the story finds in
+  chests is the reward: given **mid-cup, the first time a round is reached**, so it can be equipped for
+  the next fight, and off-path chest gear is earned in side cups themed on a dungeon. Shops sell
+  Reloaded's shop list. A script (`scripts/cup-gear.py`, to write) joins scene, chest and item.
+- **Djinn in cups** (2026-11-01): a cup may include its region's Djinn fight as a round (one or two) and
+  end by giving a Djinni, so not every Djinni is bought: each is fought, given or sold once its cup
+  is cleared. Cup party levels are our own proposal anchored to enemy levels, which Reloaded barely
+  changes (13 of 165 rows, by 1 to 3); it changes the enemies' stats instead.
