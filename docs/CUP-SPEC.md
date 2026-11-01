@@ -82,7 +82,37 @@ spread over five steps (section 2.2's eleven-cup table folds into it: its Djinn 
 columns add up the same, grouped five ways). **Open:** the cup 4 load (four bosses, check
 the round count), the strangers as a side cup, and the gear rewards per cup.
 
-Still open: what 50 to 99 contains (later), and the exact cup list and order.
+### Revised proposal: seven main cups (owner's change of mind, 2026-11-01; supersedes the five above)
+
+Changes: **Saturos and Killer Ape are separate single-boss cups; the overloaded level 40 cup
+is split in two; the party level need not always rise** (a cup's reward is Djinn and shop
+stock, not necessarily a level); **cup levels follow the enemy levels** (a 5-level award is
+allowed, some cups award less or nothing). **Shops come from Reloaded's own shop list**: its
+TBS sheets name the shops (Vale, Vault, Bilibin, Imil, Kolima, Xian; the later towns Altin,
+Tolbi, Kalay, Lunpa, Stucco, Suhalla and Lalivero come from our stock table, section 2.2),
+so a cup simply names which shops it opens. The Djinn and shop columns below regroup 2.2's
+eleven cups (its rows 1 to 4 become A, 3 is B, 4 is C, 5 and 6 are D, 7 and part of 8 are E,
+the rest of 8 and 9 are F, 10 is G). Levels are a first draft to tune.
+
+| Cup | Name (cand.) | Mobs from | Boss (enemy level) | Played at party level | First clear raises to | Djinn | Shops opened |
+|---|---|---|---|---|---|---|---|
+| A | Tret Cup | Sol Sanctum and Vale, Goma, Kolima, Tret Tree | Tret (L14) | 10 | 15 | Flint, Forge, Granite, Breeze | Vale, Vault |
+| B | Mercury Cup | Bilibin, Mercury Lighthouse | Saturos (L18) | 15 | 18 | Gust, Fizz, Sleet | Bilibin |
+| C | Mogall Cup | Fuchin Falls, Mogall Forest | Killer Ape (L18) | 18 | 20 | Fever, Zephyr, Quartz | Imil |
+| D | Altin Cup | Altin Peak, Lamakan Desert, Vale Cave, Vault Cave | Hydros Statue (L20), Manticore (L22) | 20 | 25 | Spritz, Smog, Sap, Kite | Kolima, Xian, Altin |
+| E | Tolbi Cup | Tolbi ship, Altmiller, Colosso | Kraken (L25) and the Colosso trio (L25) | 25 | 27 | Ember, Squall, Mist | Kalay |
+| F | Lunpa Cup | Gondowan, Lunpa Fortress, Suhalla Desert and Gate | Toadonpa (L27), Storm and Tempest Lizard (L28) | 27 | 35 | Scorch, Ground, Torch, Tonic, Flash, Dew, Luff | Lunpa, Stucco, Suhalla |
+| G | Lighthouse Cup | Babi, Venus Lighthouse | Saturos and Menardi (L38), then the Fusion Dragon (L39) | 35 | 50 (the base progression ends) | Vine, Corona, Hail | (none left; Suhalla stock if not given in F) |
+
+Notes: all 28 Djinn are given once (the three of Vine, Corona and Hail and the one of Bane
+after Crossbone Isle included). **After G:** the Boss Rush and the other side cups open, and
+**Crossbone Isle (Deadbeard, L43) is the first post-game challenge**, giving Bane and the
+Lalivero stock. G is the hardest step (the party jumps from 35 to the L38 to L39 fights); a
+level 35 to 38 range for G is the thing to test. The Mystery Man and Woman (L10, four sprite
+slots) stay out of the line (possible side cup). Cup F carries seven Djinn, which is a lot at
+once: the first clear could also be split into two rewards if it feels heavy.
+
+Still open: what 50 to 99 contains (later), the gear reward per cup, and the levels above.
 
 ## 0. Summary
 

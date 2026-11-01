@@ -135,3 +135,8 @@
   the Fusion Dragon), party level before each 10, 20, 30, 40, 50. Deadbeard/Crossbone Isle is
   the first post-game challenge; the caped strangers are too strong an opener. See
   `docs/CUP-SPEC.md`.
+- **Seven main cups, levels follow the enemies** (2026-11-01, revises the five-cup proposal): Saturos
+  and Killer Ape are single-boss cups; the old level-40 cup is split in two; the party level need not
+  always rise (a cup's reward is Djinn and shop stock, from Reloaded's shop list); levels follow the
+  enemy levels (a 5-level award is allowed). See `docs/CUP-SPEC.md` (revised proposal): Tret, Mercury,
+  Mogall, Altin, Tolbi, Lunpa and Lighthouse cups; Crossbone Isle post-game.
