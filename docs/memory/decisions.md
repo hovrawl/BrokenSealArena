@@ -145,3 +145,7 @@
   chests is the reward: given **mid-cup, the first time a round is reached**, so it can be equipped for
   the next fight, and off-path chest gear is earned in side cups themed on a dungeon. Shops sell
   Reloaded's shop list. A script (`scripts/cup-gear.py`, to write) joins scene, chest and item.
+- **Djinn in cups** (2026-11-01): a cup may include its region's Djinn fight as a round (one or two) and
+  end by giving a Djinni, so not every Djinni is bought: each is fought, given or sold once its cup
+  is cleared. Cup party levels are our own proposal anchored to enemy levels, which Reloaded barely
+  changes (13 of 165 rows, by 1 to 3); it changes the enemies' stats instead.

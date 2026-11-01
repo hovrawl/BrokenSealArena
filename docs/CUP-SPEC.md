@@ -136,6 +136,23 @@ for encounters) and assign each to a cup round or a side cup. Items that come fr
 (`PartyInventory_GiveItem` calls in scene code, for example a boss's reward) go to the cup that
 holds that boss.
 
+**Where the levels come from (checked 2026-11-01).** The enemy levels in the cup table are the
+levels in our enemy table, and **Reloaded barely changes them**: only 13 of 165 enemy rows have
+a different level byte, each by one to three levels (for example Manticore 20 to 22, Hydros
+Statue 19 to 20, Cerberus 35 to 33). What Reloaded changes is the enemies' **stats** at those
+levels (the bosses gain roughly 40 percent HP, more Attack and PP, and higher Luck: Tret HP 710
+to 1012, Kraken 2400 to 3420, Fusion Dragon 5000 to 7125), so a boss of a given level is a
+harder fight than in the stock game. The *party* levels in the table (10, 15, 18 ...) are our
+own proposal anchored to those enemy levels, not Reloaded's; they are tuned in the balance pass.
+
+**Djinn in cups.** The story has about two dozen Djinn battles (scenes that call
+`Field_RequestDjinnBattle`, listed in `cup-candidates.md` "Djinn battles and Djinn in scenes").
+Rule: **a cup may include its region's Djinn fight as a round** (one or two, not a flood), and
+**a cup can end by giving a Djinni**, so that **not all Djinn need to be bought**: each Djinni is
+earned in a fight, given as an end reward, or sold at the party manager once its cup is cleared.
+The Djinn column in the table above is then read as "available from this cup" and the builder
+splits it three ways with the scene list; the manager's Djinn stock is gated by the same state.
+
 Still open: what 50 to 99 contains (later) and the levels above (to tune in the balance pass).
 
 ## 0. Summary
