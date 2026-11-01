@@ -1,0 +1,135 @@
+From 2be2697d0e50d0a57e8c15e5318930c57e904273 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Mon, 2 Nov 2026 08:51:29 +1100
+Subject: [PATCH] Arena: each cup has its own trophy design
+
+Nine distinct 16 x 16 placeholder sprites in cup order: 309 cup, 310 pennant,
+311 shield, 312 star on a plinth, 313 sword in a stone, 315 laurel wreath,
+316 crown, 317 gem on a plinth, 318 mask (bronze, silver, gold, blue by tier).
+Rows 315 to 318 of sprites.tsv and layout.tsv; art from
+scripts/gen-trophy-sprites.py. Both placement tables use them.
+
+Sprite memory with all nine trophies, the champion and the scout standing:
+350 of 512 blocks used, 162 free (68 more than with no trophies); message
+windows stay clean. The sprite data grew past the start of the last ROM
+region, so main.ld moves it up 0x1000 (ROM_END_tbs 0x08806000).
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/main.ld                         |  2 +-
+ games/tbs/src/graphics/sprite/layout.tsv  |  4 +++
+ games/tbs/src/graphics/sprite/sprites.tsv |  8 +++---
+ games/tbs/src/scene/battle_arena.c        | 32 +++++++++++------------
+ 4 files changed, 25 insertions(+), 21 deletions(-)
+
+diff --git a/games/tbs/main.ld b/games/tbs/main.ld
+index 95d97e27df..8dae890700 100644
+--- a/games/tbs/main.ld
++++ b/games/tbs/main.ld
+@@ -124,7 +124,7 @@ SECTIONS
+         . = ABSOLUTE(DEFINED(TBS_EDITION_JA)                            ? 0x08317000 :
+                      DEFINED(TBS_EDITION_DE)                            ? 0x0831fe00 :
+                      DEFINED(TBS_EDITION_ES) || DEFINED(TBS_EDITION_FR) ? 0x08321800 :
+-                                                                          0x08325000);
++                                                                          0x08326000);
+         INCLUDE "rom_tail_02.ld"
+     } > ROM
+     IwramResident_Rom = LOADADDR(.iwram_resident);
+diff --git a/games/tbs/src/graphics/sprite/layout.tsv b/games/tbs/src/graphics/sprite/layout.tsv
+index 00e9c752ea..f5190ad3cc 100644
+--- a/games/tbs/src/graphics/sprite/layout.tsv
++++ b/games/tbs/src/graphics/sprite/layout.tsv
+@@ -374,3 +374,7 @@ SPR_311
+ SPR_312
+ SPR_313
+ SPR_314
++SPR_315
++SPR_316
++SPR_317
++SPR_318
+diff --git a/games/tbs/src/graphics/sprite/sprites.tsv b/games/tbs/src/graphics/sprite/sprites.tsv
+index 6c1a234bcb..f1ea0d87b8 100644
+--- a/games/tbs/src/graphics/sprite/sprites.tsv
++++ b/games/tbs/src/graphics/sprite/sprites.tsv
+@@ -314,10 +314,10 @@ SPR_311	16	16	0x100	11	0	2	14	12	3	SPR_311	SPR_311
+ SPR_312	16	16	0x100	11	0	2	14	12	3	SPR_312	SPR_312
+ SPR_313	16	16	0x100	11	0	2	14	12	3	SPR_313	SPR_313
+ SPR_314	16	32	0x100	11	0	7	14	12	3	SPR_314	SPR_314
+-SPR_315	0	0	0x0	0	0	0	0	0	0	-	-
+-SPR_316	0	0	0x0	0	0	0	0	0	0	-	-
+-SPR_317	0	0	0x0	0	0	0	0	0	0	-	-
+-SPR_318	0	0	0x0	0	0	0	0	0	0	-	-
++SPR_315	16	16	0x100	11	0	2	14	12	3	SPR_315	SPR_315
++SPR_316	16	16	0x100	11	0	2	14	12	3	SPR_316	SPR_316
++SPR_317	16	16	0x100	11	0	2	14	12	3	SPR_317	SPR_317
++SPR_318	16	16	0x100	11	0	2	14	12	3	SPR_318	SPR_318
+ SPR_319	0	0	0x0	0	0	0	0	0	0	-	-
+ SPR_320	64	64	0xc0	22	0	2	48	32	3	SPR_320	SPR_320
+ SPR_321	64	64	0xd9	2	0	2	48	32	3	SPR_321	SPR_321
+diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
+index c23270400e..8d6bbe3f85 100644
+--- a/games/tbs/src/scene/battle_arena.c
++++ b/games/tbs/src/scene/battle_arena.c
+@@ -1973,21 +1973,21 @@ struct ActorPlacement gBattleArenaActorPlacements[] = {
+     // Trophies (ACTOR_TROPHY_FIRST on), one for each cup, once it is cleared.
+     { 309, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 0), MOVEMENT_TYPE_STAND,
+         PIXELS(70), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-    { 309, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 1), MOVEMENT_TYPE_STAND,
++    { 310, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 1), MOVEMENT_TYPE_STAND,
+         PIXELS(88), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-    { 310, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 2), MOVEMENT_TYPE_STAND,
++    { 311, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 2), MOVEMENT_TYPE_STAND,
+         PIXELS(106), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-    { 310, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 3), MOVEMENT_TYPE_STAND,
++    { 312, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 3), MOVEMENT_TYPE_STAND,
+         PIXELS(124), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-    { 311, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 4), MOVEMENT_TYPE_STAND,
++    { 313, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 4), MOVEMENT_TYPE_STAND,
+         PIXELS(303), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-    { 311, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 5), MOVEMENT_TYPE_STAND,
++    { 315, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 5), MOVEMENT_TYPE_STAND,
+         PIXELS(318), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-    { 312, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 6), MOVEMENT_TYPE_STAND,
++    { 316, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 6), MOVEMENT_TYPE_STAND,
+         PIXELS(333), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-    { 313, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 7), MOVEMENT_TYPE_STAND,
++    { 317, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 7), MOVEMENT_TYPE_STAND,
+         PIXELS(348), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-    { 313, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 8), MOVEMENT_TYPE_STAND,
++    { 318, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 8), MOVEMENT_TYPE_STAND,
+         PIXELS(363), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+     // Arena romhack: two visitors who come once cups are cleared: the champion
+     // after the last main cup, the scout after the third.
+@@ -2065,21 +2065,21 @@ struct ActorPlacement gBattleArenaBattleActorPlacements[] = {
+     // Trophies (ACTOR_TROPHY_FIRST on), one for each cup, once it is cleared.
+     { 309, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 0), MOVEMENT_TYPE_STAND,
+         PIXELS(70), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-    { 309, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 1), MOVEMENT_TYPE_STAND,
++    { 310, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 1), MOVEMENT_TYPE_STAND,
+         PIXELS(88), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-    { 310, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 2), MOVEMENT_TYPE_STAND,
++    { 311, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 2), MOVEMENT_TYPE_STAND,
+         PIXELS(106), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-    { 310, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 3), MOVEMENT_TYPE_STAND,
++    { 312, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 3), MOVEMENT_TYPE_STAND,
+         PIXELS(124), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-    { 311, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 4), MOVEMENT_TYPE_STAND,
++    { 313, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 4), MOVEMENT_TYPE_STAND,
+         PIXELS(303), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-    { 311, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 5), MOVEMENT_TYPE_STAND,
++    { 315, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 5), MOVEMENT_TYPE_STAND,
+         PIXELS(318), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-    { 312, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 6), MOVEMENT_TYPE_STAND,
++    { 316, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 6), MOVEMENT_TYPE_STAND,
+         PIXELS(333), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-    { 313, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 7), MOVEMENT_TYPE_STAND,
++    { 317, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 7), MOVEMENT_TYPE_STAND,
+         PIXELS(348), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+-    { 313, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 8), MOVEMENT_TYPE_STAND,
++    { 318, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 8), MOVEMENT_TYPE_STAND,
+         PIXELS(363), PIXELS(7), PIXELS(288), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+     // Arena romhack: two visitors who come once cups are cleared: the champion
+     // after the last main cup, the scout after the third.
+-- 
+2.53.0
+

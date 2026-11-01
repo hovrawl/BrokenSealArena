@@ -1,0 +1,32 @@
+# The scout and the champion stand in the south strip of the hall (scout 160,268 facing
+# east; champion 272,268 facing west), clear of the door. All cups cleared; talk to both.
+include to_lobby.txt
+poke 0x0200013E 1 7
+poke 0x0200013D 1 3
+poke 0x02000132 1 255
+poke 0x02000133 1 1
+include save_continue.txt
+wait 60
+shot /tmp/shots/m0_lobby.png
+press U 40
+press L 55
+shot /tmp/shots/m1_left.png
+press D 6
+tap A
+wait 150
+shot /tmp/shots/m2_scout.png
+tap A
+wait 100
+tap A
+wait 60
+press D 40
+press R 110
+press U 40
+shot /tmp/shots/m3_mid.png
+press R 25
+press L 8
+press D 15
+shot /tmp/shots/m4_right.png
+tap A
+wait 150
+shot /tmp/shots/m5_champion.png

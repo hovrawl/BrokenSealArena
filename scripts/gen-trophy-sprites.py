@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Makes the arena's trophy sprites (placeholder art, drawn by this script):
-spr_309 bronze, 310 silver, 311 gold, 312 gold with a crown and a red gem,
-313 blue (side cups). Each is one 16 x 16 picture of a cup standing on a plinth
-(16 x 16 costs a quarter of the sprite memory of a person's 32 x 32), and an
-animation file whose every animation holds that picture.
+"""Makes the arena's trophy sprites (placeholder art, drawn by this script), one
+design for each of the nine cups, in cup order: spr_309 a cup (bronze), 310 a
+pennant (bronze), 311 a shield (silver), 312 a star on a plinth (silver), 313 a
+sword in a stone (gold), 315 a laurel wreath (gold), 316 a crown (gold, red
+gems), 317 a gem on a plinth (blue), 318 a mask (blue). Each is one 16 x 16
+picture (16 x 16 costs a quarter of the sprite memory of a person's 32 x 32), and
+an animation file whose every animation holds that picture. Except the first,
+the designs are the ASCII pictures in ART (letters are colour roles; a one pixel
+outline is added).
 spr_314 is the display case the trophies stand in: 16 x 32, a wooden frame with a
 glass front on a stone pedestal. A trophy actor is placed 4 pixels above the
 case's foot and one pixel in front of it, so the cup sits inside the glass.
@@ -23,11 +27,7 @@ OUTLINE = 217  # 181818
 
 # name: (light, mid, dark, accent)
 TIERS = {
-    309: (53, 52, 45, 54),     # bronze
-    310: (15, 223, 14, 173),   # silver
-    311: (30, 24, 11, 4),      # gold
-    312: (30, 24, 11, 2),      # gold, crown, red gem
-    313: (201, 194, 151, 33),  # blue, green gem (side cups)
+    309: (53, 52, 45, 54),     # bronze (the cup)
 }
 
 
@@ -136,14 +136,170 @@ def build_case():
     return mask
 
 
+
+# Colour roles of the ASCII pictures: L M D light, mid, dark and A accent of the
+# design's tier colours; the rest are fixed palette indexes.
+FIXED = {'S': 223, 's': 222, 'T': 219,   # stone
+         'G': 33, 'g': 20, 'h': 50,      # leaves
+         'R': 2, 'Y': 30, 'y': 24,       # red, gold, dark gold
+         'W': 15, 'w': 14}               # blade
+
+PLINTH = [
+    "...SSSSSSSSsT...",
+    "..SSSSSSSSssTT..",
+    "..SSSSSSSSssTT..",
+    "..TTTTTTTTTTTT..",
+]
+
+ART = {
+    310: ((53, 52, 45, 54), True, [                    # pennant on a plinth
+        "................",
+        ".....yLLLLLLLM..",
+        ".....yLLLLLLMD..",
+        ".....yLLLLMMDD..",
+        ".....yLLMMMDD...",
+        ".....yLMMDD.....",
+        ".....yMDD.......",
+        ".....y..........",
+        ".....y..........",
+        ".....y..........",
+        ".....y..........",
+    ]),
+    311: ((15, 223, 14, 2), False, [                   # shield with a cross
+        "................",
+        "..LLLLLAADDDDD..",
+        "..LLLLLAADDDDD..",
+        "..LAAAAAAAAAAD..",
+        "..LAAAAAAAAAAD..",
+        "..LLLLLAADDDDD..",
+        "..LLLLLAADDDDD..",
+        "...LLLLAADDDD...",
+        "...LLLLAADDDD...",
+        "....LLLAADDD....",
+        ".....LLAADD.....",
+        "......LAAD......",
+        ".......AD.......",
+    ]),
+    312: ((15, 223, 14, 173), True, [                  # star on a plinth
+        "................",
+        ".......LD.......",
+        "......LLDD......",
+        "......LMMD......",
+        ".LLLLLLMMDDDDDD.",
+        "..LLLLLMMDDDDD..",
+        "....LLLMMDDD....",
+        "....LLMMMMDD....",
+        "...LLLM..MDDD...",
+        "...LL......DD...",
+        "................",
+    ]),
+    313: ((30, 24, 11, 2), False, [                    # sword in a stone
+        "................",
+        ".......Ww.......",
+        ".......Ww.......",
+        ".......Ww.......",
+        ".......Ww.......",
+        ".......Ww.......",
+        ".......Ww.......",
+        ".......Ww.......",
+        "....YYYYYYyy....",
+        ".......yy.......",
+        ".......yy.......",
+        "..SSSSSSSSssTT..",
+        ".SSSSSSSSSsssTT.",
+        ".SSSSssssssTTTT.",
+        "..TTTTTTTTTTTT..",
+    ]),
+    315: ((30, 24, 11, 2), False, [                    # laurel wreath
+        "................",
+        "....GGG..hhh....",
+        "..GGggG..hggGG..",
+        ".GGgG......hggG.",
+        ".GgG........GgG.",
+        ".GgG........GgG.",
+        ".GgG........hgG.",
+        ".GGg........ggG.",
+        ".hGGg......gGGh.",
+        "..hGGg....gGGh..",
+        "...hGGgRRgGGh...",
+        "....hhYYYYhh....",
+        ".....YY..YY.....",
+        "....YY....YY....",
+    ]),
+    316: ((30, 24, 11, 2), True, [                     # crown with red gems
+        "................",
+        "..LL...MM...DD..",
+        "..LL...MM...DD..",
+        "..LLL.MMMM.DDD..",
+        "..LLLLMMMMDDDD..",
+        "..LLLLMMMMDDDD..",
+        "..LAALMMMDAADD..",
+        "..LLLLMMMMDDDD..",
+        "..LLLLLMMDDDDD..",
+        "..LLLLMMMMDDDD..",
+        "................",
+    ]),
+    317: ((215, 207, 201, 15), True, [                 # gem on a plinth
+        "................",
+        "....LLLLMMDD....",
+        "...LLLLLMMDDD...",
+        "..LLLLLLMMDDDD..",
+        "..AAAAAAAAAAAA..",
+        "...LLLLMMDDDD...",
+        "....LLLMMMDD....",
+        ".....LLMMDD.....",
+        "......LMDD......",
+        ".......MD.......",
+        "................",
+    ]),
+    318: ((201, 194, 151, 33), True, [                 # mask
+        "................",
+        "..LLLLLMMDDDDD..",
+        "..LLLLLMMDDDDD..",
+        "..LLLLLAADDDDD..",
+        "..LLL..MM..DDD..",
+        "..LLL..MM..DDD..",
+        "..LLLLLMMDDDDD..",
+        "...LLLLMMDDDD...",
+        "....LL.MM.DD....",
+        ".....LLMMDD.....",
+        "................",
+    ]),
+}
+
+
+def build_art(tier):
+    colours, plinth, rows = ART[tier]
+    roles = dict(FIXED)
+    roles.update(zip("LMDA", colours))
+    rows = list(rows)
+    if plinth:
+        rows += PLINTH
+    mask = {}
+    for y, row in enumerate(rows):
+        assert len(row) == W, (tier, y, row)
+        for x, ch in enumerate(row):
+            if ch != '.':
+                mask[(x, y)] = roles[ch]
+    assert max(y for (_, y) in mask) < H, tier
+    solid = set(mask)
+    for (x, y) in list(solid):
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            p = (x + dx, y + dy)
+            if p not in solid and 0 <= p[0] < W and 0 <= p[1] < H:
+                mask[p] = OUTLINE
+    return mask
+
+
 def main():
     directory = sys.argv[1]
     palette = Image.open("%s/spr_106.png" % directory).getpalette()
-    for tier in TIERS:
+    for tier in [309] + sorted(ART):
         image = Image.new("P", (W, H), 0)
         image.putpalette(palette)
         px = image.load()
-        for (x, y), c in build(tier, tier == 312).items():
+        picture = build(tier, False) if tier == 309 else build_art(tier)
+        for (x, y), c in picture.items():
             px[x, y] = c
         image.save("%s/spr_%03d.png" % (directory, tier))
         with open("%s/spr_%03d.tsv" % (directory, tier), "w", newline="\n") as f:

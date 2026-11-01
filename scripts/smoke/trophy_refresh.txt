@@ -1,0 +1,11 @@
+# First clear of the Tret Cup, then the lobby at once (no reload): the first trophy must
+# stand in its case in the lower left wing.
+include cup_clear.txt
+mash B 6
+wait 120
+shot /tmp/shots/refresh_lobby.png
+press D 20
+press L 400
+wait 20
+shot /tmp/shots/refresh_wing.png
+peek 0x02000132 1

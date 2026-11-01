@@ -1,0 +1,15 @@
+# After the first clear (no reload): the attendant's menu offers the next cup.
+include cup_clear.txt
+mash B 6
+wait 120
+press L 50
+press U 24
+shot /tmp/shots/rm_pos.png
+tap A
+wait 150
+tap A
+wait 150
+shot /tmp/shots/rm_menu.png
+tap A
+wait 150
+shot /tmp/shots/rm_menu2.png

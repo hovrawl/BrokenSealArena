@@ -1,0 +1,44 @@
+# The file list pages the cup trophies: five cups cleared on page 1 (grey for the cups
+# not won), L and R turn the page (page 2 has the other four cups and a grey slot).
+# Seven cups cleared (bits 0 to 6), the side cups not. Title Continue list, then the
+# Pause menu's Save list.
+include to_lobby.txt
+poke 0x0200013E 1 7
+poke 0x02000132 1 127
+tap T
+wait 60
+tap A
+wait 90
+tap A
+wait 90
+tap A
+wait 120
+reset
+wait 900
+tap D
+wait 20
+tap A
+wait 120
+tap A
+wait 150
+shot /tmp/shots/p1_page1.png
+tap r
+wait 30
+shot /tmp/shots/p2_page2.png
+tap r
+wait 30
+shot /tmp/shots/p3_page1_again.png
+tap l
+wait 30
+shot /tmp/shots/p4_page2_by_L.png
+tap A
+wait 200
+wait 300
+tap T
+wait 60
+tap A
+wait 90
+shot /tmp/shots/p5_pause_save.png
+tap r
+wait 30
+shot /tmp/shots/p6_pause_save_page2.png

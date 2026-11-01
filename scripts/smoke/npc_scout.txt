@@ -1,12 +1,15 @@
-# Only the scout (three cups cleared): talk to him, to see his text on its own.
+# Only the scout (three cups cleared) stands in the south strip of the hall (160,268, facing east); talk to him.
+# (The champion stands at 272,268 facing west once the last main cup is cleared.)
 include to_lobby.txt
 poke 0x0200013E 1 3
 poke 0x02000132 1 7
 include save_continue.txt
-press U 90
-press R 20
-press U 15
-shot /tmp/shots/sc0.png
+wait 60
+shot /tmp/shots/m0_lobby.png
+press U 40
+press L 55
+shot /tmp/shots/m1_left.png
+press D 6
 tap A
-wait 200
-shot /tmp/shots/sc1.png
+wait 150
+shot /tmp/shots/m2_scout.png
