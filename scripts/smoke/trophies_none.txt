@@ -1,0 +1,4 @@
+# The lobby with no cup cleared: no trophies.
+include to_lobby.txt
+wait 60
+shot /tmp/shots/t0_lobby.png

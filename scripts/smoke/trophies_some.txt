@@ -1,0 +1,7 @@
+# Three and then (a second run) seven cups cleared: the progress byte and the
+# trophy bits (flags 0x790 to 0x798 are bytes 0x02000132 and 0x02000133) poked.
+include to_lobby.txt
+poke 0x0200013E 1 3
+poke 0x02000132 1 7
+include save_continue.txt
+shot /tmp/shots/t3_lobby.png

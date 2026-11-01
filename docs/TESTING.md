@@ -164,3 +164,11 @@ The Gauntlet and Boss Rush scripts (`clear`, `rungs`, `rungs_rush`, `tournaments
 - `cup_reward_item2.txt`: the Lighthouse Cup (cup byte poked to 6), round 6: two gear messages.
 - `cup_rungs.txt`: the first frame of all 76 rounds of the 9 cups (generated; cup byte 0x0200013F).
 Poke map: cup 0x0200013F, progress 0x0200013E, side bits 0x0200013D, streak 0x020004EA.
+
+## Trophies, NPCs and the file list
+
+`save_continue.txt` (prefix) saves through the Pause menu, resets and Continues, so the lobby
+is rebuilt from poked flags (trophy bits are bytes 0x02000132 and 0x02000133; progress
+0x0200013E; side cups 0x0200013D). Tests: `trophies_none/some/all.txt`, `trophies_reach.txt`
+(counter still reachable), `trophies_text.txt`, `npcs.txt`, `npc_scout.txt`, `npc_all.txt`,
+`filelist_cups.txt`, `filelist_cups_all.txt`.

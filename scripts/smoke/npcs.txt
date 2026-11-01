@@ -1,0 +1,33 @@
+# The cup visitors: with three cups cleared the scout stands beside the door;
+# with all seven (and the side cups) the champion joins him. Poked flags, then
+# Save and Continue to rebuild the lobby. Shots of the lobby for each state.
+include to_lobby.txt
+poke 0x0200013E 1 7
+poke 0x02000132 1 127
+include save_continue.txt
+shot /tmp/shots/n0_lobby.png
+# walk up the middle, then left under the champion, and talk
+press U 70
+press L 14
+press U 25
+shot /tmp/shots/n1_walk.png
+tap A
+wait 120
+shot /tmp/shots/n2_champ1.png
+wait 200
+shot /tmp/shots/n2b_champ1.png
+tap A
+wait 120
+shot /tmp/shots/n3_champ2.png
+tap A
+wait 60
+# the scout is to the right
+press R 40
+press U 10
+shot /tmp/shots/n4_walk2.png
+tap A
+wait 120
+shot /tmp/shots/n5_scout1.png
+tap A
+wait 120
+shot /tmp/shots/n6_scout2.png

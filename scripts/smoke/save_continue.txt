@@ -1,0 +1,21 @@
+# Prefix: save through the Pause menu (the first file), restart the console and
+# choose Continue, so the lobby is built again from the flags now in the save.
+# Poke the flags BEFORE including this.
+tap T
+wait 60
+tap A
+wait 90
+tap A
+wait 90
+tap A
+wait 120
+reset
+wait 900
+tap D
+wait 20
+tap A
+wait 120
+tap A
+wait 200
+tap A
+wait 300

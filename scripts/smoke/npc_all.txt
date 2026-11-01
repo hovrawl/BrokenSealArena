@@ -1,0 +1,14 @@
+# Only the scout (three cups cleared): talk to him, to see his text on its own.
+include to_lobby.txt
+poke 0x0200013E 1 7
+poke 0x0200013D 1 3
+poke 0x02000133 1 1
+poke 0x02000132 1 255
+include save_continue.txt
+press U 90
+press R 20
+press U 15
+shot /tmp/shots/sc0.png
+tap A
+wait 200
+shot /tmp/shots/sc1.png

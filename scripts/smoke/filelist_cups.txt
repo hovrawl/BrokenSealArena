@@ -1,0 +1,38 @@
+# The file list shows the cups: poke 3 and then 7 cups cleared, save through the
+# Pause menu, restart the console and open Continue; shot the list. (A new game
+# with no cups shows no trophy window.)
+include to_lobby.txt
+poke 0x0200013E 1 3
+poke 0x02000132 1 7
+tap T
+wait 60
+tap A
+wait 90
+tap A
+wait 90
+tap A
+wait 120
+shot /tmp/shots/f0_saved.png
+reset
+wait 900
+tap D
+wait 20
+tap A
+wait 120
+shot /tmp/shots/f1_list.png
+tap A
+wait 150
+shot /tmp/shots/f2_list.png
+wait 100
+shot /tmp/shots/f3_list.png
+# Load it, then the Pause menu's Save list shows the same file with its cups
+# (the same code serves both lists).
+tap A
+wait 200
+wait 300
+shot /tmp/shots/f3b_lobby.png
+tap T
+wait 60
+tap A
+wait 90
+shot /tmp/shots/f4_pause_save.png
