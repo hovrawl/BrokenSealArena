@@ -11,7 +11,7 @@ enemies are levelled to targetLevel; a round holds at most six sprite slots (a
 small enemy takes one, any other two).
 Rewards on a round are given the first time the round is won (once only):
   ("djinn", element, n)   a Djinni won in a Djinn battle
-  ("item", itemName)      gear from the region's chests (cup-gear.py lists them)
+  ("item", itemName)      gear from the cup's stretch of the story (GEAR below; cup-gear.py lists them)
 """
 
 # Djinn by table index: element (0 Venus, 1 Mercury, 2 Mars, 3 Jupiter) and n.
@@ -195,24 +195,33 @@ CUPS = [
 
 MAIN_COUNT = sum(1 for c in CUPS if not c.side)
 
-# Gear from the region's dungeon chests (scripts/cup-gear.py lists them), given the
-# first time the round is won: {cup short name: {round number: [ITEM_*]}}.
-# Cups A to C are complete for gear (every chest worth equipping); D to G give
-# what fits and the rest is listed by `cup-gear.py --missing`.
+# Gear for the first win of a round: {cup short name: {round number: [ITEM_*]}}. Each cup pays
+# the equipment of its whole stretch of the story (the previous cup's boss dungeon up to its
+# own: scripts/cupstretch.py), chests, gifts and the rare drops of the stretch's mobs
+# (`cup-gear.py --equip` and `cup-drops.py` list them). Equipment only. Spread over the rounds
+# in story order, at most two per round; within a type each piece is dearer than the one
+# before (the Golden Rule of docs/RELOADED-DESIGN.md). Left out: the Colosso prizes (Iron
+# Shield, Padded Gloves, Chain Mail, Cotton Shirt, Claymore, Hunter's Sword: weaker than shop
+# stock by then) and Bandit's Sword (a 320 coin weapon).
 GEAR = {
-    # Equipment only (no consumables). Chest gear first; "drop" lines are what the round's
-    # enemies drop in the story (scripts/cup-drops.py lists them).
     "Tret": {5: ["ITEM_FUR_COAT"], 6: ["ITEM_HEALING_RING"]},
     "Mercury": {3: ["ITEM_ELVEN_RAPIER"], 6: ["ITEM_PSYNERGY_ARMOR"]},
     "Mogall": {2: ["ITEM_UNICORN_RING"], 3: ["ITEM_ARCTIC_BLADE"], 5: ["ITEM_ELVEN_SHIRT"]},
-    "Altin": {3: ["ITEM_VULCAN_AXE"]},
-    "Tolbi": {5: ["ITEM_SPIRIT_GLOVES"], 6: ["ITEM_PROPHETS_HAT"]},   # drop: Cerberus
-    "Lunpa": {3: ["ITEM_MYTHRIL_CIRCLET"], 4: ["ITEM_VIRTUOUS_ARMLET", "ITEM_AURA_GLOVES"],   # drop: Magicore
-              6: ["ITEM_WATER_JACKET"]},
-    "Lighthouse": {3: ["ITEM_ORACLES_ROBE"],
-                   5: ["ITEM_ASURAS_ARMOR", "ITEM_FEATHERED_ROBE"],   # drop: Wild Gryphon
-                   6: ["ITEM_SPIKED_ARMOR"],                          # drop: Chimera Mage
-                   7: ["ITEM_BLESSED_MACE", "ITEM_ZODIAC_WAND"]},     # drops: Thunder Lizard, Grand Golem
+    "Altin": {3: ["ITEM_VULCAN_AXE"], 6: ["ITEM_VAMBRACE"]},          # Lamakan; Vault Cave
+    "Tolbi": {2: ["ITEM_SPIRIT_GLOVES"],                                # Kalay
+              6: ["ITEM_PROPHETS_HAT"]},                                # drop: Cerberus (Altmiller)
+    "Lunpa": {2: ["ITEM_WATER_JACKET"],                                 # Hammet Palace
+              3: ["ITEM_MYTHRIL_CIRCLET"],                              # Lunpa Fortress
+              4: ["ITEM_VIRTUOUS_ARMLET", "ITEM_AURA_GLOVES"],          # Suhalla Desert; drop: Magicore
+              6: ["ITEM_TURTLE_BOOTS"]},                                # buried in the storm
+    "Lighthouse": {1: ["ITEM_LURE_CAP"],                                # Babi Palace
+                   2: ["ITEM_ORACLES_ROBE"],                            # Tunnel Ruins
+                   3: ["ITEM_LUCKY_CAP"],                               # Venus Lighthouse
+                   5: ["ITEM_SPIKED_ARMOR", "ITEM_THUNDER_CROWN"],      # drop: Chimera Mage
+                   6: ["ITEM_FEATHERED_ROBE", "ITEM_ASURAS_ARMOR"],     # drop: Wild Gryphon; Tunnel Ruins
+                   7: ["ITEM_DRAGON_SCALES", "ITEM_BLESSED_MACE"],      # drop: Thunder Lizard
+                   8: ["ITEM_ZODIAC_WAND"],                             # drop: Grand Golem
+                   9: ["ITEM_GAIA_BLADE"]},
     "Crossbone": {1: ["ITEM_WARRIORS_HELM"], 2: ["ITEM_FAIRY_RING"], 3: ["ITEM_CLERICS_RING"],
                   4: ["ITEM_MYSTERY_BLADE"], 5: ["ITEM_STORM_GEAR"], 6: ["ITEM_NINJA_GARB"],
                   7: ["ITEM_WICKED_MACE"], 8: ["ITEM_DEMON_MAIL"], 9: ["ITEM_MURAMASA"],

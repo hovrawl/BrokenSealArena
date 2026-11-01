@@ -1,0 +1,90 @@
+# Lighthouse Cup (cup byte poked to 6 mid-battle), win count poked to 5 so the win is round 6: two gear rewards (Feathered Robe and Asura's Armor), given once.
+include to_solo.txt
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+poke 0x0200013F 1 6
+poke 0x020004EA 2 5
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 2
+wait 60
+shot /tmp/shots/r10.png
+mash A 2
+wait 60
+shot /tmp/shots/r11.png
+mash A 2
+wait 60
+shot /tmp/shots/r12.png
+mash A 2
+wait 60
+shot /tmp/shots/r13.png
+mash A 2
+wait 60
+shot /tmp/shots/r14.png
+mash A 2
+wait 60
+shot /tmp/shots/r15.png
+mash A 2
+wait 60
+shot /tmp/shots/r16.png
+mash A 2
+wait 60
+shot /tmp/shots/r17.png
+mash A 2
+wait 60
+shot /tmp/shots/r18.png
+mash A 2
+wait 60
+shot /tmp/shots/r19.png
+mash A 2
+wait 60
+shot /tmp/shots/r20.png
+mash A 2
+wait 60
+shot /tmp/shots/r21.png
