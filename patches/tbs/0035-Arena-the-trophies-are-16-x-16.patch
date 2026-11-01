@@ -1,0 +1,37 @@
+From abadc183e958b77fd606da4fe8c55d176e4925d2 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sun, 1 Nov 2026 16:14:48 +1100
+Subject: [PATCH] Arena: the trophies are 16 x 16
+
+The trophy sprites (sprite table rows 309 to 313) are one 16 x 16 picture each instead of 16 x 32,
+a quarter of a person's sprite memory. scripts/gen-trophy-sprites.py draws the smaller cups.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/graphics/sprite/sprites.tsv | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/games/tbs/src/graphics/sprite/sprites.tsv b/games/tbs/src/graphics/sprite/sprites.tsv
+index c1cddb6a89..60b498f600 100644
+--- a/games/tbs/src/graphics/sprite/sprites.tsv
++++ b/games/tbs/src/graphics/sprite/sprites.tsv
+@@ -308,11 +308,11 @@ SPR_305	64	64	0xc0	2	0	2	48	32	0	SPR_305	SPR_305
+ SPR_306	32	32	0x1b2	2	0	2	48	32	3	SPR_306	SPR_301
+ SPR_307	32	32	0x180	2	0	2	48	32	3	SPR_307	SPR_302
+ SPR_308	32	32	0x180	2	0	2	48	32	3	SPR_308	SPR_303
+-SPR_309	16	32	0x100	11	0	2	14	12	3	SPR_309	SPR_309
+-SPR_310	16	32	0x100	11	0	2	14	12	3	SPR_310	SPR_310
+-SPR_311	16	32	0x100	11	0	2	14	12	3	SPR_311	SPR_311
+-SPR_312	16	32	0x100	11	0	2	14	12	3	SPR_312	SPR_312
+-SPR_313	16	32	0x100	11	0	2	14	12	3	SPR_313	SPR_313
++SPR_309	16	16	0x100	11	0	2	14	12	3	SPR_309	SPR_309
++SPR_310	16	16	0x100	11	0	2	14	12	3	SPR_310	SPR_310
++SPR_311	16	16	0x100	11	0	2	14	12	3	SPR_311	SPR_311
++SPR_312	16	16	0x100	11	0	2	14	12	3	SPR_312	SPR_312
++SPR_313	16	16	0x100	11	0	2	14	12	3	SPR_313	SPR_313
+ SPR_314	0	0	0x0	0	0	0	0	0	0	-	-
+ SPR_315	0	0	0x0	0	0	0	0	0	0	-	-
+ SPR_316	0	0	0x0	0	0	0	0	0	0	-	-
+-- 
+2.53.0
+
