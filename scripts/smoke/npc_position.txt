@@ -1,0 +1,24 @@
+# The class viewer's scholar: the south hall, then up the left stairs to the upper hall where
+# he stands at (56, 168), facing east, below the left table. Full-size shots (the lobby, the
+# hall as Isaac arrives, and next to the scholar).
+include to_lobby.txt
+poke 0x0200013E 1 7
+poke 0x0200013D 1 3
+poke 0x02000132 1 255
+poke 0x02000133 1 1
+include save_continue.txt
+wait 60
+shot /tmp/shots/npc_lobby.png
+press U 55
+press L 160
+press U 60
+shot /tmp/shots/npc_stairs.png
+press L 40
+press U 140
+shot /tmp/shots/npc_hall.png
+press L 30
+press D 30
+shot /tmp/shots/npc_at_scholar.png
+tap A
+wait 60
+shot /tmp/shots/npc_talk.png

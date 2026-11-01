@@ -11,7 +11,7 @@ item is an agent task, run one at a time. Status is kept in `CHANGES.md`.
 | 4 | The scout and champion stand too close to the gate NPC | move them | polish (4) |
 | 5 | Warn when the next round is a boss or mini-boss | a marker per round in `cupdata.py`, one extra message page | polish (5) |
 | 6 | Stat boosts by round wins | see below | done: patch 0043 (CHANGES 43) |
-| 7 | An NPC in the back shows each character's classes (class viewer) | see below | queued |
+| 7 | An NPC in the back shows each character's classes (class viewer) | see below | done: patch 0044 (CHANGES 44), branch `class-viewer` |
 | 8 | An NPC that explains general mechanics | one NPC with a topic menu | queued |
 
 ## Stat boosts by round wins (replaces the coin stat shop)

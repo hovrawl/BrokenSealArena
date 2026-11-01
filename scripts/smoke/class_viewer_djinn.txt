@@ -1,0 +1,31 @@
+# The Now filter with Djinn owned: Isaac holds all seven Venus Djinn (djinnHeld[0], unit
+# 0x02000500 + 0xf8) and Garet two Mars Djinn (unit 0x0200064C + 0xf8 + 8 = 0x0200074C). Isaac's Squire line
+# then reaches Squire to Lord in Now (Sovereign needs 8 Venus Djinn: never), and the Mars line
+# for Garet shows Guard and Soldier. Keys: S is Select, r is the right shoulder.
+include to_scholar.txt
+poke 0x020005f8 4 127
+poke 0x0200074C 4 3
+tap A
+wait 30
+shot /tmp/shots/cvd01_isaac_all.png
+tap S
+wait 10
+shot /tmp/shots/cvd02_isaac_now.png
+tap D
+tap R
+wait 10
+shot /tmp/shots/cvd03_isaac_now_lord.png
+tap B
+wait 30
+tap R
+wait 30
+tap A
+wait 30
+tap r
+wait 10
+tap S
+wait 10
+shot /tmp/shots/cvd04_garet_now_mars_line.png
+tap D
+wait 10
+shot /tmp/shots/cvd05_garet_now_soldier.png

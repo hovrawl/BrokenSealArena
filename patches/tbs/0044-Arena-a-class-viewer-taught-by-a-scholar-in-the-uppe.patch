@@ -1,0 +1,1428 @@
+From a814fc5ba5f5ee6f3810150a02b998899e8db26c Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Mon, 2 Nov 2026 09:49:05 +1100
+Subject: [PATCH] Arena: a class viewer, taught by a scholar in the upper hall
+
+A scholar (the elder's sprite 0x6f, which the hall already loads: no extra
+sprite memory) stands at (56, 168) in the upper hall, a new row after the scout
+in both placement tables (ACTOR_CLASS_VIEWER) and a talk trigger to
+BattleArena_ClassViewer (scene/arena_menu.c). It loops the party manager's
+member picker (status panel) and ClassViewer_Run, a new part of shop.c
+(shop/shop/arena_class_viewer.c, far call ClassViewer_RunFar, import row).
+
+ClassViewer_Run has two windows over the screen, a 30 by 11 panel and a 30 by 9
+list. The browse screen shows a line of classes (twenty lines: the class ids
+that share a tens digit and have a series 1 to 10), L and R change the line,
+the hand highlights a class and the panel shows its name, the Djinn it needs
+for this character (ceil((required * 10 - elementBonus) / 10) of each element,
+as animated Djinn figures with a count), HP, PP, Attack, Defense, Agility and
+Luck as percentages of the base stat, the ward, and whether the party's Djinn
+reach it. Select toggles Now (classes whose needs the Djinn held by the whole
+party, set or on standby, cover) and All (red names are not reachable now); A
+opens the class's Psynergy, eight to a page, an icon for what the character's
+level has and a red level for what it has not, with PP and the level in the
+window under; B goes back. Labels are 19 new messages above the generated cups
+block (gen-cups.py re-run).
+
+The shop bank (rom_main_06) overflowed by 0x81d bytes, so main.ld moves the
+start of bank 07 to 0x080b7000 and bank 08 to 0x080c9d00 (tbs-en only; bank 07
+ends at 0x080c9c6c, bank 08 before 0x080f0000).
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/module/arena.h             |   5 +
+ games/tbs/include/module/arena_cups.h        |   2 +-
+ games/tbs/main.ld                            |   4 +-
+ games/tbs/src/gamepak/far_call/SHOP.S        |   1 +
+ games/tbs/src/scene/arena_cup_info.inc       |  82 ++--
+ games/tbs/src/scene/arena_menu.c             |  18 +
+ games/tbs/src/scene/battle_arena.c           |  12 +-
+ games/tbs/src/scene/import/battle_arena.s    |   1 +
+ games/tbs/src/shop/shop.c                    |   1 +
+ games/tbs/src/shop/shop/arena_class_viewer.c | 471 +++++++++++++++++++
+ games/tbs/src/system/overlay/imports.inc     |   1 +
+ games/tbs/text/en.po                         | 198 +++++---
+ 12 files changed, 690 insertions(+), 106 deletions(-)
+ create mode 100644 games/tbs/src/shop/shop/arena_class_viewer.c
+
+diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
+index 847f65ce1d..2d09a2fa61 100644
+--- a/games/tbs/include/module/arena.h
++++ b/games/tbs/include/module/arena.h
+@@ -61,6 +61,8 @@ s32 ArenaCup_Current(void);
+ s32 ArenaCup_Heals(void);
+ /// Talking to the party manager: stats, Djinn and the item shops.
+ s32 BattleArena_PartyManager(s32 actorId);
++/// Talking to the scholar: the class viewer (scene/arena_menu.c).
++s32 BattleArena_ClassViewer(s32 actorId);
+ 
+ // File screen overlay (scene/arena_boot.c)
+ 
+@@ -81,5 +83,8 @@ s32 ItemPicker_ChooseMember(s32 mode);
+ /// The stat (2), Djinn (1) or Psynergy (0) counter for one character
+ /// (shop/shop/arena_shop.c).
+ s32 ArenaShop_Run(s32 kind, s32 unitId);
++/// The class viewer for one character: lines of classes, the Djinn and stats of
++/// each, its Psynergy (shop/shop/arena_class_viewer.c).
++s32 ClassViewer_Run(s32 unitId);
+ 
+ #endif
+diff --git a/games/tbs/include/module/arena_cups.h b/games/tbs/include/module/arena_cups.h
+index 34fd23386f..a98cad1723 100644
+--- a/games/tbs/include/module/arena_cups.h
++++ b/games/tbs/include/module/arena_cups.h
+@@ -70,6 +70,6 @@ extern const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT];
+ extern const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3];
+ extern const u8 gArenaCrossboneRows[3];
+ 
+-#define MSG_ARENA_CUP_NAME 10789
++#define MSG_ARENA_CUP_NAME 10808
+ 
+ #endif
+diff --git a/games/tbs/main.ld b/games/tbs/main.ld
+index 8dae890700..1f07f3e23e 100644
+--- a/games/tbs/main.ld
++++ b/games/tbs/main.ld
+@@ -72,12 +72,12 @@ SECTIONS
+         . = ABSOLUTE(DEFINED(TBS_EDITION_JA)                            ? 0x080ac000 :
+                      DEFINED(TBS_EDITION_DE)                            ? 0x080b7600 :
+                      DEFINED(TBS_EDITION_ES) || DEFINED(TBS_EDITION_FR) ? 0x080b9000 :
+-                                                                          0x080b6000);
++                                                                          0x080b7000);
+         INCLUDE "rom_main_07.ld"
+         . = ABSOLUTE(DEFINED(TBS_EDITION_JA)                            ? 0x080c0000 :
+                      DEFINED(TBS_EDITION_DE)                            ? 0x080cae00 :
+                      DEFINED(TBS_EDITION_ES) || DEFINED(TBS_EDITION_FR) ? 0x080cc800 :
+-                                                                          0x080c9000);
++                                                                          0x080c9d00);
+         INCLUDE "rom_main_08.ld"
+         . = ABSOLUTE(DEFINED(TBS_EDITION_JA)                            ? 0x080e7000 :
+                      DEFINED(TBS_EDITION_DE)                            ? 0x080f1600 :
+diff --git a/games/tbs/src/gamepak/far_call/SHOP.S b/games/tbs/src/gamepak/far_call/SHOP.S
+index c4cebe5aef..ce9139dcc3 100644
+--- a/games/tbs/src/gamepak/far_call/SHOP.S
++++ b/games/tbs/src/gamepak/far_call/SHOP.S
+@@ -18,3 +18,4 @@ FarCall_ShopTable:
+ 	export Inn_PlaySleepFar, Inn_PlaySleep
+ 	export ItemPicker_ChooseMemberFar, ItemPicker_ChooseMember
+ 	export ArenaShop_RunFar, ArenaShop_Run
++	export ClassViewer_RunFar, ClassViewer_Run
+diff --git a/games/tbs/src/scene/arena_cup_info.inc b/games/tbs/src/scene/arena_cup_info.inc
+index 57e08e1c5d..bf7722592b 100644
+--- a/games/tbs/src/scene/arena_cup_info.inc
++++ b/games/tbs/src/scene/arena_cup_info.inc
+@@ -2,66 +2,66 @@
+ // Included by arena_menu.c. Global const data: a scene overlay has no static data of its own.
+ 
+ const struct ArenaCupReward gArenaCup0Rewards[] = {
+-    {2, 2, 0, 0, 0, 10807},
+-    {3, 2, 1, 2, 0, 10809},
+-    {4, 1, 0, 14, 0, 10816},
++    {2, 2, 0, 0, 0, 10826},
++    {3, 2, 1, 2, 0, 10828},
++    {4, 1, 0, 14, 0, 10835},
+     {5, 0, 1, 0, 91, 0},
+     {6, 0, 2, 0, 265, 0},
+-    {7, 1, 3, 22, 0, 10817},
++    {7, 1, 3, 22, 0, 10836},
+ };
+ const struct ArenaCupReward gArenaCup1Rewards[] = {
+-    {2, 2, 2, 3, 0, 10810},
++    {2, 2, 2, 3, 0, 10829},
+     {3, 0, 4, 0, 22, 0},
+-    {4, 2, 3, 3, 0, 10810},
+-    {5, 1, 5, 8, 0, 10821},
++    {4, 2, 3, 3, 0, 10829},
++    {5, 1, 5, 8, 0, 10840},
+     {6, 0, 6, 0, 76, 0},
+ };
+ const struct ArenaCupReward gArenaCup2Rewards[] = {
+-    {1, 2, 4, 5, 0, 10812},
++    {1, 2, 4, 5, 0, 10831},
+     {2, 0, 7, 0, 266, 0},
+-    {3, 1, 8, 23, 0, 10825},
++    {3, 1, 8, 23, 0, 10844},
+     {3, 0, 9, 0, 8, 0},
+-    {4, 2, 5, 2, 0, 10809},
+-    {5, 1, 10, 2, 0, 10826},
++    {4, 2, 5, 2, 0, 10828},
++    {5, 1, 10, 2, 0, 10845},
+     {5, 0, 11, 0, 93, 0},
+ };
+ const struct ArenaCupReward gArenaCup3Rewards[] = {
+-    {1, 2, 6, 1, 0, 10808},
+-    {2, 2, 7, 0, 0, 10807},
++    {1, 2, 6, 1, 0, 10827},
++    {2, 2, 7, 0, 0, 10826},
+     {3, 0, 12, 0, 36, 0},
+-    {4, 1, 13, 10, 0, 10830},
+-    {4, 2, 8, 5, 0, 10812},
+-    {5, 2, 9, 4, 0, 10811},
++    {4, 1, 13, 10, 0, 10849},
++    {4, 2, 8, 5, 0, 10831},
++    {5, 2, 9, 4, 0, 10830},
+     {6, 0, 14, 0, 130, 0},
+-    {7, 2, 10, 4, 0, 10811},
+-    {8, 2, 11, 4, 0, 10811},
++    {7, 2, 10, 4, 0, 10830},
++    {8, 2, 11, 4, 0, 10830},
+ };
+ const struct ArenaCupReward gArenaCup4Rewards[] = {
+-    {1, 2, 12, 2, 0, 10809},
++    {1, 2, 12, 2, 0, 10828},
+     {2, 0, 15, 0, 132, 0},
+-    {3, 2, 13, 0, 0, 10807},
+-    {4, 1, 16, 26, 0, 10834},
+-    {5, 2, 14, 1, 0, 10808},
++    {3, 2, 13, 0, 0, 10826},
++    {4, 1, 16, 26, 0, 10853},
++    {5, 2, 14, 1, 0, 10827},
+     {6, 0, 17, 0, 163, 0},
+ };
+ const struct ArenaCupReward gArenaCup5Rewards[] = {
+-    {1, 2, 15, 2, 0, 10809},
++    {1, 2, 15, 2, 0, 10828},
+     {2, 0, 18, 0, 95, 0},
+     {3, 0, 19, 0, 170, 0},
+-    {3, 2, 16, 0, 0, 10807},
++    {3, 2, 16, 0, 0, 10826},
+     {4, 0, 20, 0, 141, 0},
+     {4, 0, 21, 0, 134, 0},
+-    {4, 2, 17, 3, 0, 10810},
+-    {5, 1, 22, 19, 0, 10838},
++    {4, 2, 17, 3, 0, 10829},
++    {5, 1, 22, 19, 0, 10857},
+     {6, 0, 23, 0, 259, 0},
+-    {7, 1, 24, 13, 0, 10839},
+-    {8, 2, 18, 1, 0, 10808},
++    {7, 1, 24, 13, 0, 10858},
++    {8, 2, 18, 1, 0, 10827},
+ };
+ const struct ArenaCupReward gArenaCup6Rewards[] = {
+     {1, 0, 25, 0, 164, 0},
+     {2, 0, 26, 0, 113, 0},
+     {3, 0, 27, 0, 161, 0},
+-    {4, 1, 28, 27, 0, 10843},
++    {4, 1, 28, 27, 0, 10862},
+     {5, 0, 29, 0, 85, 0},
+     {5, 0, 30, 0, 162, 0},
+     {6, 0, 31, 0, 112, 0},
+@@ -74,38 +74,38 @@ const struct ArenaCupReward gArenaCup6Rewards[] = {
+ const struct ArenaCupReward gArenaCup8Rewards[] = {
+     {1, 0, 37, 0, 151, 0},
+     {2, 0, 38, 0, 267, 0},
+-    {2, 2, 19, 5, 0, 10812},
++    {2, 2, 19, 5, 0, 10831},
+     {3, 0, 39, 0, 268, 0},
+     {4, 0, 40, 0, 24, 0},
+     {5, 0, 41, 0, 96, 0},
+-    {5, 2, 20, 1, 0, 10808},
++    {5, 2, 20, 1, 0, 10827},
+     {6, 0, 42, 0, 98, 0},
+     {7, 0, 43, 0, 50, 0},
+     {8, 0, 44, 0, 83, 0},
+-    {8, 2, 21, 3, 0, 10810},
++    {8, 2, 21, 3, 0, 10829},
+     {9, 0, 45, 0, 11, 0},
+     {10, 0, 46, 0, 38, 0},
+ };
+ 
+ const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT] = {
+     // Tret Cup
+-    {8, 2, 0, 15, 6, 0, 0x0, gArenaCup0Rewards, 10813, 10814, 10815, 0x80},
++    {8, 2, 0, 15, 6, 0, 0x0, gArenaCup0Rewards, 10832, 10833, 10834, 0x80},
+     // Mercury Cup
+-    {8, 2, 1, 18, 5, 0, 0x0, gArenaCup1Rewards, 10818, 10819, 10820, 0x80},
++    {8, 2, 1, 18, 5, 0, 0x0, gArenaCup1Rewards, 10837, 10838, 10839, 0x80},
+     // Mogall Cup
+-    {7, 2, 2, 20, 7, 0, 0x0, gArenaCup2Rewards, 10822, 10823, 10824, 0x40},
++    {7, 2, 2, 20, 7, 0, 0x0, gArenaCup2Rewards, 10841, 10842, 10843, 0x40},
+     // Altin Cup
+-    {9, 2, 3, 25, 9, 0, 0x80, gArenaCup3Rewards, 10827, 10828, 10829, 0x100},
++    {9, 2, 3, 25, 9, 0, 0x80, gArenaCup3Rewards, 10846, 10847, 10848, 0x100},
+     // Tolbi Cup
+-    {8, 2, 4, 27, 6, 0, 0x40, gArenaCup4Rewards, 10831, 10832, 10833, 0x80},
++    {8, 2, 4, 27, 6, 0, 0x40, gArenaCup4Rewards, 10850, 10851, 10852, 0x80},
+     // Lunpa Cup
+-    {10, 2, 5, 35, 11, 0, 0x100, gArenaCup5Rewards, 10835, 10836, 10837, 0x200},
++    {10, 2, 5, 35, 11, 0, 0x100, gArenaCup5Rewards, 10854, 10855, 10856, 0x200},
+     // Lighthouse Cup
+-    {10, 2, 6, 50, 12, 0, 0x100, gArenaCup6Rewards, 10840, 10841, 10842, 0x200},
++    {10, 2, 6, 50, 12, 0, 0x100, gArenaCup6Rewards, 10859, 10860, 10861, 0x200},
+     // Boss Rush
+-    {6, 1, 7, 0, 0, 0, 0x0, 0, 10844, 10845, 10846, 0x3f},
++    {6, 1, 7, 0, 0, 0, 0x0, 0, 10863, 10864, 10865, 0x3f},
+     // Crossbone Isle
+-    {10, 3, 7, 0, 13, 0, 0x0, gArenaCup8Rewards, 10847, 10848, 10849, 0x200},
++    {10, 3, 7, 0, 13, 0, 0x0, gArenaCup8Rewards, 10866, 10867, 10868, 0x200},
+ };
+ 
+ const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3] = {
+diff --git a/games/tbs/src/scene/arena_menu.c b/games/tbs/src/scene/arena_menu.c
+index 1c87085b1f..067946293d 100644
+--- a/games/tbs/src/scene/arena_menu.c
++++ b/games/tbs/src/scene/arena_menu.c
+@@ -273,3 +273,21 @@ s32 BattleArena_PartyManager(s32 actorId) {
+   Event_End();
+   return 0;
+ }
++
++/// Talking to the scholar (ACTOR_CLASS_VIEWER): choose a character in the
++/// party strip, then read that character's class lines (ClassViewer_Run). B in
++/// the strip leaves. Nothing about the party changes, so nothing is healed.
++s32 BattleArena_ClassViewer(s32 actorId) {
++  s32 member;
++
++  Event_Start();
++  Actor_SetAngleToward(actorId, gMainRoutineWork.leaderActorId, 0);
++  for (;;) {
++    member = ItemPicker_ChooseMember(3);
++    if (member < 0)
++      break;
++    ClassViewer_Run(member);
++  }
++  Event_End();
++  return 0;
++}
+diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
+index 17b6c858d8..d14c07928a 100644
+--- a/games/tbs/src/scene/battle_arena.c
++++ b/games/tbs/src/scene/battle_arena.c
+@@ -214,7 +214,9 @@ enum BattleArenaActorId {
+   /// Congratulates the player after the last main cup (MsgArenaChampion).
+   ACTOR_CHAMPION,
+   /// Hints at the side cups, from the third cup on (MsgArenaScout).
+-  ACTOR_SCOUT
++  ACTOR_SCOUT,
++  /// Arena romhack: the scholar in the upper hall, who opens the class viewer.
++  ACTOR_CLASS_VIEWER
+ };
+ 
+ /// The words of gBattleArena_SlotValues, by slot: the signature, then the state
+@@ -1995,6 +1997,9 @@ struct ActorPlacement gBattleArenaActorPlacements[] = {
+         PIXELS(272), 0, PIXELS(268), FACING_WEST, TALK_FACING_PARTY_AND_BACK, 0 },
+     { 0x87, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 2), MOVEMENT_TYPE_STAND,
+         PIXELS(160), 0, PIXELS(268), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
++    // Arena romhack: the scholar of the class viewer (ACTOR_CLASS_VIEWER).
++    { 0x6f, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
++        PIXELS(56), 0, PIXELS(168), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
+     { GARET, IF_FLAG_SET(0x1), MOVEMENT_TYPE_STAND,
+         PIXELS(352), 0, PIXELS(108), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
+     { IVAN, IF_FLAG_SET(0x2), MOVEMENT_TYPE_STAND,
+@@ -2087,6 +2092,9 @@ struct ActorPlacement gBattleArenaBattleActorPlacements[] = {
+         PIXELS(272), 0, PIXELS(268), FACING_WEST, TALK_FACING_PARTY_AND_BACK, 0 },
+     { 0x87, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 2), MOVEMENT_TYPE_STAND,
+         PIXELS(160), 0, PIXELS(268), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
++    // Arena romhack: the scholar of the class viewer (ACTOR_CLASS_VIEWER).
++    { 0x6f, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
++        PIXELS(56), 0, PIXELS(168), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
+     { GARET, IF_FLAG_SET(0x1), MOVEMENT_TYPE_STAND,
+         PIXELS(104), 0, PIXELS(144), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
+     { IVAN, IF_FLAG_SET(0x2), MOVEMENT_TYPE_STAND,
+@@ -2129,6 +2137,8 @@ struct Trigger gBattleArenaTriggers[] = {
+      EVENT(BattleArena_ChooseBattleMode)},
+     {TRIGGER_TALK, ACTOR_CHAMPION, CONDITION_ALWAYS, MSGNO(MsgArenaChampion)},
+     {TRIGGER_TALK, ACTOR_SCOUT, CONDITION_ALWAYS, MSGNO(MsgArenaScout)},
++    {TRIGGER_TALK, ACTOR_CLASS_VIEWER, CONDITION_ALWAYS,
++     EVENT(BattleArena_ClassViewer)},
+ #if ARENA_TRAINING
+     {TRIGGER_TALK, ACTOR_LINKED_WINS_TELLER, CONDITION_ALWAYS,
+      EVENT(BattleArena_PartyManager)},
+diff --git a/games/tbs/src/scene/import/battle_arena.s b/games/tbs/src/scene/import/battle_arena.s
+index bde38f87ae..5c45840660 100644
+--- a/games/tbs/src/scene/import/battle_arena.s
++++ b/games/tbs/src/scene/import/battle_arena.s
+@@ -43,6 +43,7 @@
+ 	.set import.ArenaMenu_IconChoose, 1
+ 	.set import.ItemPicker_ChooseMember, 1
+ 	.set import.ArenaShop_Run, 1
++	.set import.ClassViewer_Run, 1
+ 	.set import.WindowSprite_CreateFromResource, 1
+ 	.set import.Sprite_Create, 1
+ 	.set import.Sprite_Destroy, 1
+diff --git a/games/tbs/src/shop/shop.c b/games/tbs/src/shop/shop.c
+index 6c5cc6441c..e00b603786 100644
+--- a/games/tbs/src/shop/shop.c
++++ b/games/tbs/src/shop/shop.c
+@@ -32,3 +32,4 @@
+ #include "shop/inn.c"
+ #include "shop/item_picker.c"
+ #include "shop/arena_shop.c"
++#include "shop/arena_class_viewer.c"
+diff --git a/games/tbs/src/shop/shop/arena_class_viewer.c b/games/tbs/src/shop/shop/arena_class_viewer.c
+new file mode 100644
+index 0000000000..6d26e5f214
+--- /dev/null
++++ b/games/tbs/src/shop/shop/arena_class_viewer.c
+@@ -0,0 +1,471 @@
++/// @file
++/// Arena romhack: the class viewer (the scholar in the lobby's upper hall). A
++/// character is chosen with the party manager's picker (ItemPicker_ChooseMember),
++/// then ClassViewer_Run shows the character's class lines: a line is a chain of
++/// classes (Squire, Knight, Gallant, Lord, Sovereign), L and R change the line,
++/// the hand highlights a class and the panel above gives the Djinn it needs for
++/// this character and its stats; A shows the Psynergy it teaches; Select toggles
++/// between the classes the party's Djinn reach now and every class of the line.
++/// Built from the shops' own windows, hand and message text (docs/UI-SPECS.md,
++/// "Class viewer"). Far-called from the Battle Arena overlay.
++// Part of shop.c.
++
++#include "../shop_internal.h"
++#include "ability_ids.h"
++#include "character.h"
++#include "module/arena.h"
++
++/// The class table has twenty lines: the classes whose ids share a tens digit
++/// (Squire to Sovereign are ids 1 to 5, Guard to Phalanx 10 to 14, and so on).
++/// This is the first id of each. Ids 0 and 200 up are not in any line.
++#define CV_LINE_COUNT 20
++/// The longest line has six classes.
++#define CV_CLASSES_PER_LINE 6
++/// A class that needs more Djinn of an element than the game has (seven) cannot
++/// be reached at all.
++#define CV_DJINN_MAX 7
++/// Psynergy on a page: two columns of four.
++#define CV_PSY_PER_PAGE 8
++#define CV_PSY_MAX 16
++#define CV_LIST_COLUMN_WIDTH 112
++/// How big the Djinn figures are drawn (16.16); the Djinn panel's are 0xb000.
++#define CV_FIGURE_SCALE 0xa000
++
++static const u8 sClassViewerLineStart[CV_LINE_COUNT] = {
++    1,  10, 20,  30,  40,  50,  60,  70,  80,  90,
++    100, 110, 120, 130, 140, 150, 160, 170, 180, 190};
++
++/// How many Djinn of `element` a class needs for a character: the class's
++/// requirement is in whole element levels, and the character's own element
++/// level starts with a bonus in tenths (Unit_GetElementLevels), each Djinni
++/// adding one level.
++static s32 ClassViewer_Need(s32 unitId, s32 classId, s32 element) {
++  s32 need = gClass_DefinitionTable[classId].required[element] * 10 -
++             gCharacter_DefinitionTable[unitId].elementBonus[element];
++
++  if (need <= 0)
++    return 0;
++  return (need + 9) / 10;
++}
++
++/// 0 when the Djinn the party owns (`owned`, by element) are enough for the
++/// class, 1 when more Djinn are needed, 2 when it needs more than the game has.
++static s32 ClassViewer_Reach(s32 unitId, s32 classId, const s32 *owned) {
++  s32 element;
++  s32 result = 0;
++
++  for (element = 0; element < ELEMENT_COUNT; element++) {
++    s32 need = ClassViewer_Need(unitId, classId, element);
++
++    if (need > CV_DJINN_MAX)
++      return 2;
++    if (need > owned[element])
++      result = 1;
++  }
++  return result;
++}
++
++/// Lists the classes of line `line` to show in `ids`: all of them, or with
++/// `filter` only those the party's Djinn reach. Returns how many.
++static s32 ClassViewer_Fill(s32 line, s32 unitId, s32 filter, const s32 *owned,
++                            s32 *ids) {
++  s32 id = sClassViewerLineStart[line];
++  s32 end = id - id % 10 + 10;
++  s32 count = 0;
++
++  for (; id < end && count < CV_CLASSES_PER_LINE; id++) {
++    s32 series = gClass_DefinitionTable[id].series;
++
++    if (series < 1 || series > 10)
++      continue;
++    if (filter != 0 && ClassViewer_Reach(unitId, id, owned) != 0)
++      continue;
++    ids[count++] = id;
++  }
++  return count;
++}
++
++/// The next line from `line` in direction `step` (1 or -1) that has a class to
++/// show, or `line` when there is none.
++static s32 ClassViewer_NextLine(s32 line, s32 step, s32 unitId, s32 filter,
++                                const s32 *owned) {
++  s32 ids[CV_CLASSES_PER_LINE];
++  s32 candidate = line;
++  s32 tries;
++
++  for (tries = 0; tries < CV_LINE_COUNT; tries++) {
++    candidate = (candidate + step + CV_LINE_COUNT) % CV_LINE_COUNT;
++    if (ClassViewer_Fill(candidate, unitId, filter, owned, ids) > 0)
++      return candidate;
++  }
++  return line;
++}
++
++/// Draws a stat label, the class's multiplier as a percentage and a percent
++/// sign: `value` is in twentieths of the base stat (5 percent each).
++static void ClassViewer_DrawPercent(struct Window *window, s32 label, s32 value,
++                                    s32 x, s32 y) {
++  Text_DrawMessageAsTilesFar(label, window, x, y);
++  Text_DrawNumberInWindowFar(value, 3, window, x + 56, y);
++  Text_DrawMessageAsTilesFar(MsgArenaCvPercent, window, x + 80, y);
++}
++
++/// The browse screen: the top panel gives the highlighted class (name, the
++/// Djinn it needs, stats, ward, whether the party reaches it) and the list
++/// window the classes of the line, red where the party's Djinn do not reach.
++static void ClassViewer_DrawBrowse(struct Window *top, struct Window *list,
++                                   s32 unitId, s32 line, s32 filter,
++                                   const s32 *owned, const s32 *ids, s32 count,
++                                   s32 cursor, struct Sprite **figures,
++                                   s16 *positions) {
++  struct Unit *unit = Unit_GetFar(unitId);
++  s32 i;
++
++  WindowSprite_PrepareForRedrawFar(top);
++  WindowSprite_PrepareForRedrawFar(list);
++  Text_DrawStringAtOffsetFar(unit->name, top, 0, 0);
++  Text_DrawMessageAsTilesFar(MsgArenaCvLine, top, 52, 0);
++  Text_DrawNumberInWindowFar(line + 1, 2, top, 86, 0);
++  Text_DrawStringInWindowFar(gMenu_SlashString, top, 102, 0);
++  Text_DrawNumberInWindowFar(CV_LINE_COUNT, 2, top, 110, 0);
++  Text_DrawMessageAsTilesFar(filter != 0 ? MsgArenaCvTagNow : MsgArenaCvTagAll,
++                             top, 134, 0);
++  if (count == 0) {
++    Text_DrawMessageAsTilesFar(MsgArenaNone, top, 0, 8);
++    Text_DrawMessageAsTilesFar(MsgArenaNone, list, 16, 8);
++    return;
++  }
++
++  for (i = 0; i < count; i++) {
++    s32 x = (i % 2) * CV_LIST_COLUMN_WIDTH + 24;
++    s32 y = (i / 2) * 16 + 8;
++    s32 reach = ClassViewer_Reach(unitId, ids[i], owned);
++
++    if (reach != 0)
++      Text_SetColorFar(TEXT_COLOR_RED);
++    Text_DrawMessageAsTilesFar(MsgClassName + ids[i], list, x, y);
++    Text_SetColorFar(TEXT_COLOR_WHITE);
++  }
++
++  {
++    const struct ClassDefinition *class = &gClass_DefinitionTable[ids[cursor]];
++    s32 reach = ClassViewer_Reach(unitId, ids[cursor], owned);
++    s32 element;
++
++    Text_DrawMessageAsTilesFar(MsgClassName + ids[cursor], top, 0, 8);
++    Text_DrawMessageAsTilesFar(MsgArenaCvReachNow + reach, top, 112, 8);
++    // The Djinn row is a band of sixteen pixels (24 is its text row): an
++    // animated figure of each element, as the Djinn panel shows them, and the
++    // number of that element's Djinn the class needs.
++    Text_DrawMessageAsTilesFar(MsgArenaCvDjinn, top, 0, 24);
++    for (element = 0; element < ELEMENT_COUNT; element++) {
++      s32 x = 64 + element * 40;
++
++      figures[element] = Sprite_CreateFar(VENUS_DJINNI + element);
++      if (figures[element] != 0) {
++        Sprite_StartAnimationFar(figures[element], 2);
++        positions[element * 2] = 8 + x + 8;
++        positions[element * 2 + 1] = 8 + 16 + 15;
++      }
++      Text_DrawNumberInWindowFar(ClassViewer_Need(unitId, ids[cursor], element),
++                                 2, top, x + 16, 24);
++    }
++    ClassViewer_DrawPercent(top, MsgArenaCvHp, class->hp * 5, 0, 32);
++    ClassViewer_DrawPercent(top, MsgArenaCvPp, class->pp * 5, 0, 40);
++    ClassViewer_DrawPercent(top, MsgArenaCvAttack, class->atk * 5, 0, 48);
++    ClassViewer_DrawPercent(top, MsgArenaCvDefense, class->def * 5, 112, 32);
++    ClassViewer_DrawPercent(top, MsgArenaCvAgility, class->agi * 5, 112, 40);
++    ClassViewer_DrawPercent(top, MsgArenaCvLuck, class->luck * 5, 112, 48);
++    ClassViewer_DrawPercent(top, MsgArenaCvWard, class->ward, 0, 56);
++  }
++}
++
++/// The class's Psynergy, in the table's order, with each one's level: the
++/// abilities of the class that are not empty. Returns how many.
++static s32 ClassViewer_ListPsynergy(s32 classId, s32 *abilities, s32 *levels) {
++  const struct ClassDefinition *class = &gClass_DefinitionTable[classId];
++  s32 count = 0;
++  s32 i;
++
++  for (i = 0; i < CV_PSY_MAX; i++) {
++    if (class->abilities[i].ability == 0)
++      continue;
++    abilities[count] = class->abilities[i].ability;
++    levels[count] = class->abilities[i].level;
++    count++;
++  }
++  return count;
++}
++
++/// The Psynergy screen: the page of eight the highlight is on in the top panel
++/// (an icon and a name for what the character's level has, a red name and the
++/// level it needs for what it has not) and the class and the highlighted
++/// Psynergy's level and PP in the window under it.
++static void ClassViewer_DrawPsynergy(struct Window *top, struct Window *list,
++                                     s32 unitId, s32 classId,
++                                     const s32 *abilities, const s32 *levels,
++                                     s32 count, s32 cursor) {
++  struct Unit *unit = Unit_GetFar(unitId);
++  s32 first = cursor - cursor % CV_PSY_PER_PAGE;
++  s32 slot;
++
++  WindowSprite_PrepareForRedrawFar(top);
++  WindowSprite_PrepareForRedrawFar(list);
++  for (slot = 0; slot < CV_PSY_PER_PAGE && first + slot < count; slot++) {
++    s32 x = (slot % 2) * CV_LIST_COLUMN_WIDTH;
++    s32 y = (slot / 2) * 16;
++    s32 known = levels[first + slot] <= unit->level;
++
++    if (known) {
++      struct WindowSprite *icon = WindowSprite_CreateFromResourceFar(
++          ICON_KIND_ABILITY, abilities[first + slot], top, x + 16, y + 4);
++
++      if (icon != 0)
++        icon->sentinel = 252;
++    } else {
++      Text_SetColorFar(TEXT_COLOR_RED);
++      Text_DrawNumberInWindowFar(levels[first + slot], 2, top, x + 16, y + 8);
++    }
++    Text_DrawMessageAsTilesFar(MsgAbilityName + abilities[first + slot], top,
++                               x + 36, y + 8);
++    Text_SetColorFar(TEXT_COLOR_WHITE);
++  }
++
++  Text_DrawMessageAsTilesFar(MsgClassName + classId, list, 0, 0);
++  Text_DrawStringAtOffsetFar(unit->name, list, 120, 0);
++  Text_DrawStringAtOffsetFar(gMenu_LvString, list, 168, 0);
++  Text_DrawNumberInWindowFar(unit->level, 2, list, 192, 0);
++  if (count > 0) {
++    s32 level = levels[cursor];
++
++    Text_DrawMessageAsTilesFar(MsgArenaCvLv, list, 0, 16);
++    Text_DrawNumberInWindowFar(level, 2, list, 24, 16);
++    Text_DrawMessageAsTilesFar(MsgArenaCvPp, list, 56, 16);
++    Text_DrawNumberInWindowFar(Ability_Get(abilities[cursor])->ppCost, 2, list,
++                               80, 16);
++    if (level > unit->level)
++      Text_SetColorFar(TEXT_COLOR_RED);
++    Text_DrawMessageAsTilesFar(level <= unit->level ? MsgArenaCvLearned
++                                                    : MsgArenaCvNotYet,
++                               list, 120, 16);
++    Text_SetColorFar(TEXT_COLOR_WHITE);
++  }
++  Text_DrawMessageAsTilesFar(MsgArenaCvLegend, list, 0, 40);
++  if (count > CV_PSY_PER_PAGE) {
++    Text_DrawNumberInWindowFar(cursor / CV_PSY_PER_PAGE + 1, 1, list, 192, 40);
++    Text_DrawStringInWindowFar(gMenu_SlashString, list, 200, 40);
++    Text_DrawNumberInWindowFar((count + CV_PSY_PER_PAGE - 1) / CV_PSY_PER_PAGE,
++                               1, list, 208, 40);
++  }
++}
++
++/// Arena romhack: the class viewer for one character (`unitId`). Opens a panel
++/// over a list window and runs until B at the browse screen; returns 0. See the
++/// file comment and docs/UI-SPECS.md for the screens. Called from the Battle
++/// Arena overlay through SHOP.S.
++s32 ClassViewer_Run(s32 unitId) {
++  struct ShopWork *shop;
++  struct Window *anchorWindow;
++  struct Window *top;
++  struct Window *list;
++  struct WindowSprite *anchor;
++  s32 owned[ELEMENT_COUNT];
++  s32 ids[CV_CLASSES_PER_LINE];
++  s32 abilities[CV_PSY_MAX];
++  s32 levels[CV_PSY_MAX];
++  s32 filter = 0;
++  s32 line = 0;
++  s32 count = 0;
++  s32 cursor = 0;
++  s32 psyCount = 0;
++  s32 psyCursor = 0;
++  s32 stage = 0;
++  s32 redraw = 1;
++  s32 i;
++  s32 element;
++  struct Sprite *figures[ELEMENT_COUNT];
++  s16 positions[ELEMENT_COUNT * 2];
++
++  for (i = 0; i < ELEMENT_COUNT; i++)
++    figures[i] = 0;
++  while (gKeysHeld != 0)
++    wait(1);
++  Shop_InitializeWork();
++  shop = gMenuWork;
++  // The Djinn the party owns, by element: every member's held Djinn, set or on
++  // standby, counted together (they can be traded).
++  for (element = 0; element < ELEMENT_COUNT; element++) {
++    owned[element] = 0;
++    for (i = 0; i < shop->partyMemberCount; i++) {
++      s32 bits = Unit_GetFar(shop->partyMemberIds[i])->djinnHeld[element];
++      s32 index;
++
++      for (index = 0; index < CV_DJINN_MAX; index++) {
++        if ((bits & (1 << index)) != 0)
++          owned[element]++;
++      }
++    }
++  }
++  anchorWindow = Window_CreateFar(-5, 0, 5, 5, WINDOW_FLAG_INSTANT);
++  anchor = WindowSprite_CreateFar(shop->cursorIcon, OUTPUT_SIZE_16X16,
++                                  anchorWindow, 0, 0);
++  anchor->motion = WINDOW_SPRITE_MOTION_WOBBLE;
++  anchor->kind = 0;
++  MenuCursor_SetPositionImmediate(&shop->cursor, -32, 112);
++  shop->cursor.anchor = anchor;
++  top = Window_CreateFar(0, 0, 30, 11, WINDOW_FLAG_INSTANT);
++  list = Window_CreateFar(0, 11, 30, 9, WINDOW_FLAG_INSTANT);
++  shop->mode = 12;
++
++  while (1) {
++    if (redraw != 0) {
++      redraw = 0;
++      for (i = 0; i < ELEMENT_COUNT; i++) {
++        if (figures[i] != 0)
++          Sprite_DestroyFar(figures[i]);
++        figures[i] = 0;
++      }
++      if (stage == 0) {
++        count = ClassViewer_Fill(line, unitId, filter, owned, ids);
++        if (cursor >= count)
++          cursor = count > 0 ? count - 1 : 0;
++        ClassViewer_DrawBrowse(top, list, unitId, line, filter, owned, ids,
++                               count, cursor, figures, positions);
++        if (count > 0)
++          MenuCursor_Place(list, (cursor % 2) * CV_LIST_COLUMN_WIDTH + 2,
++                           (cursor / 2) * 16 + 8);
++      } else {
++        ClassViewer_DrawPsynergy(top, list, unitId, ids[cursor], abilities,
++                                 levels, psyCount, psyCursor);
++        if (psyCount > 0)
++          MenuCursor_Place(top,
++                           (psyCursor % 2) * CV_LIST_COLUMN_WIDTH - 2,
++                           (psyCursor % CV_PSY_PER_PAGE / 2) * 16 + 8);
++      }
++    }
++    wait(1);
++    for (i = 0; i < ELEMENT_COUNT; i++) {
++      if (figures[i] != 0)
++        ArenaFigure_Place(figures[i], positions[i * 2], positions[i * 2 + 1],
++                          CV_FIGURE_SCALE);
++    }
++
++    if ((gKeysPressed & KEY_B) != 0) {
++      Sound_PlayFar(SE_MENU_CANCEL);
++      if (stage == 0)
++        break;
++      stage = 0;
++      redraw = 1;
++    } else if ((gKeysPressed & KEY_A) != 0) {
++      if (stage == 0 && count > 0) {
++        Sound_PlayFar(SE_MENU_CONFIRM);
++        psyCount = ClassViewer_ListPsynergy(ids[cursor], abilities, levels);
++        psyCursor = 0;
++        stage = 1;
++        redraw = 1;
++      }
++    }
++    if (stage == 0) {
++      s32 moved = 0;
++
++      if ((gKeysPressed & KEY_SELECT) != 0) {
++        s32 keep = count > 0 ? ids[cursor] : 0;
++
++        Sound_PlayFar(SE_MENU_CONFIRM);
++        filter = 1 - filter;
++        count = ClassViewer_Fill(line, unitId, filter, owned, ids);
++        if (count == 0) {
++          // Nothing reaches in this line: go to the next line that has one.
++          line = ClassViewer_NextLine(line, 1, unitId, filter, owned);
++          count = ClassViewer_Fill(line, unitId, filter, owned, ids);
++        }
++        cursor = 0;
++        for (i = 0; i < count; i++) {
++          if (ids[i] == keep)
++            cursor = i;
++        }
++        redraw = 1;
++      }
++      if ((gKeysPressed & KEY_R) != 0)
++        moved = 1;
++      if ((gKeysPressed & KEY_L) != 0)
++        moved = -1;
++      if (moved != 0) {
++        s32 next = ClassViewer_NextLine(line, moved, unitId, filter, owned);
++
++        if (next != line) {
++          Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++          line = next;
++          cursor = 0;
++          redraw = 1;
++        }
++      }
++      if ((gKeysRepeat & KEY_LEFT) != 0 && cursor % 2 == 1) {
++        Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++        cursor--;
++        redraw = 1;
++      }
++      if ((gKeysRepeat & KEY_RIGHT) != 0 && cursor % 2 == 0 &&
++          cursor + 1 < count) {
++        Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++        cursor++;
++        redraw = 1;
++      }
++      if ((gKeysRepeat & KEY_UP) != 0 && cursor - 2 >= 0) {
++        Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++        cursor -= 2;
++        redraw = 1;
++      }
++      if ((gKeysRepeat & KEY_DOWN) != 0 && cursor + 2 < count) {
++        Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++        cursor += 2;
++        redraw = 1;
++      }
++    } else {
++      if ((gKeysRepeat & KEY_LEFT) != 0 && psyCursor % 2 == 1) {
++        Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++        psyCursor--;
++        redraw = 1;
++      }
++      if ((gKeysRepeat & KEY_RIGHT) != 0 && psyCursor % 2 == 0 &&
++          psyCursor + 1 < psyCount) {
++        Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++        psyCursor++;
++        redraw = 1;
++      }
++      if ((gKeysRepeat & KEY_UP) != 0 && psyCursor - 2 >= 0) {
++        Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++        psyCursor -= 2;
++        redraw = 1;
++      }
++      if ((gKeysRepeat & KEY_DOWN) != 0 && psyCursor + 2 < psyCount) {
++        Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++        psyCursor += 2;
++        redraw = 1;
++      }
++      if ((gKeysPressed & KEY_R) != 0 &&
++          psyCursor - psyCursor % CV_PSY_PER_PAGE + CV_PSY_PER_PAGE <
++              psyCount) {
++        Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++        psyCursor = psyCursor - psyCursor % CV_PSY_PER_PAGE + CV_PSY_PER_PAGE;
++        redraw = 1;
++      }
++      if ((gKeysPressed & KEY_L) != 0 && psyCursor >= CV_PSY_PER_PAGE) {
++        Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++        psyCursor = psyCursor - psyCursor % CV_PSY_PER_PAGE - CV_PSY_PER_PAGE;
++        redraw = 1;
++      }
++    }
++  }
++
++  for (i = 0; i < ELEMENT_COUNT; i++) {
++    if (figures[i] != 0)
++      Sprite_DestroyFar(figures[i]);
++  }
++  Window_CloseFar(list, 2);
++  Window_CloseFar(top, 2);
++  Window_CloseFar(anchorWindow, 2);
++  wait(1);
++  Shop_ReleaseWork();
++  return 0;
++}
+diff --git a/games/tbs/src/system/overlay/imports.inc b/games/tbs/src/system/overlay/imports.inc
+index 489761293a..6242a4be36 100644
+--- a/games/tbs/src/system/overlay/imports.inc
++++ b/games/tbs/src/system/overlay/imports.inc
+@@ -367,6 +367,7 @@
+ 	import Inn_PlaySleep, Inn_PlaySleepFar
+ 	import ItemPicker_ChooseMember, ItemPicker_ChooseMemberFar
+ 	import ArenaShop_Run, ArenaShop_RunFar
++	import ClassViewer_Run, ClassViewer_RunFar
+ @ Battle bank (far_call/BATTLE.S)
+ 	import DjinnRecovery_CountDownTwenty, DjinnRecovery_CountDownTwentyFar
+ 	import DebugParameterSet_Load, DebugParameterSet_LoadFar
+diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
+index dc6a7919f8..c1e62530a3 100644
+--- a/games/tbs/text/en.po
++++ b/games/tbs/text/en.po
+@@ -65333,114 +65333,190 @@ msgctxt "MsgArenaResetDone"
+ msgid "10788"
+ msgstr "All boosts are back."
+ 
++msgctxt "MsgArenaCvLine"
++msgid "10789"
++msgstr "Line"
++
++msgctxt "MsgArenaCvTagNow"
++msgid "10790"
++msgstr "Can reach now"
++
++msgctxt "MsgArenaCvTagAll"
++msgid "10791"
++msgstr "All classes"
++
++msgctxt "MsgArenaCvDjinn"
++msgid "10792"
++msgstr "Djinn"
++
++msgctxt "MsgArenaCvHp"
++msgid "10793"
++msgstr "HP"
++
++msgctxt "MsgArenaCvPp"
++msgid "10794"
++msgstr "PP"
++
++msgctxt "MsgArenaCvAttack"
++msgid "10795"
++msgstr "Attack"
++
++msgctxt "MsgArenaCvDefense"
++msgid "10796"
++msgstr "Defense"
++
++msgctxt "MsgArenaCvAgility"
++msgid "10797"
++msgstr "Agility"
++
++msgctxt "MsgArenaCvLuck"
++msgid "10798"
++msgstr "Luck"
++
++msgctxt "MsgArenaCvWard"
++msgid "10799"
++msgstr "Ward"
++
++msgctxt "MsgArenaCvPercent"
++msgid "10800"
++msgstr "%"
++
++msgctxt "MsgArenaCvReachNow"
++msgid "10801"
++msgstr "Reachable now"
++
++msgctxt "MsgArenaCvReachNeed"
++msgid "10802"
++msgstr "Needs more Djinn"
++
++msgctxt "MsgArenaCvReachNever"
++msgid "10803"
++msgstr "Out of reach"
++
++msgctxt "MsgArenaCvLv"
++msgid "10804"
++msgstr "Lv"
++
++msgctxt "MsgArenaCvLearned"
++msgid "10805"
++msgstr "Learned"
++
++msgctxt "MsgArenaCvNotYet"
++msgid "10806"
++msgstr "Not yet"
++
++msgctxt "MsgArenaCvLegend"
++msgid "10807"
++msgstr "Red: not learned yet"
++
+ # BEGIN GENERATED CUPS (scripts/gen-cups.py; do not edit by hand)
+ 
+ msgctxt "MsgArenaCupName0"
+-msgid "10789"
++msgid "10808"
+ msgstr ""
+ "Tret Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName1"
+-msgid "10790"
++msgid "10809"
+ msgstr ""
+ "Mercury Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName2"
+-msgid "10791"
++msgid "10810"
+ msgstr ""
+ "Mogall Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName3"
+-msgid "10792"
++msgid "10811"
+ msgstr ""
+ "Altin Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName4"
+-msgid "10793"
++msgid "10812"
+ msgstr ""
+ "Tolbi Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName5"
+-msgid "10794"
++msgid "10813"
+ msgstr ""
+ "Lunpa Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName6"
+-msgid "10795"
++msgid "10814"
+ msgstr ""
+ "Lighthouse Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName7"
+-msgid "10796"
++msgid "10815"
+ msgstr ""
+ "Boss Rush"
+ 
+ 
+ msgctxt "MsgArenaCupName8"
+-msgid "10797"
++msgid "10816"
+ msgstr ""
+ "Crossbone Isle"
+ 
+ 
+ msgctxt "MsgArenaCupNext"
+-msgid "10798"
++msgid "10817"
+ msgstr ""
+ "Next cup"
+ 
+ 
+ msgctxt "MsgArenaCupReplay"
+-msgid "10799"
++msgid "10818"
+ msgstr ""
+ "Replay"
+ 
+ 
+ msgctxt "MsgArenaCupSide"
+-msgid "10800"
++msgid "10819"
+ msgstr ""
+ "Side cups"
+ 
+ 
+ msgctxt "MsgArenaCupReplayPrompt"
+-msgid "10801"
++msgid "10820"
+ msgstr ""
+ "Replay which cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupGroupEarly"
+-msgid "10802"
++msgid "10821"
+ msgstr ""
+ "Early cups"
+ 
+ 
+ msgctxt "MsgArenaCupGroupLate"
+-msgid "10803"
++msgid "10822"
+ msgstr ""
+ "Later cups"
+ 
+ 
+ msgctxt "MsgArenaCupSidePrompt"
+-msgid "10804"
++msgid "10823"
+ msgstr ""
+ "Which side cup\n"
+ "will you enter?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaGearReward"
+-msgid "10805"
++msgid "10824"
+ msgstr ""
+ "A find from the\n"
+ "dungeon! It is yours.{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaDjinnNoRoom"
+-msgid "10806"
++msgid "10825"
+ msgstr ""
+ "Your Djinn are full!\n"
+ "Make room, then win\n"
+@@ -65448,56 +65524,56 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaBoostGetHP"
+-msgid "10807"
++msgid "10826"
+ msgstr ""
+ "You can boost\n"
+ "HP once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetPP"
+-msgid "10808"
++msgid "10827"
+ msgstr ""
+ "You can boost\n"
+ "PP once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetAttack"
+-msgid "10809"
++msgid "10828"
+ msgstr ""
+ "You can boost\n"
+ "Attack once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetDefense"
+-msgid "10810"
++msgid "10829"
+ msgstr ""
+ "You can boost\n"
+ "Defense once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetAgility"
+-msgid "10811"
++msgid "10830"
+ msgstr ""
+ "You can boost\n"
+ "Agility once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetLuck"
+-msgid "10812"
++msgid "10831"
+ msgstr ""
+ "You can boost\n"
+ "Luck once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaCupConfirm0"
+-msgid "10813"
++msgid "10832"
+ msgstr ""
+ "Enter the\n"
+ "Tret Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared0"
+-msgid "10814"
++msgid "10833"
+ msgstr ""
+ "You cleared the\n"
+ "Tret Cup!\n"
+@@ -65505,7 +65581,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst0"
+-msgid "10815"
++msgid "10834"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65519,7 +65595,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup0DjinnForge"
+-msgid "10816"
++msgid "10835"
+ msgstr ""
+ "You won the Djinni\n"
+ "Forge!\n"
+@@ -65527,7 +65603,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup0DjinnBreeze"
+-msgid "10817"
++msgid "10836"
+ msgstr ""
+ "You won the Djinni\n"
+ "Breeze!\n"
+@@ -65535,14 +65611,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm1"
+-msgid "10818"
++msgid "10837"
+ msgstr ""
+ "Enter the\n"
+ "Mercury Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared1"
+-msgid "10819"
++msgid "10838"
+ msgstr ""
+ "You cleared the\n"
+ "Mercury Cup!\n"
+@@ -65550,7 +65626,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst1"
+-msgid "10820"
++msgid "10839"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65562,7 +65638,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup1DjinnSleet"
+-msgid "10821"
++msgid "10840"
+ msgstr ""
+ "You won the Djinni\n"
+ "Sleet!\n"
+@@ -65570,14 +65646,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm2"
+-msgid "10822"
++msgid "10841"
+ msgstr ""
+ "Enter the\n"
+ "Mogall Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared2"
+-msgid "10823"
++msgid "10842"
+ msgstr ""
+ "You cleared the\n"
+ "Mogall Cup!\n"
+@@ -65585,7 +65661,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst2"
+-msgid "10824"
++msgid "10843"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65597,7 +65673,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup2DjinnZephyr"
+-msgid "10825"
++msgid "10844"
+ msgstr ""
+ "You won the Djinni\n"
+ "Zephyr!\n"
+@@ -65605,7 +65681,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup2DjinnQuartz"
+-msgid "10826"
++msgid "10845"
+ msgstr ""
+ "You won the Djinni\n"
+ "Quartz!\n"
+@@ -65613,14 +65689,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm3"
+-msgid "10827"
++msgid "10846"
+ msgstr ""
+ "Enter the\n"
+ "Altin Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared3"
+-msgid "10828"
++msgid "10847"
+ msgstr ""
+ "You cleared the\n"
+ "Altin Cup!\n"
+@@ -65628,7 +65704,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst3"
+-msgid "10829"
++msgid "10848"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65643,7 +65719,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup3DjinnSpritz"
+-msgid "10830"
++msgid "10849"
+ msgstr ""
+ "You won the Djinni\n"
+ "Spritz!\n"
+@@ -65651,14 +65727,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm4"
+-msgid "10831"
++msgid "10850"
+ msgstr ""
+ "Enter the\n"
+ "Tolbi Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared4"
+-msgid "10832"
++msgid "10851"
+ msgstr ""
+ "You cleared the\n"
+ "Tolbi Cup!\n"
+@@ -65666,7 +65742,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst4"
+-msgid "10833"
++msgid "10852"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65680,7 +65756,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup4DjinnSquall"
+-msgid "10834"
++msgid "10853"
+ msgstr ""
+ "You won the Djinni\n"
+ "Squall!\n"
+@@ -65688,14 +65764,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm5"
+-msgid "10835"
++msgid "10854"
+ msgstr ""
+ "Enter the\n"
+ "Lunpa Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared5"
+-msgid "10836"
++msgid "10855"
+ msgstr ""
+ "You cleared the\n"
+ "Lunpa Cup!\n"
+@@ -65703,7 +65779,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst5"
+-msgid "10837"
++msgid "10856"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65719,7 +65795,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup5DjinnFlash"
+-msgid "10838"
++msgid "10857"
+ msgstr ""
+ "You won the Djinni\n"
+ "Flash!\n"
+@@ -65727,7 +65803,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup5DjinnDew"
+-msgid "10839"
++msgid "10858"
+ msgstr ""
+ "You won the Djinni\n"
+ "Dew!\n"
+@@ -65735,14 +65811,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm6"
+-msgid "10840"
++msgid "10859"
+ msgstr ""
+ "Enter the\n"
+ "Lighthouse Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared6"
+-msgid "10841"
++msgid "10860"
+ msgstr ""
+ "You cleared the\n"
+ "Lighthouse Cup!\n"
+@@ -65750,7 +65826,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst6"
+-msgid "10842"
++msgid "10861"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65766,7 +65842,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup6DjinnLuff"
+-msgid "10843"
++msgid "10862"
+ msgstr ""
+ "You won the Djinni\n"
+ "Luff!\n"
+@@ -65774,14 +65850,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm7"
+-msgid "10844"
++msgid "10863"
+ msgstr ""
+ "Enter the\n"
+ "Boss Rush?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared7"
+-msgid "10845"
++msgid "10864"
+ msgstr ""
+ "You cleared the\n"
+ "Boss Rush!\n"
+@@ -65789,7 +65865,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst7"
+-msgid "10846"
++msgid "10865"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65797,14 +65873,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm8"
+-msgid "10847"
++msgid "10866"
+ msgstr ""
+ "Enter the\n"
+ "Crossbone Isle?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared8"
+-msgid "10848"
++msgid "10867"
+ msgstr ""
+ "You cleared the\n"
+ "Crossbone Isle!\n"
+@@ -65812,7 +65888,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst8"
+-msgid "10849"
++msgid "10868"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+-- 
+2.53.0
+
