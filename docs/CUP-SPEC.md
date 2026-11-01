@@ -112,7 +112,31 @@ level 35 to 38 range for G is the thing to test. The Mystery Man and Woman (L10,
 slots) stay out of the line (possible side cup). Cup F carries seven Djinn, which is a lot at
 once: the first clear could also be split into two rewards if it feels heavy.
 
-Still open: what 50 to 99 contains (later), the gear reward per cup, and the levels above.
+**Accepted by the owner (2026-11-01): the seven cups, with their level disparity** (Djinn give a
+lot of power, so level against enemy level is a balancing act, not a rule). **Cup F's seven Djinn
+at once is fine**: the player may not be able to afford them all.
+
+**Gear comes from the dungeons, not the shops.** Shops sell what Reloaded's shop list says;
+gear that the story finds in **chests** is the reward, and two mechanisms deliver it:
+
+1. **Mid-cup first-time rewards.** A cup's data lists reward rounds: on the first time a round
+   is reached, an item (or Djinni) from that region's chests is given **during the run**, so
+   the player can equip it before the next fight (a Mercury Lighthouse chest item is given
+   part-way through the Mercury Cup). Needs: a reward entry in a round (item id, a once-only
+   flag), the item given with `PartyInventory_GiveItem` (the call the scenes use) and a message
+   saying so; checking that the inventory has room (15 slots a unit; the party stock).
+2. **Side cups for the rest.** Gear that is off the main path (optional chests, the rooms
+   the story only passes by) is earned in side cups, themed on a dungeon: the chest contents
+   of that dungeon are the first-clear rewards.
+
+Research for the builder: list each scene's chests and their items. Chests are
+`TreasureSpot` actors (`include/field/field_work.h:24`) in the scene tables, 34 scenes mention
+them; write `scripts/cup-gear.py` to join scene, chest id and item (as `cup-candidates.py` does
+for encounters) and assign each to a cup round or a side cup. Items that come from story events
+(`PartyInventory_GiveItem` calls in scene code, for example a boss's reward) go to the cup that
+holds that boss.
+
+Still open: what 50 to 99 contains (later) and the levels above (to tune in the balance pass).
 
 ## 0. Summary
 

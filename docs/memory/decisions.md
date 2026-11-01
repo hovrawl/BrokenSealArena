@@ -140,3 +140,8 @@
   always rise (a cup's reward is Djinn and shop stock, from Reloaded's shop list); levels follow the
   enemy levels (a 5-level award is allowed). See `docs/CUP-SPEC.md` (revised proposal): Tret, Mercury,
   Mogall, Altin, Tolbi, Lunpa and Lighthouse cups; Crossbone Isle post-game.
+- **Gear rewards come from the dungeons** (2026-11-01): the seven cups and their level disparity are
+  accepted (Djinn carry the power balance; cup F's seven Djinn at once is fine). Gear that the story finds in
+  chests is the reward: given **mid-cup, the first time a round is reached**, so it can be equipped for
+  the next fight, and off-path chest gear is earned in side cups themed on a dungeon. Shops sell
+  Reloaded's shop list. A script (`scripts/cup-gear.py`, to write) joins scene, chest and item.
