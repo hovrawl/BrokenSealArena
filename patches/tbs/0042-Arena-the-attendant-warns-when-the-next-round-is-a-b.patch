@@ -1,0 +1,642 @@
+From 043cb0b8c01b5ecb114afb10462b4a57bffb0efe Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Mon, 2 Nov 2026 09:03:31 +1100
+Subject: [PATCH] Arena: the attendant warns when the next round is a boss or a
+ mini-boss
+
+cupdata.py: R(..., boss=0/1/2); left out it is derived (finish_bosses): the last
+round of a main cup, or of a side cup with a story boss, and every Boss Rush
+round are bosses (2); any other round with a story boss is a mini-boss (1).
+gen-cups.py writes them as two bitmasks in ArenaCupInfo (miniBossRounds in the
+old pad, bossRounds in pad2; same size). After "Round n won!" the attendant
+shows one more message, MsgArenaBossWarning ("Watch out! The next round is a
+boss!") or MsgArenaMiniBossWarning ("Careful! A tough opponent is next!"), when
+round n + 1 is marked. Round 1 never has one. New messages above the generated
+block; gen-cups.py re-run (ids moved by two).
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/module/arena_cups.h  |   8 +-
+ games/tbs/src/scene/arena_cup_info.inc |  38 ++++----
+ games/tbs/src/scene/arena_series.c     |   9 ++
+ games/tbs/text/en.po                   | 122 ++++++++++++++-----------
+ 4 files changed, 100 insertions(+), 77 deletions(-)
+
+diff --git a/games/tbs/include/module/arena_cups.h b/games/tbs/include/module/arena_cups.h
+index 9df99a76b9..da34204815 100644
+--- a/games/tbs/include/module/arena_cups.h
++++ b/games/tbs/include/module/arena_cups.h
+@@ -53,12 +53,14 @@ struct ArenaCupInfo {
+   u8 requires; /* main cups cleared before it opens */
+   u8 raiseTo;   /* party level at the first clear, 0 for none */
+   u8 rewardCount;
+-  u8 pad[3];
++  u8 pad;
++  /* bit n: the round after n wins (round n + 1) is a mini-boss / a boss */
++  u16 miniBossRounds;
+   const struct ArenaCupReward *rewards;
+   u16 confirmMsg;
+   u16 clearedMsg;
+   u16 firstMsg;
+-  u16 pad2;
++  u16 bossRounds;
+ };
+ 
+ extern const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT];
+@@ -66,6 +68,6 @@ extern const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT];
+ extern const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3];
+ extern const u8 gArenaCrossboneRows[3];
+ 
+-#define MSG_ARENA_CUP_NAME 10781
++#define MSG_ARENA_CUP_NAME 10783
+ 
+ #endif
+diff --git a/games/tbs/src/scene/arena_cup_info.inc b/games/tbs/src/scene/arena_cup_info.inc
+index c058464885..4338148605 100644
+--- a/games/tbs/src/scene/arena_cup_info.inc
++++ b/games/tbs/src/scene/arena_cup_info.inc
+@@ -2,31 +2,31 @@
+ // Included by arena_menu.c. Global const data: a scene overlay has no static data of its own.
+ 
+ const struct ArenaCupReward gArenaCup0Rewards[] = {
+-    {4, 1, 0, 14, 0, 10802},
++    {4, 1, 0, 14, 0, 10804},
+     {5, 0, 1, 0, 91, 0},
+     {6, 0, 2, 0, 265, 0},
+-    {7, 1, 3, 22, 0, 10803},
++    {7, 1, 3, 22, 0, 10805},
+ };
+ const struct ArenaCupReward gArenaCup1Rewards[] = {
+     {3, 0, 4, 0, 22, 0},
+-    {5, 1, 5, 8, 0, 10807},
++    {5, 1, 5, 8, 0, 10809},
+     {6, 0, 6, 0, 76, 0},
+ };
+ const struct ArenaCupReward gArenaCup2Rewards[] = {
+     {2, 0, 7, 0, 266, 0},
+-    {3, 1, 8, 23, 0, 10811},
++    {3, 1, 8, 23, 0, 10813},
+     {3, 0, 9, 0, 8, 0},
+-    {5, 1, 10, 2, 0, 10812},
++    {5, 1, 10, 2, 0, 10814},
+     {5, 0, 11, 0, 93, 0},
+ };
+ const struct ArenaCupReward gArenaCup3Rewards[] = {
+     {3, 0, 12, 0, 36, 0},
+-    {4, 1, 13, 10, 0, 10816},
++    {4, 1, 13, 10, 0, 10818},
+     {6, 0, 14, 0, 130, 0},
+ };
+ const struct ArenaCupReward gArenaCup4Rewards[] = {
+     {2, 0, 15, 0, 132, 0},
+-    {4, 1, 16, 26, 0, 10820},
++    {4, 1, 16, 26, 0, 10822},
+     {6, 0, 17, 0, 163, 0},
+ };
+ const struct ArenaCupReward gArenaCup5Rewards[] = {
+@@ -34,15 +34,15 @@ const struct ArenaCupReward gArenaCup5Rewards[] = {
+     {3, 0, 19, 0, 170, 0},
+     {4, 0, 20, 0, 141, 0},
+     {4, 0, 21, 0, 134, 0},
+-    {5, 1, 22, 19, 0, 10824},
++    {5, 1, 22, 19, 0, 10826},
+     {6, 0, 23, 0, 259, 0},
+-    {7, 1, 24, 13, 0, 10825},
++    {7, 1, 24, 13, 0, 10827},
+ };
+ const struct ArenaCupReward gArenaCup6Rewards[] = {
+     {1, 0, 25, 0, 164, 0},
+     {2, 0, 26, 0, 113, 0},
+     {3, 0, 27, 0, 161, 0},
+-    {4, 1, 28, 27, 0, 10829},
++    {4, 1, 28, 27, 0, 10831},
+     {5, 0, 29, 0, 85, 0},
+     {5, 0, 30, 0, 162, 0},
+     {6, 0, 31, 0, 112, 0},
+@@ -67,23 +67,23 @@ const struct ArenaCupReward gArenaCup8Rewards[] = {
+ 
+ const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT] = {
+     // Tret Cup
+-    {8, 2, 0, 15, 4, {0}, gArenaCup0Rewards, 10799, 10800, 10801, 0},
++    {8, 2, 0, 15, 4, 0, 0x0, gArenaCup0Rewards, 10801, 10802, 10803, 0x80},
+     // Mercury Cup
+-    {8, 2, 1, 18, 3, {0}, gArenaCup1Rewards, 10804, 10805, 10806, 0},
++    {8, 2, 1, 18, 3, 0, 0x0, gArenaCup1Rewards, 10806, 10807, 10808, 0x80},
+     // Mogall Cup
+-    {7, 2, 2, 20, 5, {0}, gArenaCup2Rewards, 10808, 10809, 10810, 0},
++    {7, 2, 2, 20, 5, 0, 0x0, gArenaCup2Rewards, 10810, 10811, 10812, 0x40},
+     // Altin Cup
+-    {9, 2, 3, 25, 3, {0}, gArenaCup3Rewards, 10813, 10814, 10815, 0},
++    {9, 2, 3, 25, 3, 0, 0x80, gArenaCup3Rewards, 10815, 10816, 10817, 0x100},
+     // Tolbi Cup
+-    {8, 2, 4, 27, 3, {0}, gArenaCup4Rewards, 10817, 10818, 10819, 0},
++    {8, 2, 4, 27, 3, 0, 0x40, gArenaCup4Rewards, 10819, 10820, 10821, 0x80},
+     // Lunpa Cup
+-    {10, 2, 5, 35, 7, {0}, gArenaCup5Rewards, 10821, 10822, 10823, 0},
++    {10, 2, 5, 35, 7, 0, 0x100, gArenaCup5Rewards, 10823, 10824, 10825, 0x200},
+     // Lighthouse Cup
+-    {10, 2, 6, 50, 12, {0}, gArenaCup6Rewards, 10826, 10827, 10828, 0},
++    {10, 2, 6, 50, 12, 0, 0x100, gArenaCup6Rewards, 10828, 10829, 10830, 0x200},
+     // Boss Rush
+-    {6, 1, 7, 0, 0, {0}, 0, 10830, 10831, 10832, 0},
++    {6, 1, 7, 0, 0, 0, 0x0, 0, 10832, 10833, 10834, 0x3f},
+     // Crossbone Isle
+-    {10, 3, 7, 0, 10, {0}, gArenaCup8Rewards, 10833, 10834, 10835, 0},
++    {10, 3, 7, 0, 10, 0, 0x0, gArenaCup8Rewards, 10835, 10836, 10837, 0x200},
+ };
+ 
+ const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3] = {
+diff --git a/games/tbs/src/scene/arena_series.c b/games/tbs/src/scene/arena_series.c
+index a1e25f0524..2001b836f7 100644
+--- a/games/tbs/src/scene/arena_series.c
++++ b/games/tbs/src/scene/arena_series.c
+@@ -178,4 +178,13 @@ static void ArenaSeries_AfterWin(void) {
+   Event_SetMessageId(ArenaCup_Heals() ? MsgArenaNextRound
+                                       : MsgArenaNextRoundBossRush);
+   FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++  // Round `won + 1` is next: warn when it is a boss or a mini-boss (the bit of the
++  // round is its number less one).
++  if (info->bossRounds & (1 << won)) {
++    Event_SetMessageId(MsgArenaBossWarning);
++    FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++  } else if (info->miniBossRounds & (1 << won)) {
++    Event_SetMessageId(MsgArenaMiniBossWarning);
++    FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++  }
+ }
+diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
+index d3c6c9a36c..d28ec88c48 100644
+--- a/games/tbs/text/en.po
++++ b/games/tbs/text/en.po
+@@ -65297,114 +65297,126 @@ msgstr ""
+ "Rumor says they are\n"
+ "far harder.{end_wait}"
+ 
++msgctxt "MsgArenaBossWarning"
++msgid "10781"
++msgstr ""
++"Watch out! The next\n"
++"round is a boss!{end_wait}"
++
++msgctxt "MsgArenaMiniBossWarning"
++msgid "10782"
++msgstr ""
++"Careful! A tough\n"
++"opponent is next!{end_wait}"
++
+ # BEGIN GENERATED CUPS (scripts/gen-cups.py; do not edit by hand)
+ 
+ msgctxt "MsgArenaCupName0"
+-msgid "10781"
++msgid "10783"
+ msgstr ""
+ "Tret Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName1"
+-msgid "10782"
++msgid "10784"
+ msgstr ""
+ "Mercury Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName2"
+-msgid "10783"
++msgid "10785"
+ msgstr ""
+ "Mogall Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName3"
+-msgid "10784"
++msgid "10786"
+ msgstr ""
+ "Altin Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName4"
+-msgid "10785"
++msgid "10787"
+ msgstr ""
+ "Tolbi Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName5"
+-msgid "10786"
++msgid "10788"
+ msgstr ""
+ "Lunpa Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName6"
+-msgid "10787"
++msgid "10789"
+ msgstr ""
+ "Lighthouse Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName7"
+-msgid "10788"
++msgid "10790"
+ msgstr ""
+ "Boss Rush"
+ 
+ 
+ msgctxt "MsgArenaCupName8"
+-msgid "10789"
++msgid "10791"
+ msgstr ""
+ "Crossbone Isle"
+ 
+ 
+ msgctxt "MsgArenaCupNext"
+-msgid "10790"
++msgid "10792"
+ msgstr ""
+ "Next cup"
+ 
+ 
+ msgctxt "MsgArenaCupReplay"
+-msgid "10791"
++msgid "10793"
+ msgstr ""
+ "Replay"
+ 
+ 
+ msgctxt "MsgArenaCupSide"
+-msgid "10792"
++msgid "10794"
+ msgstr ""
+ "Side cups"
+ 
+ 
+ msgctxt "MsgArenaCupReplayPrompt"
+-msgid "10793"
++msgid "10795"
+ msgstr ""
+ "Replay which cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupGroupEarly"
+-msgid "10794"
++msgid "10796"
+ msgstr ""
+ "Early cups"
+ 
+ 
+ msgctxt "MsgArenaCupGroupLate"
+-msgid "10795"
++msgid "10797"
+ msgstr ""
+ "Later cups"
+ 
+ 
+ msgctxt "MsgArenaCupSidePrompt"
+-msgid "10796"
++msgid "10798"
+ msgstr ""
+ "Which side cup\n"
+ "will you enter?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaGearReward"
+-msgid "10797"
++msgid "10799"
+ msgstr ""
+ "A find from the\n"
+ "dungeon! It is yours.{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaDjinnNoRoom"
+-msgid "10798"
++msgid "10800"
+ msgstr ""
+ "Your Djinn are full!\n"
+ "Make room, then win\n"
+@@ -65412,14 +65424,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm0"
+-msgid "10799"
++msgid "10801"
+ msgstr ""
+ "Enter the\n"
+ "Tret Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared0"
+-msgid "10800"
++msgid "10802"
+ msgstr ""
+ "You cleared the\n"
+ "Tret Cup!\n"
+@@ -65427,7 +65439,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst0"
+-msgid "10801"
++msgid "10803"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65441,7 +65453,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup0DjinnForge"
+-msgid "10802"
++msgid "10804"
+ msgstr ""
+ "You won the Djinni\n"
+ "Forge!\n"
+@@ -65449,7 +65461,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup0DjinnBreeze"
+-msgid "10803"
++msgid "10805"
+ msgstr ""
+ "You won the Djinni\n"
+ "Breeze!\n"
+@@ -65457,14 +65469,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm1"
+-msgid "10804"
++msgid "10806"
+ msgstr ""
+ "Enter the\n"
+ "Mercury Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared1"
+-msgid "10805"
++msgid "10807"
+ msgstr ""
+ "You cleared the\n"
+ "Mercury Cup!\n"
+@@ -65472,7 +65484,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst1"
+-msgid "10806"
++msgid "10808"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65484,7 +65496,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup1DjinnSleet"
+-msgid "10807"
++msgid "10809"
+ msgstr ""
+ "You won the Djinni\n"
+ "Sleet!\n"
+@@ -65492,14 +65504,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm2"
+-msgid "10808"
++msgid "10810"
+ msgstr ""
+ "Enter the\n"
+ "Mogall Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared2"
+-msgid "10809"
++msgid "10811"
+ msgstr ""
+ "You cleared the\n"
+ "Mogall Cup!\n"
+@@ -65507,7 +65519,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst2"
+-msgid "10810"
++msgid "10812"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65519,7 +65531,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup2DjinnZephyr"
+-msgid "10811"
++msgid "10813"
+ msgstr ""
+ "You won the Djinni\n"
+ "Zephyr!\n"
+@@ -65527,7 +65539,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup2DjinnQuartz"
+-msgid "10812"
++msgid "10814"
+ msgstr ""
+ "You won the Djinni\n"
+ "Quartz!\n"
+@@ -65535,14 +65547,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm3"
+-msgid "10813"
++msgid "10815"
+ msgstr ""
+ "Enter the\n"
+ "Altin Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared3"
+-msgid "10814"
++msgid "10816"
+ msgstr ""
+ "You cleared the\n"
+ "Altin Cup!\n"
+@@ -65550,7 +65562,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst3"
+-msgid "10815"
++msgid "10817"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65565,7 +65577,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup3DjinnSpritz"
+-msgid "10816"
++msgid "10818"
+ msgstr ""
+ "You won the Djinni\n"
+ "Spritz!\n"
+@@ -65573,14 +65585,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm4"
+-msgid "10817"
++msgid "10819"
+ msgstr ""
+ "Enter the\n"
+ "Tolbi Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared4"
+-msgid "10818"
++msgid "10820"
+ msgstr ""
+ "You cleared the\n"
+ "Tolbi Cup!\n"
+@@ -65588,7 +65600,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst4"
+-msgid "10819"
++msgid "10821"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65602,7 +65614,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup4DjinnSquall"
+-msgid "10820"
++msgid "10822"
+ msgstr ""
+ "You won the Djinni\n"
+ "Squall!\n"
+@@ -65610,14 +65622,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm5"
+-msgid "10821"
++msgid "10823"
+ msgstr ""
+ "Enter the\n"
+ "Lunpa Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared5"
+-msgid "10822"
++msgid "10824"
+ msgstr ""
+ "You cleared the\n"
+ "Lunpa Cup!\n"
+@@ -65625,7 +65637,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst5"
+-msgid "10823"
++msgid "10825"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65641,7 +65653,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup5DjinnFlash"
+-msgid "10824"
++msgid "10826"
+ msgstr ""
+ "You won the Djinni\n"
+ "Flash!\n"
+@@ -65649,7 +65661,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup5DjinnDew"
+-msgid "10825"
++msgid "10827"
+ msgstr ""
+ "You won the Djinni\n"
+ "Dew!\n"
+@@ -65657,14 +65669,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm6"
+-msgid "10826"
++msgid "10828"
+ msgstr ""
+ "Enter the\n"
+ "Lighthouse Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared6"
+-msgid "10827"
++msgid "10829"
+ msgstr ""
+ "You cleared the\n"
+ "Lighthouse Cup!\n"
+@@ -65672,7 +65684,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst6"
+-msgid "10828"
++msgid "10830"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65688,7 +65700,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup6DjinnLuff"
+-msgid "10829"
++msgid "10831"
+ msgstr ""
+ "You won the Djinni\n"
+ "Luff!\n"
+@@ -65696,14 +65708,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm7"
+-msgid "10830"
++msgid "10832"
+ msgstr ""
+ "Enter the\n"
+ "Boss Rush?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared7"
+-msgid "10831"
++msgid "10833"
+ msgstr ""
+ "You cleared the\n"
+ "Boss Rush!\n"
+@@ -65711,7 +65723,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst7"
+-msgid "10832"
++msgid "10834"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65719,14 +65731,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm8"
+-msgid "10833"
++msgid "10835"
+ msgstr ""
+ "Enter the\n"
+ "Crossbone Isle?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared8"
+-msgid "10834"
++msgid "10836"
+ msgstr ""
+ "You cleared the\n"
+ "Crossbone Isle!\n"
+@@ -65734,7 +65746,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst8"
+-msgid "10835"
++msgid "10837"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+-- 
+2.53.0
+

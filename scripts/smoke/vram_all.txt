@@ -1,0 +1,11 @@
+# All nine trophies stand (nine distinct sprites): is every message window's first line
+# clean (no sprite-memory noise)? The greeter's introduction pages (the onboarding flag
+# poked back to 0), then the champion, the scout and the attendant.
+include to_lobby.txt
+poke 0x0200013E 1 7
+poke 0x0200013D 1 3
+poke 0x02000132 1 255
+poke 0x02000133 1 1
+include save_continue.txt
+wait 60
+include vram_peek.txt

@@ -1,0 +1,116 @@
+# The attendant warns before a boss round: Tret Cup, win count poked to 6 mid-battle, so the
+# win is the 7th and the 8th (the last) round is the boss: 'Round 7 won!' then the warning.
+include to_solo.txt
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+peek 0x0200013E 1
+poke 0x020004EA 2 6
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 2
+wait 60
+shot /tmp/shots/c10.png
+mash A 2
+wait 60
+shot /tmp/shots/c11.png
+mash A 2
+wait 60
+shot /tmp/shots/c12.png
+mash A 2
+wait 60
+shot /tmp/shots/c13.png
+mash A 2
+wait 60
+shot /tmp/shots/c14.png
+mash A 2
+wait 60
+shot /tmp/shots/c15.png
+mash A 2
+wait 60
+shot /tmp/shots/c16.png
+mash A 2
+wait 60
+shot /tmp/shots/c17.png
+mash A 2
+wait 60
+shot /tmp/shots/c18.png
+mash A 2
+wait 60
+shot /tmp/shots/c19.png
+mash A 2
+wait 60
+shot /tmp/shots/c20.png
+mash A 2
+wait 60
+shot /tmp/shots/c21.png
+mash A 2
+wait 60
+shot /tmp/shots/c22.png
+mash A 2
+wait 60
+shot /tmp/shots/c23.png
+mash A 2
+wait 60
+shot /tmp/shots/c24.png
+mash A 2
+wait 60
+shot /tmp/shots/c25.png
+mash A 2
+wait 60
+shot /tmp/shots/c26.png
+mash A 2
+wait 60
+shot /tmp/shots/c27.png
+mash A 2
+wait 60
+shot /tmp/shots/c28.png
+mash A 2
+wait 60
+shot /tmp/shots/c29.png
+peek 0x0200013E 1

@@ -26,7 +26,12 @@
 - A bank of the main image has a fixed size. The shop bank (`rom_main_06`) had
   114 bytes spare; adding code overflowed it ("cannot move location counter
   backwards", `main.ld`). Bank 07's start was moved up 0x1000 for `tbs-en`. Check
-  slack from `out/tbs-en/tbs-en.map` before adding code to a bank.
+  slack from `out/tbs-en/tbs-en.map` before adding code to a bank. The same error came
+  from sprite data (four more sprite rows): the last region of `main.ld` now starts at
+  0x08326000 and `build.ps1` pads to 0x08806000.
+- A placement row's flag condition is only read when the actors are spawned. After
+  changing the flag in the lobby, call `Event_SpawnActorPlacements(gFieldWork->tables[1],
+  ACTOR_FIRST_PLACED)` again (it creates the new actors and resets the others' places).
 - A scene overlay can only call main-image functions that have a far-call stub and
   an `import` row (`system/overlay/imports.inc` plus the scene's
   `scene/import/<scene>.s`). Unexported functions need a new export in

@@ -159,7 +159,7 @@ def main():
          "/// the item id; `message` the message said for a Djinni.\n",
          "struct ArenaCupReward {\n  u8 afterRound;\n  u8 kind;\n  u8 flag;\n  u8 value;\n  u16 item;\n  u16 message;\n};\n\n",
          "struct ArenaCupInfo {\n  u8 roundCount;\n  u8 flags;\n  u8 requires; /* main cups cleared before it opens */\n  u8 raiseTo;   /* party level at the first clear, 0 for none */\n",
-         "  u8 rewardCount;\n  u8 pad[3];\n  const struct ArenaCupReward *rewards;\n  u16 confirmMsg;\n  u16 clearedMsg;\n  u16 firstMsg;\n  u16 pad2;\n};\n\n",
+         "  u8 rewardCount;\n  u8 pad;\n  /* bit n: the round after n wins (round n + 1) is a mini-boss / a boss */\n  u16 miniBossRounds;\n  const struct ArenaCupReward *rewards;\n  u16 confirmMsg;\n  u16 clearedMsg;\n  u16 firstMsg;\n  u16 bossRounds;\n};\n\n",
          "extern const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT];\n",
          "/// Item shop rows (weapons, armor, supplies) by cups cleared, 0 to ARENA_MAIN_CUPS.\n",
          "extern const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3];\n",
@@ -198,9 +198,11 @@ def main():
     for i, cup in enumerate(cups):
         e = info[i]
         flags = (1 if cup.side else 0) | (2 if cup.heals else 0)
-        s.append("    // %s\n    {%d, %d, %d, %d, %d, {0}, %s, %d, %d, %d, 0},\n" % (
-            cup.name, len(cup.rounds), flags, cup.requires, cup.raise_to, len(e["rewards"]),
-            "gArenaCup%dRewards" % i if e["rewards"] else "0", e["confirm"], e["cleared"], e["first"]))
+        mini = sum(1 << k for k, rd in enumerate(cup.rounds) if rd.boss == 1)
+        boss = sum(1 << k for k, rd in enumerate(cup.rounds) if rd.boss == 2)
+        s.append("    // %s\n    {%d, %d, %d, %d, %d, 0, 0x%x, %s, %d, %d, %d, 0x%x},\n" % (
+            cup.name, len(cup.rounds), flags, cup.requires, cup.raise_to, len(e["rewards"]), mini,
+            "gArenaCup%dRewards" % i if e["rewards"] else "0", e["confirm"], e["cleared"], e["first"], boss))
     s.append("};\n\nconst u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3] = {\n")
     for r in D.SHOP_ROWS:
         s.append("    {%d, %d, %d},\n" % r)

@@ -1,0 +1,38 @@
+From ea063876281328d6a5996c6cce7e6a528b6c20c3 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Mon, 2 Nov 2026 08:44:17 +1100
+Subject: [PATCH] Arena: a cup's trophy appears in the lobby straight after the
+ first clear
+
+The trophy rows' flag conditions were read only when the scene loaded, so the
+trophy showed after a reload. ArenaSeries_Cleared now reads the scene's
+placement table again (Event_SpawnActorPlacements) after setting the flag: the
+rows whose condition now holds get their actors. The attendant's menu, the
+manager's stock and the Djinn read the progress byte live and were right already.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/scene/arena_series.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/games/tbs/src/scene/arena_series.c b/games/tbs/src/scene/arena_series.c
+index c12036e079..a1e25f0524 100644
+--- a/games/tbs/src/scene/arena_series.c
++++ b/games/tbs/src/scene/arena_series.c
+@@ -146,8 +146,12 @@ static void ArenaSeries_Cleared(s32 cup, const struct ArenaCupInfo *info) {
+     FieldGameFlag_SetByte(FLAG_ARENA_SIDE_CLEARED,
+                           FieldGameFlag_GetByte(FLAG_ARENA_SIDE_CLEARED) |
+                               (1 << (cup - ARENA_MAIN_CUPS)));
+-  // The trophy of the cup stands in the lobby from the next time it is built.
++  // The trophy of the cup stands in the lobby at once: the scene's placement
++  // rows are read again, which creates the actors whose condition now holds (and
++  // sets the others back in their places; they stand still).
+   GameFlag_Set(FLAG_ARENA_TROPHY_FIRST + cup);
++  if (gFieldWork->tables[1] != NULL)
++    Event_SpawnActorPlacements(gFieldWork->tables[1], ACTOR_FIRST_PLACED);
+   Event_SetMessageId(info->firstMsg);
+   FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+   if (info->raiseTo != 0)
+-- 
+2.53.0
+

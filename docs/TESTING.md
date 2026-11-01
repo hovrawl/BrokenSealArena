@@ -178,3 +178,19 @@ lower right wings (`press U 30`, `press L 400`, `press R 700`); shots `cases_N_s
 `scripts/compose-shots.py` joins L and R into `cases_N.png` (the smoke run wipes the shots
 folder each time, so copy them out between runs). Check the champion's first message line in
 `npcs.txt` for sprite-memory noise.
+
+## Polish scripts (patches 0038 to 0042)
+
+- `trophy_refresh.txt`: first clear, then the lobby at once: the trophy stands in the case (no
+  reload). `trophy_refresh_menu.txt`: the attendant's menu then offers the next cup.
+- `trophies_text_all.txt`: all nine trophies, the greeter's introduction pages (flag poked to 0)
+  to see that the first line of each window is clean. `vram_peek.txt` (a prefix that prints the
+  512 sprite VRAM block owners; `vram_all.txt`, `vram_none.txt` use it) and
+  `scripts/vram-count.py OUTPUT` count the free blocks: capture the run's text with
+  `smoke.ps1 ... > file` and pass it. All nine trophies, champion and scout: 350 used, 162 free.
+- `filelist_pages.txt`: Continue list pages (`tap r`, `tap l`) and the Pause-menu Save list.
+- `npcs_moved.txt`: scout and champion at the new spots, both talks.
+- `boss_warning.txt`, `boss_warning_mini.txt`: the warning page after "Round 7 won!" (the second
+  pokes the cup byte 0x0200013F to 3 mid-battle).
+Screenshots worth showing are copied into `build\smoke\keep\` by hand (the driver wipes
+`build\smoke\shots`).

@@ -9,6 +9,11 @@ Enemy ids are rows of src/game/enemy_table.c (the `#n` of docs/cup-candidates.md
 A round is R(targetLevel, [(enemyId, count), ...], reward=None, note="..."): the
 enemies are levelled to targetLevel; a round holds at most six sprite slots (a
 small enemy takes one, any other two).
+boss=0/1/2 marks a round for the warning the attendant gives before it: 1 a mini-boss
+(a tough opponent), 2 a boss. Left out (None) it follows the rules at the end of this file
+(finish_bosses): the last round of a cup holding a story boss, and every round of the Boss
+Rush, is a boss; any other round holding a story boss is a mini-boss. R(..., boss=0) forces
+no warning.
 Rewards on a round are given the first time the round is won (once only):
   ("djinn", element, n)   a Djinni won in a Djinn battle
   ("item", itemName)      gear from the cup's stretch of the story (GEAR below; cup-gear.py lists them)
@@ -32,8 +37,9 @@ def djinn_entry(name):
 
 
 class R:
-    def __init__(self, level, team, reward=None, note=""):
+    def __init__(self, level, team, reward=None, note="", boss=None):
         self.level, self.team, self.note = level, team, note
+        self.boss = boss
         # one reward or a list of them; kept as a list
         if reward is None:
             reward = []
@@ -194,6 +200,35 @@ CUPS = [
 ]
 
 MAIN_COUNT = sum(1 for c in CUPS if not c.side)
+
+# Enemy ids of the story bosses (rows of the enemy table): Tret, Saturos (two rows),
+# Killer Ape, Hydros, Manticore, Kraken, Toadonpa, Storm and Tempest Lizard, Menardi,
+# Fusion Dragon, Deadbeard and the Colosso trio.
+STORY_BOSSES = {139, 115, 116, 70, 123, 81, 113, 133, 137, 138, 118, 140, 141,
+                124, 125, 126, 127, 128, 129}
+
+
+def finish_bosses():
+    """Fills in R.boss where the cup table left it out (see the top of this file):
+    a main cup's last round is a boss, a Boss Rush round is a boss, any other round with a
+    story boss is a mini-boss."""
+    for ci, cup in enumerate(CUPS):
+        last = len(cup.rounds) - 1
+        for ri, rd in enumerate(cup.rounds):
+            if rd.boss is not None:
+                continue
+            has_boss = any(e in STORY_BOSSES for e, _ in rd.team)
+            if cup.name == "Boss Rush":
+                rd.boss = 2
+            elif ri == last and (not cup.side or has_boss):
+                rd.boss = 2
+            elif has_boss:
+                rd.boss = 1
+            else:
+                rd.boss = 0
+
+
+finish_bosses()
 
 # Gear for the first win of a round: {cup short name: {round number: [ITEM_*]}}. Each cup pays
 # the equipment of its whole stretch of the story (the previous cup's boss dungeon up to its

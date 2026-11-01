@@ -613,6 +613,64 @@ party or its level.
 - Tests: `cases_0/3/9.txt` (walk into both wings; `build\smoke\shots\cases_N.png` joins the left
   and right views, `scripts/compose-shots.py`). Port notes: depth and sharing rules above.
 
+## 38. A trophy appears at once after the first clear (patch 0038)
+
+- `ArenaSeries_Cleared` sets the trophy flag and then calls `Event_SpawnActorPlacements` on the
+  scene's table (`gFieldWork->tables[1]`, from `ACTOR_FIRST_PLACED`): it creates the actors whose
+  condition now holds and puts the existing ones back in their places (they stand still). No
+  reload. The attendant's menu, the manager's Djinn and shop stock and the Djinn gate read the
+  progress byte live and were right already (`trophy_refresh_menu.txt`: the menu offers the
+  Mercury Cup straight after the clear). Test `trophy_refresh.txt` (first clear, then walk into
+  the lower left wing: the trophy stands in the first case).
+
+## 39. A trophy design for every cup (patch 0039)
+
+- Nine 16 x 16 placeholder sprites, cup order: 309 cup, 310 pennant, 311 shield, 312 star on a
+  plinth, 313 sword in a stone, 315 laurel wreath, 316 crown, 317 gem on a plinth, 318 mask
+  (bronze, silver, gold, blue by tier). `gen-trophy-sprites.py` holds the art as ASCII pictures
+  (one letter a colour role); rows 315 to 318 of `sprites.tsv` / `layout.tsv`; both placement
+  tables use them (case and flag order unchanged). Redraw by editing the pictures or replacing
+  the PNGs.
+- **Sprite memory** (`vram_peek.txt` + `scripts/vram-count.py`): lobby with all nine trophies, the
+  champion and the scout standing, 350 of 512 blocks used, 162 free; with no cups 282 used. So
+  nine distinct trophies cost 36 blocks and both NPCs 32; every message window drew clean
+  (`trophies_text_all.txt`: the greeter's six introduction pages with all nine; `npcs.txt`).
+- The extra sprite data overflowed the ROM region before the last one ("cannot move location
+  counter backwards"): `main.ld` starts the last region at 0x08326000 (was 0x08325000) and
+  `build.ps1` pads to `ROM_END_tbs=0x08806000`. Watch this when adding more sprites.
+
+## 40. The file list pages the trophies (patch 0040)
+
+- `SaveFileSummary.cups[4]` is now `cupBits[4]`: bit n set when cup n is cleared (32 cups fit;
+  size unchanged). The list draws the cups' own trophies, five to a page; a cup not won is the
+  same sprite in grey (`Sprite_SetAnimationColorModesFar(.., SPRITE_COLOR_GREY)`). Under them the
+  page indicator "1/2" (`Text_DrawNumberAtOffset` and a "/"); it is drawn for every file with a
+  cup (the page total is `ARENA_CUP_COUNT` over five), so there is no stale text. L and R turn
+  the page (wrapping, with the cursor sound); up and down reset it to page 1. The fifth sprite
+  slot is the first Djinn-menu `phases` word of the menu work (a gap the shop's party sprites do
+  not reach). The Continue list and the Pause-menu Save list are the same code (checked in
+  `filelist_pages.txt`). New saves only. `sFileListTrophySprites` must grow with the cup count.
+
+## 41. The scout and the champion move (patch 0041)
+
+- Scout (0x87) at (160, 268) facing east, champion (0x71) at (272, 268) facing west: the south
+  strip of the hall, at the pits' edge, 56 px from the spawn lane, clear of the door and the old
+  man, the counters' fronts (z 236 to 250), the circle, the cases (x 124 and 303, z 280) and the
+  wing floors. Both placement tables. Tests: `npcs.txt`, `npc_scout.txt`, `npc_all.txt`,
+  `npcs_moved.txt` (the old routes up to the door were replaced).
+
+## 42. A warning before a boss round (patch 0042)
+
+- `cupdata.py`: `R(..., boss=0/1/2)`; when left out `finish_bosses()` derives it: the last round
+  of a main cup (or of a side cup that holds a story boss) and every Boss Rush round are bosses
+  (2); a round with a story boss (`STORY_BOSSES`) that is not last is a mini-boss (1). Written
+  as two bitmasks in `ArenaCupInfo` (`miniBossRounds`, `bossRounds`; bit n is the round after n
+  wins). After "Round n won!" the attendant shows `MsgArenaBossWarning` ("Watch out! The next
+  round is a boss!") or `MsgArenaMiniBossWarning` ("Careful! A tough opponent is next!") as one
+  more window when round n + 1 is marked. Round 1 has none. Marked: Tret, Mercury, Mogall, Altin,
+  Tolbi, Lunpa, Lighthouse last rounds, minis: Altin 8, Tolbi 7, Lunpa 9, Lighthouse 9; Boss
+  Rush all; Crossbone 10. Tests `boss_warning.txt` (Tret, round 8) and `boss_warning_mini.txt`.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.
