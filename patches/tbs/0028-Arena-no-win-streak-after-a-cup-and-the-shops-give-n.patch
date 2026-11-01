@@ -1,0 +1,73 @@
+From d8e78234fdc1cebbc75d802f5a32bc9b4c01910e Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sun, 1 Nov 2026 15:06:35 +1100
+Subject: [PATCH] Arena: no win streak after a cup, and the shops give no Game
+ Ticket
+
+The attendant no longer tells the win streak when a series ends (the first clear scene
+already congratulates; the best streak is kept for the endless challenge). Giving up with
+no wins still says "Try again next time!". The shops no longer give a Game Ticket after a
+purchase (Shop_BuySpecialItem returns at once in the arena).
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/scene/arena_series.c | 9 +++------
+ games/tbs/src/shop/shop/stock.c    | 6 ++++++
+ 2 files changed, 9 insertions(+), 6 deletions(-)
+
+diff --git a/games/tbs/src/scene/arena_series.c b/games/tbs/src/scene/arena_series.c
+index ea4a227442..46ceddec0a 100644
+--- a/games/tbs/src/scene/arena_series.c
++++ b/games/tbs/src/scene/arena_series.c
+@@ -21,21 +21,18 @@ static void ArenaSeries_End(void) {
+   GameFlag_Clear(FLAG_BATTLE_ARENA_PLAYER_AGREED);
+   FieldGameFlag_SetByte(FLAG_MONSTER_BATTLE_WINS, -1);
+   MessageArgument_ClearAll();
+-  MessageArgument_Push(gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK],
+-                       MESSAGE_ARGUMENT_NUMBER);
+   if (gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK] == 0) {
+     // Quit before winning a round: they did not want to compete. (The stock line
+     // would say "You won 0 battle.")
+     Event_SetMessageId(MsgArenaTryAgain);
++    FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+   } else if (gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] <
+              gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK]) {
++    // The streak is not told: it means nothing until the endless challenge
++    // (the first clear scene already congratulates). The best is still kept.
+     gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] =
+         gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK];
+-    Event_SetMessageId(MsgLobbyWonNumberBattleBroke);
+-  } else {
+-    Event_SetMessageId(MsgLobbyWonNumberBattle);
+   }
+-  FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+   BattleArena_WriteSlotValue(LOBBY_SLOT_SIGNATURE);
+ }
+ 
+diff --git a/games/tbs/src/shop/shop/stock.c b/games/tbs/src/shop/shop/stock.c
+index 93b3d5da86..a6960f2196 100644
+--- a/games/tbs/src/shop/shop/stock.c
++++ b/games/tbs/src/shop/shop/stock.c
+@@ -3,6 +3,7 @@
+ // Part of shop.c.
+ 
+ #include "../shop_internal.h"
++#include "arena_config.h"
+ 
+ /// The shop credit each Game Ticket costs, by how many have been given: five
+ /// at each price: 300, then 500 doubling to 8000. The gift count stops at 28
+@@ -47,6 +48,11 @@ void Shop_BuySpecialItem(struct Window *window, struct Window *itemWindow) {
+   creditCost = sGameTicketCreditCosts[gMainRoutineWork.shopGifts];
+   memberIndex = 0;
+ 
++#if ARENA_TRAINING
++  // Arena romhack: there is no Game Ticket to win in the arena, so the shops give
++  // none.
++  return;
++#endif
+   // Gifts spend accumulated shop credit; they do not debit the party's coins.
+   if (creditCost > gMainRoutineWork.shopCredit)
+     return;
+-- 
+2.53.0
+

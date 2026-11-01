@@ -1,6 +1,6 @@
 # Cup framework: specification
 
-Status: **spec only, no gameplay code.** Written 2026-11-01 for the builder agent (plan step 3 in
+Status: **implemented in patch 0027 (see CHANGES.md entry 27); the text below is the spec as written.** Not done: counter-style cup list, trophies, cups D to G gear beyond a few items (`cup-gear.py --missing`), balance pass. Written 2026-11-01 for the builder agent (plan step 3 in
 `CUPS.md`). Source read: `~/alchemy` branch `arena` (`games/tbs`). Every claim carries a file and
 line; every guess is marked **GUESS** and every gap **UNKNOWN**. Numbers come from the generated
 `cup-candidates.md` (run `scripts/cup-candidates.py`; it reads our enemy table, so levels are the

@@ -1,0 +1,89 @@
+# Win round 1 with the win count poked to 4 mid-battle, so the win is round 5 (Fur Coat): its reward is given (once).
+include to_solo.txt
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+poke 0x020004EA 2 4
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 6
+wait 100
+mash A 2
+wait 60
+shot /tmp/shots/r10.png
+mash A 2
+wait 60
+shot /tmp/shots/r11.png
+mash A 2
+wait 60
+shot /tmp/shots/r12.png
+mash A 2
+wait 60
+shot /tmp/shots/r13.png
+mash A 2
+wait 60
+shot /tmp/shots/r14.png
+mash A 2
+wait 60
+shot /tmp/shots/r15.png
+mash A 2
+wait 60
+shot /tmp/shots/r16.png
+mash A 2
+wait 60
+shot /tmp/shots/r17.png
+mash A 2
+wait 60
+shot /tmp/shots/r18.png
+mash A 2
+wait 60
+shot /tmp/shots/r19.png
+mash A 2
+wait 60
+shot /tmp/shots/r20.png
+mash A 2
+wait 60
+shot /tmp/shots/r21.png

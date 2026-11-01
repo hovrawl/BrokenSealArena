@@ -1,0 +1,1836 @@
+From 2c3f74972d052173fd1448161d2c787860c48e05 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sun, 1 Nov 2026 14:26:59 +1100
+Subject: [PATCH] Arena: the cup framework (seven main cups, side cups,
+ unlocks, gear)
+
+A cup is data (scripts/cupdata.py, generated into the game tree by
+scripts/gen-cups.py): rounds of enemy teams with a target level, a boss round,
+rewards, what it requires and a heal flag. It never sets the party or its level.
+
+- battle: src/battle/arena_cups.c (generated, its own object in rom_tail_00)
+  holds every cup's teams; arena_ladder.c picks the round by win count. The
+  Monster Gauntlet is gone; the Boss Rush is the first side cup (opens after the
+  seventh main cup); Crossbone Isle (Deadbeard) is the second.
+- state: FLAG_ARENA_PROGRESS 0x7f0 (main cups cleared), FLAG_ARENA_SIDE_CLEARED
+  0x7e8, reward-given bits 0x7a0 to 0x7df; all persistent, so the Pause-menu save
+  keeps them.
+- attendant: Solo opens Next cup / Replay / Side cups (icon rows of at most four,
+  Early and Later groups when more than four are open), then "Enter the X Cup?".
+  Only open cups are offered.
+- series: the first clear of a main cup plays the unlock scene (what it opens),
+  raises the party (Unit_LevelUpTo, never lowers) and advances the progress; a
+  replay only congratulates. A reward round gives its Djinni or gear item once
+  (PartyInventory_GiveItem).
+- party manager: the Djinn counter lists only the Djinn on sale (a gate per Djinni
+  by cups cleared); the item shops follow the last cup cleared (gArenaShopRows);
+  the Psynergy shop is removed. New Game starts at level 10 (ARENA_START_LEVEL).
+- objects.tsv: a row for arena_cups.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/module/arena.h             |  49 +-
+ games/tbs/include/module/arena_cups.h        |  71 +++
+ games/tbs/objects.tsv                        |   1 +
+ games/tbs/src/battle/arena_cups.c            | 206 +++++++++
+ games/tbs/src/battle/battle/arena_ladder.c   |  86 +---
+ games/tbs/src/scene/arena_boot.c             |   2 +-
+ games/tbs/src/scene/arena_cup_info.inc       |  87 ++++
+ games/tbs/src/scene/arena_menu.c             | 174 +++++--
+ games/tbs/src/scene/arena_series.c           | 150 ++++--
+ games/tbs/src/scene/battle_arena.c           |   2 +
+ games/tbs/src/scene/import/battle_arena.s    |   2 +
+ games/tbs/src/shop/shop/arena_djinn_gate.inc |   9 +
+ games/tbs/src/shop/shop/arena_shop.c         | 113 ++---
+ games/tbs/text/en.po                         | 462 ++++++++++++++++++-
+ 14 files changed, 1169 insertions(+), 245 deletions(-)
+ create mode 100644 games/tbs/include/module/arena_cups.h
+ create mode 100644 games/tbs/src/battle/arena_cups.c
+ create mode 100644 games/tbs/src/scene/arena_cup_info.inc
+ create mode 100644 games/tbs/src/shop/shop/arena_djinn_gate.inc
+
+diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
+index 5b72481f1c..de55bf6825 100644
+--- a/games/tbs/include/module/arena.h
++++ b/games/tbs/include/module/arena.h
+@@ -6,37 +6,29 @@
+ 
+ #include "types.h"
+ 
+-/// The level of the party a New Game starts with (scene/arena_boot.c). 50 opens
+-/// every class's Psynergy, which is learnt by class and level (the last at 54 in
+-/// the stock table, 42 in the Reloaded rebalance); a party then needs only the
+-/// right Djinn for the class.
+-#define ARENA_START_LEVEL 50
++/// The level of the party a New Game starts with (scene/arena_boot.c). The level
++/// is earned from there: the first clear of a main cup raises it
++/// (docs/CUP-SPEC.md).
++#define ARENA_START_LEVEL 10
+ 
+-// Tournaments. The player chooses one at the attendant; it is kept in a
++// Cups. The player chooses one at the attendant; its index in gArenaCupInfo
++// (module/arena_cups.h, generated from scripts/cupdata.py) is kept in a
+ // persistent byte flag, so a save remembers it. Flags 0x7f8 to 0x7ff are the byte
+ // at index 0xff of the game flags: no name in flags.h refers to them and no code
+ // computes a flag number there (the computed ranges are the Djinn, the Psynergy
+ // tints, the shop stock at 0x400 plus a row, and ENEMY_DEFEATED_FLAG at 0x600 plus
+-// an enemy). More bytes can be claimed downward from here, and listed here.
++// an enemy). More bytes are claimed downward from here, and listed here:
++//   0x7f8 FLAG_ARENA_TOURNAMENT   the chosen cup (byte)
++//   0x7f0 FLAG_ARENA_PROGRESS     main cups cleared, 0 to ARENA_MAIN_CUPS (byte)
++//   0x7e8 FLAG_ARENA_SIDE_CLEARED bit n: side cup n cleared (byte)
++//   0x7e0                         reserved (byte)
++//   0x7a0 to 0x7df                one bit for each reward given
++//                                 (ARENA_REWARD_FLAG_FIRST in arena_cups.h)
+ #define FLAG_ARENA_TOURNAMENT 0x7f8
++#define FLAG_ARENA_PROGRESS 0x7f0
++#define FLAG_ARENA_SIDE_CLEARED 0x7e8
+ 
+-#define ARENA_TOURNAMENT_GAUNTLET 0
+-#define ARENA_TOURNAMENT_BOSS_RUSH 1
+-#define ARENA_TOURNAMENT_COUNT 2
+-
+-/// The rounds of each tournament: the rungs of its ladder in arena_ladder.c.
+-/// Clearing the last is a win and ends the series. The messages for a
+-/// tournament say its round count (a field message with two number blanks shows
+-/// the first twice), and arena_series.c asserts these.
+-#define ARENA_GAUNTLET_ROUNDS 12
+-#define ARENA_BOSS_RUSH_ROUNDS 6
+-#define ARENA_ROUNDS(tournament) \
+-  ((tournament) == ARENA_TOURNAMENT_BOSS_RUSH ? ARENA_BOSS_RUSH_ROUNDS \
+-                                              : ARENA_GAUNTLET_ROUNDS)
+-
+-/// Whether the party is healed after each win and on leaving the manager while a
+-/// series runs. A tournament can turn it off: the Boss Rush does.
+-#define ARENA_HEALS(tournament) ((tournament) != ARENA_TOURNAMENT_BOSS_RUSH)
++#include "module/arena_cups.h"
+ 
+ // Battle Arena overlay (scene/arena_menu.c)
+ 
+@@ -44,9 +36,14 @@
+ /// FLAG_ARENA_TOURNAMENT), 2 for a linked battle, 0 to leave.
+ s32 ArenaMenu_AttendantMode(void);
+ /// The coins a battle won, said by `actorId`; the party is healed if the
+-/// tournament heals.
++/// cup heals.
+ void ArenaMenu_ShowWin(s32 actorId, s32 reward);
+-/// Talking to the party manager: stats, Djinn, Psynergy and the item shops.
++/// Main cups cleared (FLAG_ARENA_PROGRESS), the cup of the series (clamped to
++/// the table) and whether it heals the party after each win.
++s32 ArenaCup_Progress(void);
++s32 ArenaCup_Current(void);
++s32 ArenaCup_Heals(void);
++/// Talking to the party manager: stats, Djinn and the item shops.
+ s32 BattleArena_PartyManager(s32 actorId);
+ 
+ // File screen overlay (scene/arena_boot.c)
+diff --git a/games/tbs/include/module/arena_cups.h b/games/tbs/include/module/arena_cups.h
+new file mode 100644
+index 0000000000..764e6539ae
+--- /dev/null
++++ b/games/tbs/include/module/arena_cups.h
+@@ -0,0 +1,71 @@
++/* Generated by scripts/gen-cups.py from scripts/cupdata.py. Do not edit. */
++#ifndef ALCHEMY_MODULE_ARENA_CUPS_H
++#define ALCHEMY_MODULE_ARENA_CUPS_H
++
++#include "types.h"
++
++#define ARENA_CUP_COUNT 9
++#define ARENA_MAIN_CUPS 7
++#define ARENA_REWARD_FLAG_FIRST 0x7A0
++#define ARENA_CUP_TRET 0
++#define ARENA_CUP_MERCURY 1
++#define ARENA_CUP_MOGALL 2
++#define ARENA_CUP_ALTIN 3
++#define ARENA_CUP_TOLBI 4
++#define ARENA_CUP_LUNPA 5
++#define ARENA_CUP_LIGHTHOUSE 6
++#define ARENA_CUP_BOSS_RUSH 7
++#define ARENA_CUP_CROSSBONE 8
++#define ARENA_CUP_SIDE 0x01  /* beside the line: not counted in progress */
++#define ARENA_CUP_HEALS 0x02 /* the party is healed after each win */
++#define ARENA_REWARD_ITEM 0
++#define ARENA_REWARD_DJINN 1
++
++#include "battle/formations.h"
++
++/// One round: win number n of a cup fights round n; its enemies are levelled to targetLevel.
++struct ArenaTeam {
++  u8 targetLevel;
++  struct Formation formation;
++};
++
++struct ArenaCupTeams {
++  const struct ArenaTeam *rounds;
++  s32 count;
++};
++extern const struct ArenaCupTeams gArenaCupTeams[];
++
++/// Given the first time round `afterRound` (1-based) is won. `flag` is the
++/// bit that says it was given; `value` the Djinni (element * 7 + n); `item`
++/// the item id; `message` the message said for a Djinni.
++struct ArenaCupReward {
++  u8 afterRound;
++  u8 kind;
++  u8 flag;
++  u8 value;
++  u16 item;
++  u16 message;
++};
++
++struct ArenaCupInfo {
++  u8 roundCount;
++  u8 flags;
++  u8 requires; /* main cups cleared before it opens */
++  u8 raiseTo;   /* party level at the first clear, 0 for none */
++  u8 rewardCount;
++  u8 pad[3];
++  const struct ArenaCupReward *rewards;
++  u16 confirmMsg;
++  u16 clearedMsg;
++  u16 firstMsg;
++  u16 pad2;
++};
++
++extern const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT];
++/// Item shop rows (weapons, armor, supplies) by cups cleared, 0 to ARENA_MAIN_CUPS.
++extern const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3];
++extern const u8 gArenaCrossboneRows[3];
++
++#define MSG_ARENA_CUP_NAME 10777
++
++#endif
+diff --git a/games/tbs/objects.tsv b/games/tbs/objects.tsv
+index fda6256374..b2a9f52fa8 100644
+--- a/games/tbs/objects.tsv
++++ b/games/tbs/objects.tsv
+@@ -426,6 +426,7 @@ main	rom_tail_00	games/tbs/sound/songs/se_materialize	.rodata
+ main	rom_tail_00	games/tbs/sound/songs/se_star_bounce	.rodata
+ main	rom_tail_00	games/tbs/sound/songs/se_310	.rodata
+ main	rom_tail_00	games/tbs/sound/songs/se_311	.rodata
++main	rom_tail_00	games/tbs/src/battle/arena_cups	.rodata
+ main	rom_tail_01	games/tbs/src/gamepak/far_call/SPRITE
+ main	rom_tail_01	games/tbs/src/system/sprite_metadata	.text
+ main	rom_tail_01	games/tbs/src/graphics/sprite/sprites	.rodata
+diff --git a/games/tbs/src/battle/arena_cups.c b/games/tbs/src/battle/arena_cups.c
+new file mode 100644
+index 0000000000..b64a4320f0
+--- /dev/null
++++ b/games/tbs/src/battle/arena_cups.c
+@@ -0,0 +1,206 @@
++/* Generated by scripts/gen-cups.py from scripts/cupdata.py. Do not edit. */
++// The teams of every cup; arena_ladder.c (part of battle.c) picks the round.
++
++#include "module/arena.h"
++
++// clang-format off
++// 0: Tret Cup
++static const struct ArenaTeam gArenaCup0Rounds[8] = {
++    // Slimes, Bats and a Vermin (Sol Sanctum)
++    {3, {.layout = 2, .memberIds = {10, 4, 1}, .minimumCounts = {2, 2, 1}, .maximumCounts = {2, 2, 1}}},
++    // Zombie and Will Heads
++    {5, {.layout = 2, .memberIds = {18, 27}, .minimumCounts = {1, 2}, .maximumCounts = {1, 2}}},
++    // Ghost, Skeleton, Will Head (Goma)
++    {6, {.layout = 2, .memberIds = {14, 24, 27}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}}},
++    // Forge, the Goma Cave Djinni
++    {7, {.layout = 2, .memberIds = {157, 24}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // Rats and a Bee (Kolima)
++    {8, {.layout = 2, .memberIds = {30, 33, 36}, .minimumCounts = {2, 1, 1}, .maximumCounts = {2, 1, 1}}},
++    // Troll, Spiders, Gnome (Tret Tree)
++    {9, {.layout = 2, .memberIds = {39, 42, 45}, .minimumCounts = {1, 2, 1}, .maximumCounts = {1, 2, 1}}},
++    // Breeze, the Tret Tree Djinni
++    {10, {.layout = 2, .memberIds = {160, 107}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // Tret
++    {14, {.layout = 2, .memberIds = {139}, .minimumCounts = {1}, .maximumCounts = {1}}},
++};
++
++// 1: Mercury Cup
++static const struct ArenaTeam gArenaCup1Rounds[8] = {
++    // Bilibin cave mobs
++    {13, {.layout = 2, .memberIds = {12, 45, 36}, .minimumCounts = {2, 2, 1}, .maximumCounts = {2, 2, 1}}},
++    // Grizzly, Ghoul, Oozes
++    {13, {.layout = 2, .memberIds = {51, 48, 12}, .minimumCounts = {1, 1, 2}, .maximumCounts = {1, 1, 2}}},
++    // Troll and Rat Soldiers
++    {14, {.layout = 2, .memberIds = {39, 33}, .minimumCounts = {1, 2}, .maximumCounts = {1, 2}}},
++    // Cuttles and a Harpy (Mercury Lighthouse)
++    {15, {.layout = 2, .memberIds = {54, 57}, .minimumCounts = {3, 1}, .maximumCounts = {3, 1}}},
++    // Sleet, the Lighthouse Djinni
++    {15, {.layout = 2, .memberIds = {153, 60}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // Harpy, Siren, Lizard Man
++    {16, {.layout = 2, .memberIds = {57, 60, 119}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}}},
++    // Lizard Man and Grizzlies
++    {17, {.layout = 2, .memberIds = {119, 51}, .minimumCounts = {1, 2}, .maximumCounts = {1, 2}}},
++    // Saturos
++    {18, {.layout = 2, .memberIds = {115}, .minimumCounts = {1}, .maximumCounts = {1}}},
++};
++
++// 2: Mogall Cup
++static const struct ArenaTeam gArenaCup2Rounds[7] = {
++    // Fuchin Falls mobs
++    {15, {.layout = 2, .memberIds = {63, 66, 28}, .minimumCounts = {2, 2, 1}, .maximumCounts = {2, 2, 1}}},
++    // Spirit, Bone Fighter, Moles
++    {16, {.layout = 2, .memberIds = {108, 25, 63}, .minimumCounts = {1, 1, 2}, .maximumCounts = {1, 1, 2}}},
++    // Zephyr, the Fuchin Falls Djinni
++    {16, {.layout = 2, .memberIds = {161, 119}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // Bone Fighters and Death Heads (Mogall)
++    {17, {.layout = 2, .memberIds = {25, 28}, .minimumCounts = {2, 2}, .maximumCounts = {2, 2}}},
++    // Quartz, the Mogall Djinni
++    {17, {.layout = 2, .memberIds = {150, 108}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // Apes and Dirges
++    {18, {.layout = 2, .memberIds = {69, 66}, .minimumCounts = {2, 2}, .maximumCounts = {2, 2}}},
++    // Killer Ape
++    {20, {.layout = 2, .memberIds = {70}, .minimumCounts = {1}, .maximumCounts = {1}}},
++};
++
++// 3: Altin Cup
++static const struct ArenaTeam gArenaCup3Rounds[9] = {
++    // Altin Peak mobs
++    {18, {.layout = 2, .memberIds = {34, 75, 43}, .minimumCounts = {1, 1, 2}, .maximumCounts = {1, 1, 2}}},
++    // Slime Beasts, Calamars, Grubs
++    {18, {.layout = 2, .memberIds = {13, 55, 72}, .minimumCounts = {2, 2, 2}, .maximumCounts = {2, 2, 2}}},
++    // Salamander, Ape, Bees (Lamakan)
++    {19, {.layout = 2, .memberIds = {78, 69, 37}, .minimumCounts = {1, 1, 2}, .maximumCounts = {1, 1, 2}}},
++    // Spritz and the Ant Lion
++    {19, {.layout = 2, .memberIds = {154, 130}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // Vale Cave mobs
++    {20, {.layout = 2, .memberIds = {3, 9, 15}, .minimumCounts = {2, 2, 1}, .maximumCounts = {2, 2, 1}}},
++    // Cave Troll, Gargoyle, Brown Bear (Vault Cave)
++    {21, {.layout = 2, .memberIds = {40, 87, 52}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}}},
++    // Undead, Ghost Mage, Brown Bear
++    {22, {.layout = 2, .memberIds = {19, 15, 52}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}}},
++    // Hydros Statue and a Living Statue
++    {22, {.layout = 2, .memberIds = {123, 122}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // Manticore
++    {24, {.layout = 2, .memberIds = {81}, .minimumCounts = {1}, .maximumCounts = {1}}},
++};
++
++// 4: Tolbi Cup
++static const struct ArenaTeam gArenaCup4Rounds[8] = {
++    // Man o' Wars and Rabid Bats (Tolbi ship)
++    {21, {.layout = 2, .memberIds = {56, 6}, .minimumCounts = {3, 2}, .maximumCounts = {3, 2}}},
++    // Lizard Fighter, Virago, Rabid Bat
++    {22, {.layout = 2, .memberIds = {120, 58, 6}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}}},
++    // Altmiller Cave mobs
++    {22, {.layout = 2, .memberIds = {20, 31, 46, 64}, .minimumCounts = {1, 1, 1, 1}, .maximumCounts = {1, 1, 1, 1}}},
++    // Squall, the Altmiller Djinni
++    {23, {.layout = 2, .memberIds = {162, 93}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // Foul Dirges, Spear Grubs, Clay Gargoyle
++    {23, {.layout = 2, .memberIds = {67, 73, 88}, .minimumCounts = {2, 2, 1}, .maximumCounts = {2, 2, 1}}},
++    // Cerberus and Golem
++    {24, {.layout = 2, .memberIds = {96, 93}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // The Colosso champions
++    {25, {.layout = 2, .memberIds = {124, 126, 128}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}}},
++    // Kraken
++    {26, {.layout = 2, .memberIds = {113}, .minimumCounts = {1}, .maximumCounts = {1}}},
++};
++
++// 5: Lunpa Cup
++static const struct ArenaTeam gArenaCup5Rounds[10] = {
++    // Gondowan Cave mobs
++    {25, {.layout = 2, .memberIds = {35, 38, 84}, .minimumCounts = {1, 2, 1}, .maximumCounts = {1, 2, 1}}},
++    // Dirty Ape and Vile Dirges
++    {25, {.layout = 2, .memberIds = {71, 68}, .minimumCounts = {1, 2}, .maximumCounts = {1, 2}}},
++    // Lunpa Fortress guards
++    {26, {.layout = 2, .memberIds = {23}, .minimumCounts = {3}, .maximumCounts = {3}}},
++    // Kobold, Roach, Magicore (Suhalla Desert)
++    {26, {.layout = 2, .memberIds = {84, 131, 82}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}}},
++    // Flash, the desert Djinni
++    {27, {.layout = 2, .memberIds = {159, 74}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // Orc Captain, Harridan, Stone Soldier
++    {27, {.layout = 2, .memberIds = {76, 59, 99}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}}},
++    // Dew, the Suhalla Gate Djinni
++    {28, {.layout = 2, .memberIds = {156, 94}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // Horned Ghost, Cannibal Ghoul, Nightmare
++    {28, {.layout = 2, .memberIds = {16, 50, 62}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}}},
++    // Toadonpa
++    {29, {.layout = 2, .memberIds = {133}, .minimumCounts = {1}, .maximumCounts = {1}}},
++    // Storm and Tempest Lizard
++    {30, {.layout = 2, .memberIds = {137, 138}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++};
++
++// 6: Lighthouse Cup
++static const struct ArenaTeam gArenaCup6Rounds[10] = {
++    // Venus Lighthouse mobs
++    {33, {.layout = 2, .memberIds = {47, 62, 85}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}}},
++    // Horned Ghost, Earth Golem, Willowisp
++    {33, {.layout = 2, .memberIds = {16, 94, 29}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}}},
++    // Plated Rat, Orc Lord, Willowisp (Babi)
++    {34, {.layout = 2, .memberIds = {32, 77, 29}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}}},
++    // Luff, the Babi Lighthouse Djinni
++    {35, {.layout = 2, .memberIds = {163, 26}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // Manticore King, Ice Gargoyle, Gryphon
++    {36, {.layout = 2, .memberIds = {83, 89, 91}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}}},
++    // Chimera Mage and Recluses
++    {36, {.layout = 2, .memberIds = {103, 44}, .minimumCounts = {1, 2}, .maximumCounts = {1, 2}}},
++    // Boulder Beast, Thunder Lizard, Grand Golem
++    {37, {.layout = 2, .memberIds = {100, 80, 95}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}}},
++    // Fenrir and Grand Golem
++    {38, {.layout = 2, .memberIds = {98, 95}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // Menardi and Saturos
++    {40, {.layout = 2, .memberIds = {118, 116}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // The Fusion Dragon
++    {41, {.layout = 2, .memberIds = {140}, .minimumCounts = {1}, .maximumCounts = {1}}},
++};
++
++// 7: Boss Rush
++static const struct ArenaTeam gArenaCup7Rounds[6] = {
++    // Orc Lord and Lizard King
++    {14, {.layout = 2, .memberIds = {77, 121}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // Manticore and Chimera
++    {22, {.layout = 2, .memberIds = {81, 102}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // Tempest Lizard and Cerberus
++    {30, {.layout = 2, .memberIds = {138, 97}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // Saturos and Menardi
++    {36, {.layout = 2, .memberIds = {115, 118}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // Deadbeard and the Hydros Statue
++    {41, {.layout = 2, .memberIds = {141, 123}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}}},
++    // The Fusion Dragon
++    {45, {.layout = 2, .memberIds = {140}, .minimumCounts = {1}, .maximumCounts = {1}}},
++};
++
++// 8: Crossbone Isle
++static const struct ArenaTeam gArenaCup8Rounds[10] = {
++    // Hobgoblin and Viragos (first guards)
++    {23, {.layout = 2, .memberIds = {86, 58}, .minimumCounts = {1, 2}, .maximumCounts = {1, 2}}},
++    // Savage Bears and a Succubus
++    {23, {.layout = 2, .memberIds = {53, 61}, .minimumCounts = {2, 1}, .maximumCounts = {2, 1}}},
++    // Lich Ghost and Fiendish Ghouls
++    {24, {.layout = 2, .memberIds = {17, 49}, .minimumCounts = {1, 2}, .maximumCounts = {1, 2}}},
++    // Gryphons
++    {25, {.layout = 2, .memberIds = {90}, .minimumCounts = {2}, .maximumCounts = {2}}},
++    // Lizard King, Harridan, Stone Soldiers (last guards)
++    {28, {.layout = 2, .memberIds = {121, 59, 99}, .minimumCounts = {1, 1, 2}, .maximumCounts = {1, 1, 2}}},
++    // Chimeras
++    {28, {.layout = 2, .memberIds = {102}, .minimumCounts = {2}, .maximumCounts = {2}}},
++    // Earth Lizards
++    {28, {.layout = 2, .memberIds = {79}, .minimumCounts = {2}, .maximumCounts = {2}}},
++    // Poison Toad and Thunder Lizards
++    {32, {.layout = 2, .memberIds = {134, 80}, .minimumCounts = {1, 2}, .maximumCounts = {1, 2}}},
++    // Hell Hounds
++    {33, {.layout = 2, .memberIds = {97}, .minimumCounts = {2}, .maximumCounts = {2}}},
++    // Deadbeard
++    {43, {.layout = 2, .memberIds = {141}, .minimumCounts = {1}, .maximumCounts = {1}}},
++};
++
++const struct ArenaCupTeams gArenaCupTeams[ARENA_CUP_COUNT] = {
++    {gArenaCup0Rounds, 8},
++    {gArenaCup1Rounds, 8},
++    {gArenaCup2Rounds, 7},
++    {gArenaCup3Rounds, 9},
++    {gArenaCup4Rounds, 8},
++    {gArenaCup5Rounds, 10},
++    {gArenaCup6Rounds, 10},
++    {gArenaCup7Rounds, 6},
++    {gArenaCup8Rounds, 10},
++};
++// clang-format on
+diff --git a/games/tbs/src/battle/battle/arena_ladder.c b/games/tbs/src/battle/battle/arena_ladder.c
+index 415055678f..8b6e7ee38b 100644
+--- a/games/tbs/src/battle/battle/arena_ladder.c
++++ b/games/tbs/src/battle/battle/arena_ladder.c
+@@ -1,83 +1,24 @@
+ /// @file
+-/// Arena romhack: the team ladders. In a monster series, the enemies come from
+-/// the chosen tournament's ladder, a rung for each win, instead of from
+-/// level-matched formations. The tournament is the persistent byte
+-/// FLAG_ARENA_TOURNAMENT (module/arena.h).
++/// Arena romhack: the cups' teams. In a monster series, the enemies come from
++/// the chosen cup's rounds (arena_cups.c, generated from scripts/cupdata.py), a
++/// round for each win, instead of from level-matched formations. The cup is the
++/// persistent byte FLAG_ARENA_TOURNAMENT (module/arena.h).
+ // Part of battle.c.
+ 
+ #include "../battle_internal.h"
+ #include "arena_config.h"
+ #include "module/arena.h"
+ 
+-/// Arena romhack: one rung of a team ladder. In a monster series, win number n
+-/// (0-based) fights rung n; its enemies are levelled to targetLevel.
+-struct ArenaTeam {
+-  u8 targetLevel;
+-  struct Formation formation;
+-};
+-
+-// clang-format off
+-// Arena romhack: the team ladders. Members are rows of enemy_table.c (an enemy
+-// id less ENEMY_ID_FIRST); a small enemy takes one of the battle's six sprite
+-// slots and any other two, so each rung's counts stay within six. Counts are
+-// fixed (minimum equals maximum).
+-#define ARENA_TEAM(level, ...) {(level), {.layout = 2, __VA_ARGS__}}
+-
+-/// The Monster Gauntlet: ARENA_GAUNTLET_ROUNDS rungs of mixed teams.
+-static const struct ArenaTeam gArenaLadder[ARENA_GAUNTLET_ROUNDS] = {
+-    // Skeleton, Bats and a Slime
+-    ARENA_TEAM(10, .memberIds = {24, 5, 11}, .minimumCounts = {1, 2, 1}, .maximumCounts = {1, 2, 1}),
+-    // Rat Fighter, Drone Bees and a Mole
+-    ARENA_TEAM(13, .memberIds = {34, 36, 63}, .minimumCounts = {1, 2, 1}, .maximumCounts = {1, 2, 1}),
+-    // Brigand, Harpy and a Dirge
+-    ARENA_TEAM(16, .memberIds = {23, 57, 66}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
+-    // Mercury Djinni, Gnome Mage and a Golem
+-    ARENA_TEAM(19, .memberIds = {154, 46, 93}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
+-    // Orc Captain, Siren and a Mole Mage
+-    ARENA_TEAM(22, .memberIds = {76, 60, 65}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
+-    // The Colosso champions: Azart, Satrage and Navampa
+-    ARENA_TEAM(25, .memberIds = {124, 126, 128}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
+-    // Cannibal Ghoul, Ice Gargoyle and two Recluses
+-    ARENA_TEAM(28, .memberIds = {50, 89, 44}, .minimumCounts = {1, 1, 2}, .maximumCounts = {1, 1, 2}),
+-    // Lizard King, Wild Gryphon and a Jupiter Djinni
+-    ARENA_TEAM(31, .memberIds = {121, 91, 163}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
+-    // Thunder Lizard, Chimera Mage and a Skull Warrior
+-    ARENA_TEAM(34, .memberIds = {80, 103, 26}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
+-    // Three Djinn: Mars, Venus and Mercury
+-    ARENA_TEAM(37, .memberIds = {159, 152, 156}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
+-    // Poison Toad, Fenrir and an Earth Lizard
+-    ARENA_TEAM(41, .memberIds = {134, 98, 79}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
+-    // Menardi, Saturos and Cerebus
+-    ARENA_TEAM(45, .memberIds = {118, 116, 97}, .minimumCounts = {1, 1, 1}, .maximumCounts = {1, 1, 1}),
+-};
+-
+-/// The Boss Rush: ARENA_BOSS_RUSH_ROUNDS rungs of bosses, no healing between.
+-static const struct ArenaTeam gArenaBossRush[ARENA_BOSS_RUSH_ROUNDS] = {
+-    // Orc Lord and Lizard King
+-    ARENA_TEAM(14, .memberIds = {77, 121}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}),
+-    // Manticore and Chimera
+-    ARENA_TEAM(22, .memberIds = {81, 102}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}),
+-    // Tempest Lizard and Cerebus
+-    ARENA_TEAM(30, .memberIds = {138, 97}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}),
+-    // Saturos (Mercury Lighthouse) and Menardi
+-    ARENA_TEAM(36, .memberIds = {115, 118}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}),
+-    // Deadbeard and the Hydros Statue
+-    ARENA_TEAM(41, .memberIds = {141, 123}, .minimumCounts = {1, 1}, .maximumCounts = {1, 1}),
+-    // The Fusion Dragon
+-    ARENA_TEAM(45, .memberIds = {140}, .minimumCounts = {1}, .maximumCounts = {1}),
+-};
+-// clang-format on
+-
+ #if ARENA_LADDER
+ /// Arena romhack: the team a monster series fights next. Win number n of the
+ /// series (the Battle Arena's LINK_TALLY_MONSTER_STREAK, linkTallies[3]) fights
+-/// rung n of the chosen tournament's ladder; a series ends before it runs past
+-/// the last rung, but if one did it would fight the last again, a level stronger
+-/// for each win. outMargin is the levels each enemy gains to reach the rung's
+-/// level from the average of its members.
++/// round n of the chosen cup; a series ends before it runs past the last round,
++/// but if one did it would fight the last again, a level stronger for each win.
++/// outMargin is the levels each enemy gains to reach the round's level from the
++/// average of its members.
+ static const struct Formation *ArenaLadder_Select(s32 *outMargin) {
+   s32 streak = gMainRoutineWork.linkTallies[3];
+-  s32 tournament = GameFlag_GetByteFar(FLAG_ARENA_TOURNAMENT);
++  s32 cup = GameFlag_GetByteFar(FLAG_ARENA_TOURNAMENT);
+   s32 rounds;
+   s32 rung = streak;
+   s32 target;
+@@ -86,13 +27,12 @@ static const struct Formation *ArenaLadder_Select(s32 *outMargin) {
+   s32 i;
+   const struct ArenaTeam *team;
+ 
+-  if (tournament >= ARENA_TOURNAMENT_COUNT)
+-    tournament = ARENA_TOURNAMENT_GAUNTLET;
+-  rounds = ARENA_ROUNDS(tournament);
++  if (cup >= ARENA_CUP_COUNT)
++    cup = 0;
++  rounds = gArenaCupTeams[cup].count;
+   if (rung >= rounds)
+     rung = rounds - 1;
+-  team = tournament == ARENA_TOURNAMENT_BOSS_RUSH ? &gArenaBossRush[rung]
+-                                                  : &gArenaLadder[rung];
++  team = &gArenaCupTeams[cup].rounds[rung];
+   for (i = 0; i < 5; i++) {
+     struct EnemyDefinition *enemy;
+ 
+diff --git a/games/tbs/src/scene/arena_boot.c b/games/tbs/src/scene/arena_boot.c
+index 1bfa406210..b59191df9c 100644
+--- a/games/tbs/src/scene/arena_boot.c
++++ b/games/tbs/src/scene/arena_boot.c
+@@ -58,7 +58,7 @@ void ArenaBoot_NewGame(void) {
+   s32 slot;
+ 
+   // "New Game" skips the prologue and enters the Battle Arena with a
+-  // ready-made level 50 party and 1500 coins to train with.
++  // ready-made level ARENA_START_LEVEL party and 1500 coins; the level is earned from there.
+   gMainRoutineWork.coins = 1500;
+   Party_AddMember(GARET);
+   Party_AddMember(MIA);
+diff --git a/games/tbs/src/scene/arena_cup_info.inc b/games/tbs/src/scene/arena_cup_info.inc
+new file mode 100644
+index 0000000000..3d1a1fcdc9
+--- /dev/null
++++ b/games/tbs/src/scene/arena_cup_info.inc
+@@ -0,0 +1,87 @@
++/* Generated by scripts/gen-cups.py from scripts/cupdata.py. Do not edit. */
++// Included by arena_menu.c. Global const data: a scene overlay has no static data of its own.
++
++const struct ArenaCupReward gArenaCup0Rewards[] = {
++    {3, 0, 0, 0, 191, 0},
++    {4, 1, 1, 14, 0, 10798},
++    {5, 0, 2, 0, 91, 0},
++    {6, 0, 3, 0, 265, 0},
++    {7, 1, 4, 22, 0, 10799},
++};
++const struct ArenaCupReward gArenaCup1Rewards[] = {
++    {3, 0, 5, 0, 22, 0},
++    {5, 1, 6, 8, 0, 10803},
++    {6, 0, 7, 0, 76, 0},
++};
++const struct ArenaCupReward gArenaCup2Rewards[] = {
++    {3, 1, 8, 23, 0, 10807},
++    {3, 0, 9, 0, 8, 0},
++    {5, 1, 10, 2, 0, 10808},
++    {5, 0, 11, 0, 93, 0},
++};
++const struct ArenaCupReward gArenaCup3Rewards[] = {
++    {3, 0, 12, 0, 36, 0},
++    {4, 1, 13, 10, 0, 10812},
++};
++const struct ArenaCupReward gArenaCup4Rewards[] = {
++    {4, 1, 14, 26, 0, 10816},
++    {4, 0, 15, 0, 237, 0},
++    {5, 0, 16, 0, 132, 0},
++};
++const struct ArenaCupReward gArenaCup5Rewards[] = {
++    {3, 0, 17, 0, 170, 0},
++    {4, 0, 18, 0, 141, 0},
++    {5, 1, 19, 19, 0, 10820},
++    {6, 0, 20, 0, 95, 0},
++    {7, 1, 21, 13, 0, 10821},
++};
++const struct ArenaCupReward gArenaCup6Rewards[] = {
++    {3, 0, 22, 0, 113, 0},
++    {4, 1, 23, 27, 0, 10825},
++    {5, 0, 24, 0, 84, 0},
++};
++const struct ArenaCupReward gArenaCup8Rewards[] = {
++    {1, 0, 25, 0, 151, 0},
++    {2, 0, 26, 0, 267, 0},
++    {3, 0, 27, 0, 268, 0},
++    {4, 0, 28, 0, 24, 0},
++    {5, 0, 29, 0, 96, 0},
++    {6, 0, 30, 0, 98, 0},
++    {7, 0, 31, 0, 50, 0},
++    {8, 0, 32, 0, 83, 0},
++    {9, 0, 33, 0, 11, 0},
++    {10, 0, 34, 0, 38, 0},
++};
++
++const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT] = {
++    // Tret Cup
++    {8, 2, 0, 15, 5, {0}, gArenaCup0Rewards, 10795, 10796, 10797, 0},
++    // Mercury Cup
++    {8, 2, 1, 18, 3, {0}, gArenaCup1Rewards, 10800, 10801, 10802, 0},
++    // Mogall Cup
++    {7, 2, 2, 20, 4, {0}, gArenaCup2Rewards, 10804, 10805, 10806, 0},
++    // Altin Cup
++    {9, 2, 3, 25, 2, {0}, gArenaCup3Rewards, 10809, 10810, 10811, 0},
++    // Tolbi Cup
++    {8, 2, 4, 27, 3, {0}, gArenaCup4Rewards, 10813, 10814, 10815, 0},
++    // Lunpa Cup
++    {10, 2, 5, 35, 5, {0}, gArenaCup5Rewards, 10817, 10818, 10819, 0},
++    // Lighthouse Cup
++    {10, 2, 6, 50, 3, {0}, gArenaCup6Rewards, 10822, 10823, 10824, 0},
++    // Boss Rush
++    {6, 1, 7, 0, 0, {0}, 0, 10826, 10827, 10828, 0},
++    // Crossbone Isle
++    {10, 3, 7, 0, 10, {0}, gArenaCup8Rewards, 10829, 10830, 10831, 0},
++};
++
++const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3] = {
++    {1, 2, 3},
++    {4, 5, 6},
++    {7, 8, 9},
++    {10, 11, 12},
++    {19, 20, 21},
++    {22, 23, 24},
++    {26, 27, 28},
++    {26, 27, 31},
++};
++const u8 gArenaCrossboneRows[3] = {32, 33, 34};
+diff --git a/games/tbs/src/scene/arena_menu.c b/games/tbs/src/scene/arena_menu.c
+index 1306131451..cc997dbcb7 100644
+--- a/games/tbs/src/scene/arena_menu.c
++++ b/games/tbs/src/scene/arena_menu.c
+@@ -54,34 +54,131 @@
+ #include "heap.h"
+ 
+ // Arena romhack: the arena's own menus. The attendant asks Solo or Multiplayer
+-// and, for Solo, which tournament. The party manager (the man at the counter's
+-// right) trains characters, sells Djinn and Psynergy, and opens the item shops.
+-// Choices are a message window across the top and a row of command icons across
+-// the bottom (ArenaMenu_IconChoose), as in the shops; a character is chosen in
+-// the shops' strip of walking figures (ItemPicker_ChooseMember). All the text
+-// is messages added to text/en.po (MsgArena*), so it draws in the game's own
+-// font. The icon labels are consecutive messages, as IconMenu_Center wants.
+-// The list screens draw as tiles and blank their window with
+-// Window_ClearInteriorTiles before each redraw.
++// and, for Solo, which cup. The party manager (the man at the counter's right)
++// trains characters, sells Djinn, and opens the item shops. Choices are a
++// message window across the top and a row of command icons across the bottom
++// (ArenaMenu_IconChoose), as in the shops; a character is chosen in the shops'
++// strip of walking figures (ItemPicker_ChooseMember). All the text is messages
++// added to text/en.po (MsgArena*), so it draws in the game's own font. The icon
++// labels are consecutive messages, as IconMenu_Center wants. The list screens
++// draw as tiles and blank their window with Window_ClearInteriorTiles before
++// each redraw. The cups, their rounds and rewards are generated from
++// scripts/cupdata.py (arena_cup_info.inc, module/arena_cups.h).
++#include "arena_cup_info.inc"
++
+ const u8 gArenaMenu_AttendantIcons[] = {COMMAND_ICON_FIGHT, COMMAND_ICON_CABLE};
+-/// One icon for each tournament, in the order of ARENA_TOURNAMENT_*.
+-const u8 gArenaMenu_TournamentIcons[] = {COMMAND_ICON_BATTLE,
+-                                         COMMAND_ICON_SUMMON};
++/// Next cup, Replay, Side cups: the row shows two of these, in this order.
++const u8 gArenaMenu_CupModeIcons[] = {COMMAND_ICON_BATTLE, COMMAND_ICON_ITEM,
++                                      COMMAND_ICON_SUMMON};
++/// Early cups and Later cups, when more than four cups can be replayed.
++const u8 gArenaMenu_CupGroupIcons[] = {COMMAND_ICON_ATTACK, COMMAND_ICON_DEFEND};
++/// One icon for each cup, in the order of gArenaCupInfo.
++const u8 gArenaMenu_CupIcons[ARENA_CUP_COUNT] = {
++    COMMAND_ICON_FIGHT,  COMMAND_ICON_BATTLE, COMMAND_ICON_SUMMON,
++    COMMAND_ICON_ATTACK, COMMAND_ICON_DEFEND, COMMAND_ICON_DJINN,
++    COMMAND_ICON_STATUS, COMMAND_ICON_ITEM,   COMMAND_ICON_PSYNERGY};
+ const u8 gArenaMenu_ManagerIcons[] = {COMMAND_ICON_STATUS, COMMAND_ICON_DJINN,
+-                                      COMMAND_ICON_PSYNERGY, COMMAND_ICON_ITEM};
++                                      COMMAND_ICON_ITEM};
+ const u8 gArenaMenu_ShopIcons[] = {COMMAND_ICON_ATTACK, COMMAND_ICON_DEFEND,
+                                    COMMAND_ICON_ITEM};
+ 
+-/// The item shops the manager opens: Xian's weapon, armor and item shops, the
+-/// last rows of the shop stock table.
+-#define TRAINING_SHOP_FIRST_ROW 16
++/// How many main cups are cleared, 0 to ARENA_MAIN_CUPS.
++s32 ArenaCup_Progress(void) {
++  s32 progress = FieldGameFlag_GetByte(FLAG_ARENA_PROGRESS);
++
++  return progress > ARENA_MAIN_CUPS ? ARENA_MAIN_CUPS : progress;
++}
++
++/// The cup of the running or last series, from its persistent byte; anything
++/// out of range (a file from before cups) is the first.
++s32 ArenaCup_Current(void) {
++  s32 cup = FieldGameFlag_GetByte(FLAG_ARENA_TOURNAMENT);
++
++  return cup < ARENA_CUP_COUNT ? cup : 0;
++}
++
++/// Whether the current cup heals the party after each win.
++s32 ArenaCup_Heals(void) {
++  return (gArenaCupInfo[ArenaCup_Current()].flags & ARENA_CUP_HEALS) != 0;
++}
++
++/// The item shop rows the party manager opens for weapons (0), armor (1) and
++/// supplies (2): the town of the last main cup cleared, or Lalivero's once
++/// Crossbone Isle is.
++static s32 ArenaMenu_ShopRow(s32 kind) {
++  if (FieldGameFlag_GetByte(FLAG_ARENA_SIDE_CLEARED) &
++      (1 << (ARENA_CUP_CROSSBONE - ARENA_MAIN_CUPS)))
++    return gArenaCrossboneRows[kind];
++  return gArenaShopRows[ArenaCup_Progress()][kind];
++}
++
++/// A row of `count` cups from `first` on (at most four, consecutive), by name.
++/// The cup chosen, or -1 for B.
++static s32 ArenaMenu_ChooseCupRow(s32 prompt, s32 first, s32 count) {
++  s32 choice = ArenaMenu_IconChoose(prompt, gArenaMenu_CupIcons + first,
++                                    MsgArenaCupName0 + first, count);
++
++  return choice < 0 ? -1 : first + choice;
++}
++
++/// Replay: the cups cleared, in one row if four or fewer, else Early cups
++/// (the first four) or Later cups (the rest) and then a row.
++static s32 ArenaMenu_ChooseReplay(s32 cleared) {
++  s32 group;
++  s32 cup;
+ 
+-/// The attendant's menu: Solo or Multiplayer and, for Solo, the tournament.
+-/// Returns 1 for a solo series, 2 for a linked battle and 0 to leave. The
+-/// tournament chosen is stored in FLAG_ARENA_TOURNAMENT, which the ladder, the
+-/// round count and the healing read; B in the tournament menu goes back to Solo
+-/// or Multiplayer. The labels are the consecutive messages
+-/// MsgArenaTournamentGauntlet and MsgArenaTournamentBossRush.
++  if (cleared <= 4)
++    return ArenaMenu_ChooseCupRow(MsgArenaCupReplayPrompt, 0, cleared);
++  for (;;) {
++    group = ArenaMenu_IconChoose(MsgArenaCupReplayPrompt,
++                                 gArenaMenu_CupGroupIcons, MsgArenaCupGroupEarly,
++                                 2);
++    if (group < 0)
++      return -1;
++    cup = group == 0 ? ArenaMenu_ChooseCupRow(MsgArenaCupReplayPrompt, 0, 4)
++                     : ArenaMenu_ChooseCupRow(MsgArenaCupReplayPrompt, 4,
++                                              cleared - 4);
++    if (cup >= 0)
++      return cup;
++  }
++}
++
++/// Which cup: the next one, one already cleared, or a side cup (open once the
++/// main cups are cleared). Only open cups are offered. With nothing cleared the
++/// first cup is the only choice. The cup, or -1 for B.
++static s32 ArenaMenu_ChooseCup(void) {
++  s32 progress = ArenaCup_Progress();
++  s32 first;
++  s32 choice;
++  s32 cup;
++
++  if (progress == 0)
++    return 0;
++  for (;;) {
++    // Next cup and Replay while there is a next; Replay and Side cups after.
++    first = progress < ARENA_MAIN_CUPS ? 0 : 1;
++    choice = ArenaMenu_IconChoose(MsgArenaTournamentPrompt,
++                                  gArenaMenu_CupModeIcons + first,
++                                  MsgArenaCupNext + first, 2);
++    if (choice < 0)
++      return -1;
++    choice += first;
++    if (choice == 0)
++      return progress;
++    if (choice == 1)
++      cup = ArenaMenu_ChooseReplay(progress);
++    else
++      cup = ArenaMenu_ChooseCupRow(MsgArenaCupSidePrompt, ARENA_MAIN_CUPS,
++                                   ARENA_CUP_COUNT - ARENA_MAIN_CUPS);
++    if (cup >= 0)
++      return cup;
++  }
++}
++
++/// The attendant's menu: Solo or Multiplayer and, for Solo, the cup. Returns 1
++/// for a solo series, 2 for a linked battle and 0 to leave. The cup chosen is
++/// stored in FLAG_ARENA_TOURNAMENT, which the ladder, the round count and the
++/// healing read; B in the cup menu goes back to Solo or Multiplayer.
+ s32 ArenaMenu_AttendantMode(void) {
+   s32 choice;
+ 
+@@ -92,10 +189,7 @@ s32 ArenaMenu_AttendantMode(void) {
+       return 0;
+     if (choice == 1)
+       return 2;
+-    choice = ArenaMenu_IconChoose(MsgArenaTournamentPrompt,
+-                                  gArenaMenu_TournamentIcons,
+-                                  MsgArenaTournamentGauntlet,
+-                                  ARENA_TOURNAMENT_COUNT);
++    choice = ArenaMenu_ChooseCup();
+     if (choice >= 0) {
+       FieldGameFlag_SetByte(FLAG_ARENA_TOURNAMENT, choice);
+       return 1;
+@@ -104,20 +198,20 @@ s32 ArenaMenu_AttendantMode(void) {
+ }
+ 
+ /// The attendant reports the coins a battle just won, and the party is healed
+-/// for the next one, unless the tournament does not heal (ARENA_HEALS).
++/// for the next one, unless the cup does not heal.
+ void ArenaMenu_ShowWin(s32 actorId, s32 reward) {
+   MessageArgument_ClearAll();
+   MessageArgument_Push(reward, MESSAGE_ARGUMENT_NUMBER);
+   Event_SetMessageId(MsgArenaVictory);
+   FieldMessage_ShowAtActor(actorId, 0);
+-  if (ARENA_HEALS(FieldGameFlag_GetByte(FLAG_ARENA_TOURNAMENT)))
++  if (ArenaCup_Heals())
+     Party_RestoreHpPp(1);
+ }
+ 
+ /// Talking to ACTOR_LINKED_WINS_TELLER, now the party manager: characters,
+-/// Djinn, Psynergy and the item shops. B leaves; the party is healed on the
+-/// way out, since stats and gear may have changed, except in a series of a
+-/// tournament that does not heal (or the heal would undo it).
++/// Djinn and the item shops. B leaves; the party is healed on the way out,
++/// since stats and gear may have changed, except in a series of a cup that
++/// does not heal (or the heal would undo it).
+ s32 BattleArena_PartyManager(s32 actorId) {
+   s32 choice;
+   s32 member;
+@@ -127,26 +221,24 @@ s32 BattleArena_PartyManager(s32 actorId) {
+   for (;;) {
+     choice = ArenaMenu_IconChoose(MsgArenaManagerPrompt,
+                                   gArenaMenu_ManagerIcons, MsgArenaCharacters,
+-                                  4);
++                                  3);
+     if (choice < 0)
+       break;
+-    if (choice == 3) {
++    if (choice == 2) {
+       choice = ArenaMenu_IconChoose(MsgArenaShopPrompt, gArenaMenu_ShopIcons,
+                                     MsgArenaWeapons, 3);
+       if (choice >= 0)
+-        Shop_Run(TRAINING_SHOP_FIRST_ROW + choice, actorId);
++        Shop_Run(ArenaMenu_ShopRow(choice), actorId);
+       continue;
+     }
+-    // The strip shows the character's status (3), Djinn (1) or Psynergy (2)
+-    // to match; Characters opens the stat counter (2), the others the Djinn (1)
+-    // and Psynergy (0) counters.
+-    member = ItemPicker_ChooseMember(choice == 0 ? 3 : choice);
++    // The strip shows the character's status (3) or Djinn (1) to match;
++    // Characters opens the stat counter (2), Djinn the Djinn counter (1).
++    member = ItemPicker_ChooseMember(choice == 0 ? 3 : 1);
+     if (member < 0)
+       continue;
+-    ArenaShop_Run(choice == 0 ? 2 : (choice == 1 ? 1 : 0), member);
++    ArenaShop_Run(choice == 0 ? 2 : 1, member);
+   }
+-  if (!GameFlag_Get(FLAG_MONSTER_BATTLE) ||
+-      ARENA_HEALS(FieldGameFlag_GetByte(FLAG_ARENA_TOURNAMENT)))
++  if (!GameFlag_Get(FLAG_MONSTER_BATTLE) || ArenaCup_Heals())
+     Party_RestoreHpPp(1);
+   Event_End();
+   return 0;
+diff --git a/games/tbs/src/scene/arena_series.c b/games/tbs/src/scene/arena_series.c
+index 322e12d1e5..ea4a227442 100644
+--- a/games/tbs/src/scene/arena_series.c
++++ b/games/tbs/src/scene/arena_series.c
+@@ -1,35 +1,14 @@
+ /// @file
+ /// Arena romhack: a monster series you can leave and come back to. A series is
+-/// one tournament (FLAG_ARENA_TOURNAMENT) of ARENA_ROUNDS(tournament) rounds.
++/// one cup (FLAG_ARENA_TOURNAMENT, an index of gArenaCupInfo) of its rounds.
+ /// After a win the series stays running and the player steps back into the
+ /// circle when ready; talking to the attendant while it runs offers to give up;
+ /// clearing the last round ends it as a win; a loss ends it (stock). Giving up and
+-/// clearing are not losses.
++/// clearing are not losses. The first time a round with a reward is won the reward
++/// is given; the first clear of a main cup plays the unlock scene and raises the
++/// party's level.
+ // Part of battle_arena.c: it uses that file's statics.
+ 
+-#include "static_assert.h"
+-
+-// The messages say their tournament's round count ("of 12", "of 6"): a field
+-// message reads every number blank from the first number pushed, so the count is
+-// in the text. Each tournament has three consecutive messages, in the order the
+-// ARENA_MSG kinds below name, and tournament t's are 3 * t after the first's.
+-STATIC_ASSERT(ARENA_GAUNTLET_ROUNDS == 12);
+-STATIC_ASSERT(ARENA_BOSS_RUSH_ROUNDS == 6);
+-#define ARENA_MSG_GIVE_UP 0
+-#define ARENA_MSG_NEXT_ROUND 1
+-#define ARENA_MSG_CLEARED 2
+-#define ARENA_MSG(kind, tournament)                                            \
+-  (MsgArenaGiveUpPrompt + 3 * (tournament) + (kind))
+-
+-/// The tournament of the running series, from its persistent byte; anything out
+-/// of range (a file from before tournaments) is the Gauntlet.
+-static s32 ArenaSeries_Tournament(void) {
+-  s32 tournament = FieldGameFlag_GetByte(FLAG_ARENA_TOURNAMENT);
+-
+-  return tournament < ARENA_TOURNAMENT_COUNT ? tournament
+-                                             : ARENA_TOURNAMENT_GAUNTLET;
+-}
+-
+ /// The series is over. As the stock "No" after a win ends it: the flag and the
+ /// win count are cleared, the attendant reports the run and the best streak is
+ /// kept. The record is not written into a file
+@@ -60,14 +39,22 @@ static void ArenaSeries_End(void) {
+   BattleArena_WriteSlotValue(LOBBY_SLOT_SIGNATURE);
+ }
+ 
+-/// Talking to the attendant while a series runs: "Round n of m. Do you want to
+-/// give up?" Yes ends the series (not a loss); No lets it carry on.
++/// "Enter the <cup>?" after the attendant's menu chose one. Yes starts it; No
++/// leaves the attendant.
++static s32 ArenaSeries_Confirm(void) {
++  Event_SetMessageId(gArenaCupInfo[ArenaCup_Current()].confirmMsg);
++  FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++  return Event_AskYesNoWithActorAnimation(0, 0) == YES;
++}
++
++/// Talking to the attendant while a series runs: "Round n. Do you want to give
++/// up?" Yes ends the series (not a loss); No lets it carry on.
+ static void ArenaSeries_GiveUp(void) {
+   MessageArgument_ClearAll();
+   MessageArgument_Push(
+       gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK] + 1,
+       MESSAGE_ARGUMENT_NUMBER);
+-  Event_SetMessageId(ARENA_MSG(ARENA_MSG_GIVE_UP, ArenaSeries_Tournament()));
++  Event_SetMessageId(MsgArenaGiveUpPrompt);
+   FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+   if (Event_AskYesNoWithActorAnimation(0, 0) == YES) {
+     ArenaSeries_End();
+@@ -77,22 +64,115 @@ static void ArenaSeries_GiveUp(void) {
+   }
+ }
+ 
++/// A Djinni (element * 7 + n, the shop's numbering) joins the first party
++/// member with room for it. 1 if one had, 0 if none did.
++static s32 ArenaSeries_GiveDjinni(s32 entry) {
++  s32 element = entry / 7;
++  s32 index = entry % 7;
++  s32 count = Party_CountMembers();
++  s32 i;
++
++  for (i = 0; i < count; i++) {
++    s32 unitId = gMainRoutineWork.party[i];
++
++    if (Djinn_Give(unitId, element, index) >= 0) {
++      Djinn_Set(unitId, element, index);
++      Unit_Calculate(unitId);
++      return 1;
++    }
++  }
++  return 0;
++}
++
++/// The rewards of the round just won (rounds won so far = `won`), each given
++/// once: the flag bit of the reward says it was.
++static void ArenaSeries_GiveRewards(const struct ArenaCupInfo *info, s32 won) {
++  s32 i;
++
++  for (i = 0; i < info->rewardCount; i++) {
++    const struct ArenaCupReward *reward = &info->rewards[i];
++
++    if (reward->afterRound != won ||
++        GameFlag_Get(ARENA_REWARD_FLAG_FIRST + reward->flag))
++      continue;
++    if (reward->kind == ARENA_REWARD_ITEM) {
++      GameFlag_Set(ARENA_REWARD_FLAG_FIRST + reward->flag);
++      Event_SetMessageId(MsgArenaGearReward);
++      FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++      PartyInventory_GiveItem(reward->item, 0);
++    } else if (ArenaSeries_GiveDjinni(reward->value)) {
++      GameFlag_Set(ARENA_REWARD_FLAG_FIRST + reward->flag);
++      Event_SetMessageId(reward->message);
++      FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++    } else {
++      Event_SetMessageId(MsgArenaDjinnNoRoom);
++      FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++    }
++  }
++}
++
++/// The party is raised to `level` (never lowered: Unit_LevelUpTo only gains) and
++/// healed.
++static void ArenaSeries_RaiseParty(s32 level) {
++  Unit_LevelUpTo(ISAAC, level);
++  Unit_LevelUpTo(GARET, level);
++  Unit_LevelUpTo(MIA, level);
++  Unit_LevelUpTo(IVAN, level);
++  Unit_Calculate(ISAAC);
++  Unit_Calculate(GARET);
++  Unit_Calculate(MIA);
++  Unit_Calculate(IVAN);
++  Party_RestoreHpPp(1);
++}
++
++/// A cup cleared. The first clear of a main cup (the progress is its index)
++/// plays the unlock scene and advances the progress and the level; the first
++/// clear of a side cup plays its scene and sets its bit; any other clear only
++/// congratulates.
++static void ArenaSeries_Cleared(s32 cup, const struct ArenaCupInfo *info) {
++  s32 first = 0;
++
++  if (cup < ARENA_MAIN_CUPS) {
++    first = ArenaCup_Progress() == cup;
++  } else {
++    first = !(FieldGameFlag_GetByte(FLAG_ARENA_SIDE_CLEARED) &
++              (1 << (cup - ARENA_MAIN_CUPS)));
++  }
++  if (!first) {
++    Event_SetMessageId(info->clearedMsg);
++    FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++    return;
++  }
++  if (cup < ARENA_MAIN_CUPS)
++    FieldGameFlag_SetByte(FLAG_ARENA_PROGRESS, cup + 1);
++  else
++    FieldGameFlag_SetByte(FLAG_ARENA_SIDE_CLEARED,
++                          FieldGameFlag_GetByte(FLAG_ARENA_SIDE_CLEARED) |
++                              (1 << (cup - ARENA_MAIN_CUPS)));
++  Event_SetMessageId(info->firstMsg);
++  FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++  if (info->raiseTo != 0)
++    ArenaSeries_RaiseParty(info->raiseTo);
++}
++
+ /// After a monster battle is won (the win and its coins are already counted):
+-/// say the round is won and leave the series running, or, after the last round,
+-/// say the tournament is cleared and end it as a win.
++/// give the round's reward, then say the round is won and leave the series
++/// running, or, after the last round, clear the cup and end the series as a win.
+ static void ArenaSeries_AfterWin(void) {
+   s32 won = gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK];
+-  s32 tournament = ArenaSeries_Tournament();
++  s32 cup = ArenaCup_Current();
++  const struct ArenaCupInfo *info = &gArenaCupInfo[cup];
+ 
+   Actor_SetAngleToward(ACTOR_ATTENDANT, gMainRoutineWork.leaderActorId, 0);
+-  if (won >= ARENA_ROUNDS(tournament)) {
+-    Event_SetMessageId(ARENA_MSG(ARENA_MSG_CLEARED, tournament));
+-    FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++  ArenaSeries_GiveRewards(info, won);
++  if (won >= info->roundCount) {
++    ArenaSeries_Cleared(cup, info);
+     ArenaSeries_End();
+     return;
+   }
+   MessageArgument_ClearAll();
+   MessageArgument_Push(won, MESSAGE_ARGUMENT_NUMBER);
+-  Event_SetMessageId(ARENA_MSG(ARENA_MSG_NEXT_ROUND, tournament));
++  Event_SetMessageId(ArenaCup_Heals() ? MsgArenaNextRound
++                                      : MsgArenaNextRoundBossRush);
+   FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+ }
+diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
+index 0596795399..8e48f2375b 100644
+--- a/games/tbs/src/scene/battle_arena.c
++++ b/games/tbs/src/scene/battle_arena.c
+@@ -1174,6 +1174,8 @@ static s32 BattleArena_ChooseBattleMode(void) {
+   mode = ArenaMenu_AttendantMode();
+   if (mode == 0)
+     goto leave;
++  if (mode == 1 && !ArenaSeries_Confirm())
++    goto leave;
+ #endif
+   // Look for the partner's signature twice, a frame apart.
+   if (BattleArena_PeerSlotMatches(LOBBY_SLOT_SIGNATURE) == 0) {
+diff --git a/games/tbs/src/scene/import/battle_arena.s b/games/tbs/src/scene/import/battle_arena.s
+index 862b1f18da..bde38f87ae 100644
+--- a/games/tbs/src/scene/import/battle_arena.s
++++ b/games/tbs/src/scene/import/battle_arena.s
+@@ -30,6 +30,8 @@
+ 	.set import.Text_DrawString, 1
+ 	.set import.Text_DrawMessage, 1
+ 	.set import.Unit_Calculate, 1
++	.set import.Unit_LevelUpTo, 1
++	.set import.PartyInventory_GiveItem, 1
+ 	.set import.Unit_LearnPsynergy, 1
+ 	.set import.Shop_Run, 1
+ 	.set import.Djinn_Give, 1
+diff --git a/games/tbs/src/shop/shop/arena_djinn_gate.inc b/games/tbs/src/shop/shop/arena_djinn_gate.inc
+new file mode 100644
+index 0000000000..80997fd3ab
+--- /dev/null
++++ b/games/tbs/src/shop/shop/arena_djinn_gate.inc
+@@ -0,0 +1,9 @@
++/* Generated by scripts/gen-cups.py from scripts/cupdata.py. Do not edit. */
++// Included by arena_shop.c. When the party manager sells each Djinni (entry = element * 7 + n):
++// 0 from the start, 1 to 7 once that many cups are cleared, 0x80 + n once side cup n is cleared, 255 never.
++static const u8 sArenaDjinnGate[28] = {
++    0, 1, 255, 7, 4, 6, 129, // Venus
++    0, 255, 5, 255, 7, 6, 255, // Mercury
++    255, 0, 7, 6, 5, 255, 6, // Mars
++    0, 255, 255, 4, 4, 255, 255, // Jupiter
++};
+diff --git a/games/tbs/src/shop/shop/arena_shop.c b/games/tbs/src/shop/shop/arena_shop.c
+index bc2f3b23ec..14c054f3c2 100644
+--- a/games/tbs/src/shop/shop/arena_shop.c
++++ b/games/tbs/src/shop/shop/arena_shop.c
+@@ -294,14 +294,12 @@ s32 ItemPicker_ChooseMember(s32 mode) {
+ /// price in a window at the left, the coins at the right and the item's
+ /// description along the bottom.
+ enum ArenaShopKind {
+-  ARENA_SHOP_PSYNERGY = 0,
+   ARENA_SHOP_DJINN = 1,
+   ARENA_SHOP_STATS = 2,
+ };
+ 
+ #define ARENA_SHOP_DJINN_COUNT 28
+ #define ARENA_SHOP_DJINN_PRICE 500
+-#define ARENA_SHOP_PSYNERGY_COUNT 32
+ 
+ /// The stats the stat counter sells, in stock order, which is the order of the
+ /// MsgArenaStatUp* and MsgArenaStatInfo* messages.
+@@ -406,41 +404,37 @@ static void ArenaStat_Add(struct Unit *unit, s32 stat, s32 amount) {
+   }
+ }
+ 
+-/// A Psynergy for sale: its ability id. The price comes from the ability's PP
+-/// cost in the ability table (the Reloaded data changed most of them), not from a
+-/// copy kept here.
+-struct ArenaShopPsynergy {
+-  u16 id;
+-};
+-
+-static const struct ArenaShopPsynergy sArenaShopPsynergy[] = {
+-    // Venus
+-    {3}, {4}, {8}, {12}, {15}, {90}, {91}, {101},
+-    // Mercury
+-    {24}, {26}, {27}, {33}, {35}, {93}, {94}, {96}, {128},
+-    // Mars
+-    {45}, {49}, {50}, {52}, {106}, {107}, {182},
+-    // Jupiter
+-    {66}, {68}, {71}, {76}, {79}, {120}, {125}, {189},
+-};
+-
+-/// A stock entry is a Psynergy's index in sArenaShopPsynergy, or a Djinni's
+-/// number: its element times seven plus its place among that element's.
++/// A stock entry is a stat's number or a Djinni's: its element times seven plus
++/// its place among that element's. (The Psynergy counter is retired: after the
++/// Reloaded changes no Psynergy is limited to a shop.)
+ static s32 ArenaShop_Price(s32 kind, s32 unitId, s32 entry) {
+   if (kind == ARENA_SHOP_STATS)
+     return ArenaStat_Cost(Unit_GetFar(unitId), entry);
+-  if (kind == ARENA_SHOP_DJINN)
+-    return ARENA_SHOP_DJINN_PRICE;
+-  return 150 + Ability_Get(sArenaShopPsynergy[entry].id)->ppCost * 50;
++  return ARENA_SHOP_DJINN_PRICE;
++}
++
++#include "arena_djinn_gate.inc"
++
++/// Whether the party manager sells the Djinni now: from the start, once enough
++/// main cups are cleared, or once a side cup is (sArenaDjinnGate, generated from
++/// scripts/cupdata.py). The ones won in a cup's rounds are never sold.
++static s32 ArenaShop_DjinnOnSale(s32 entry) {
++  s32 gate = sArenaDjinnGate[entry];
++
++  if (gate == 0)
++    return 1;
++  if (gate == 255)
++    return 0;
++  if (gate >= 0x80)
++    return (GameFlag_GetByteFar(FLAG_ARENA_SIDE_CLEARED) >> (gate - 0x80)) & 1;
++  return GameFlag_GetByteFar(FLAG_ARENA_PROGRESS) >= gate;
+ }
+ 
+ static s32 ArenaShop_NameMessage(s32 kind, s32 entry) {
+   if (kind == ARENA_SHOP_STATS)
+     return MsgArenaStatUpHp + entry;
+-  if (kind == ARENA_SHOP_DJINN)
+-    return MsgDjinnName + (entry / ARENA_DJINN_PER_ELEMENT) * DJINN_PER_ELEMENT +
+-           entry % ARENA_DJINN_PER_ELEMENT;
+-  return MsgAbilityName + sArenaShopPsynergy[entry].id;
++  return MsgDjinnName + (entry / ARENA_DJINN_PER_ELEMENT) * DJINN_PER_ELEMENT +
++         entry % ARENA_DJINN_PER_ELEMENT;
+ }
+ 
+ /// The message that explains an entry. A stat's says how much a purchase adds
+@@ -454,11 +448,9 @@ static s32 ArenaShop_DescriptionMessage(s32 kind, s32 unitId, s32 entry) {
+                             MESSAGE_ARGUMENT_NUMBER);
+     return MsgArenaStatInfoHp + entry;
+   }
+-  if (kind == ARENA_SHOP_DJINN)
+-    return MsgAbilityDescription + ABILITY_DJINNI_FIRST +
+-           (entry / ARENA_DJINN_PER_ELEMENT) * DJINN_PER_ELEMENT +
+-           entry % ARENA_DJINN_PER_ELEMENT;
+-  return MsgAbilityDescription + sArenaShopPsynergy[entry].id;
++  return MsgAbilityDescription + ABILITY_DJINNI_FIRST +
++         (entry / ARENA_DJINN_PER_ELEMENT) * DJINN_PER_ELEMENT +
++         entry % ARENA_DJINN_PER_ELEMENT;
+ }
+ 
+ /// Whether the character has the Psynergy, or anyone in the party has the
+@@ -480,11 +472,6 @@ static s32 ArenaShop_Owned(s32 kind, s32 unitId, s32 entry) {
+     }
+     return 0;
+   }
+-  for (i = 0; i < 32; i++) {
+-    if ((Unit_GetFar(unitId)->psynergy[i].encodedAction &
+-         PSYNERGY_ABILITY_MASK) == sArenaShopPsynergy[entry].id)
+-      return 1;
+-  }
+   return 0;
+ }
+ 
+@@ -506,8 +493,6 @@ static s32 ArenaShop_Buy(s32 kind, s32 unitId, s32 entry) {
+     if (Djinn_GiveFar(unitId, element, index) < 0)
+       return MsgArenaNoDjinnRoom;
+     Djinn_SetFar(unitId, element, index);
+-  } else if (Unit_LearnPsynergyFar(unitId, sArenaShopPsynergy[entry].id) < 0) {
+-    return MsgArenaNoPsynergyRoom;
+   }
+   gMainRoutineWork.coins -= price;
+   Unit_CalculateFar(unitId);
+@@ -523,8 +508,7 @@ static void ArenaShop_DrawPrice(struct Window *window, s32 kind, s32 unitId,
+   if (ArenaShop_Owned(kind, unitId, entry)) {
+     Text_DrawMessageAsTilesFar(kind == ARENA_SHOP_DJINN
+                                    ? MsgArenaOwned
+-                                   : kind == ARENA_SHOP_STATS ? MsgArenaMax
+-                                                              : MsgArenaKnown,
++                                   : MsgArenaMax,
+                                window, SHOP_ITEM_NOTE_X, 8);
+   } else {
+     Text_DrawMessageAsTilesFar(MsgPrice, window, SHOP_ITEM_NOTE_X, 8);
+@@ -573,13 +557,8 @@ static void ArenaShop_DrawStock(struct Window *window, s32 kind, s32 unitId,
+                                       entry / ARENA_DJINN_PER_ELEMENT,
+                                   slot * 4, 0, 0);
+     } else {
+-      if (kind == ARENA_SHOP_STATS)
+-        icon = WindowSprite_CreateLoadedFar(sArenaStatItems[entry], 1, window,
+-                                            slot * 32, 0);
+-      else
+-        icon = WindowSprite_CreateFromResourceFar(
+-            ICON_KIND_ABILITY, sArenaShopPsynergy[entry].id, window, slot * 32,
+-            0);
++      icon = WindowSprite_CreateLoadedFar(sArenaStatItems[entry], 1, window,
++                                          slot * 32, 0);
+       if (icon != 0) {
+         icon->sentinel = 252;
+         if (first + slot == selected) {
+@@ -596,8 +575,8 @@ static void ArenaShop_DrawStock(struct Window *window, s32 kind, s32 unitId,
+   }
+ }
+ 
+-/// Runs a counter for one character: `kind` is ARENA_SHOP_PSYNERGY or
+-/// ARENA_SHOP_DJINN and `unitId` who is buying. The D-pad moves (Left and
++/// Runs a counter for one character: `kind` is ARENA_SHOP_DJINN or
++/// ARENA_SHOP_STATS and `unitId` who is buying. The D-pad moves (Left and
+ /// Right by one, Up and Down by a page), A buys, B leaves. Called from the
+ /// Battle Arena overlay through SHOP.S. Returns 0.
+ s32 ArenaShop_Run(s32 kind, s32 unitId) {
+@@ -619,12 +598,19 @@ s32 ArenaShop_Run(s32 kind, s32 unitId) {
+     figures[i] = 0;
+   Shop_InitializeWork();
+   shop = gMenuWork;
+-  count = kind == ARENA_SHOP_DJINN
+-              ? ARENA_SHOP_DJINN_COUNT
+-              : kind == ARENA_SHOP_STATS ? ARENA_STAT_COUNT
+-                                         : ARENA_SHOP_PSYNERGY_COUNT;
+-  for (i = 0; i < count; i++)
+-    shop->stockItemIds[i] = i;
++  if (kind == ARENA_SHOP_DJINN) {
++    // Only the Djinn on sale (cleared cups open them); the stock lists their
++    // numbers, in order.
++    count = 0;
++    for (i = 0; i < ARENA_SHOP_DJINN_COUNT; i++) {
++      if (ArenaShop_DjinnOnSale(i))
++        shop->stockItemIds[count++] = i;
++    }
++  } else {
++    count = ARENA_STAT_COUNT;
++    for (i = 0; i < count; i++)
++      shop->stockItemIds[i] = i;
++  }
+   shop->stockCount = count;
+   // The hand lives in a window off the left edge, as when a shop has no
+   // portrait (Shop_Run).
+@@ -666,7 +652,8 @@ s32 ArenaShop_Run(s32 kind, s32 unitId) {
+           figures[i] = 0;
+           if (first + i < count) {
+             figures[i] = Sprite_CreateFar(
+-                VENUS_DJINNI + (first + i) / ARENA_DJINN_PER_ELEMENT);
++                VENUS_DJINNI +
++                shop->stockItemIds[first + i] / ARENA_DJINN_PER_ELEMENT);
+             if (figures[i] != 0)
+               Sprite_StartAnimationFar(figures[i], 2);
+           }
+@@ -679,8 +666,10 @@ s32 ArenaShop_Run(s32 kind, s32 unitId) {
+       Shop_DrawMessage(
+           messageWindow,
+           notice != 0 ? notice
+-                      : ArenaShop_DescriptionMessage(kind, unitId, selected));
+-      ArenaShop_DrawPrice(priceWindow, kind, unitId, selected);
++                      : ArenaShop_DescriptionMessage(
++                            kind, unitId, shop->stockItemIds[selected]));
++      ArenaShop_DrawPrice(priceWindow, kind, unitId,
++                          shop->stockItemIds[selected]);
+     }
+     // A figure stands over its icon's place in the row: the row's window
+     // starts at screen (8, 104), each entry 32 pixels on, and the one under the
+@@ -694,7 +683,7 @@ s32 ArenaShop_Run(s32 kind, s32 unitId) {
+     }
+     if ((gKeysPressed & KEY_A) != 0) {
+       Sound_PlayFar(SE_MENU_CONFIRM);
+-      notice = ArenaShop_Buy(kind, unitId, selected);
++      notice = ArenaShop_Buy(kind, unitId, shop->stockItemIds[selected]);
+       if (notice != 0)
+         Sound_PlayFar(SE_MENU_CANCEL);
+       Shop_DrawMoney();
+diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
+index 3194858b15..26e9ff6d2b 100644
+--- a/games/tbs/text/en.po
++++ b/games/tbs/text/en.po
+@@ -65003,8 +65003,8 @@ msgstr ""
+ msgctxt "MsgArenaTournamentPrompt"
+ msgid "10724"
+ msgstr ""
+-"Which tournament\n"
+-"will you enter?{end_now}"
++"Which cup would\n"
++"you like?{end_now}"
+ 
+ msgctxt "MsgArenaManagerPrompt"
+ msgid "10725"
+@@ -65044,9 +65044,9 @@ msgctxt "MsgArenaDjinn"
+ msgid "10732"
+ msgstr "Djinn"
+ 
+-msgctxt "MsgArenaPsynergy"
++msgctxt "MsgArenaManagerItems"
+ msgid "10733"
+-msgstr "Psynergy"
++msgstr "Items"
+ 
+ msgctxt "MsgArenaItems"
+ msgid "10734"
+@@ -65183,14 +65183,14 @@ msgstr "Raises Luck by {argument_signed_number}. Now {argument_signed_number}."
+ msgctxt "MsgArenaGiveUpPrompt"
+ msgid "10767"
+ msgstr ""
+-"Round {argument_signed_number} of 12.\n"
++"Round {argument_signed_number}.\n"
+ "Do you want to\n"
+ "give up?{end_now}"
+ 
+ msgctxt "MsgArenaNextRound"
+ msgid "10768"
+ msgstr ""
+-"Round {argument_signed_number} of 12 won!\n"
++"Round {argument_signed_number} won!\n"
+ "Step into the circle\n"
+ "when you are ready.{end_wait}"
+ 
+@@ -65211,7 +65211,7 @@ msgstr ""
+ msgctxt "MsgArenaNextRoundBossRush"
+ msgid "10771"
+ msgstr ""
+-"Round {argument_signed_number} of 6 won!\n"
++"Round {argument_signed_number} won!\n"
+ "No healing here.\n"
+ "Step into the circle\n"
+ "when you are ready.{end_wait}"
+@@ -65243,3 +65243,451 @@ msgstr ""
+ "Your opponent has a\n"
+ "different version of\n"
+ "the game!{end_wait}"
++
++# BEGIN GENERATED CUPS (scripts/gen-cups.py; do not edit by hand)
++
++msgctxt "MsgArenaCupName0"
++msgid "10777"
++msgstr ""
++"Tret Cup"
++
++
++msgctxt "MsgArenaCupName1"
++msgid "10778"
++msgstr ""
++"Mercury Cup"
++
++
++msgctxt "MsgArenaCupName2"
++msgid "10779"
++msgstr ""
++"Mogall Cup"
++
++
++msgctxt "MsgArenaCupName3"
++msgid "10780"
++msgstr ""
++"Altin Cup"
++
++
++msgctxt "MsgArenaCupName4"
++msgid "10781"
++msgstr ""
++"Tolbi Cup"
++
++
++msgctxt "MsgArenaCupName5"
++msgid "10782"
++msgstr ""
++"Lunpa Cup"
++
++
++msgctxt "MsgArenaCupName6"
++msgid "10783"
++msgstr ""
++"Lighthouse Cup"
++
++
++msgctxt "MsgArenaCupName7"
++msgid "10784"
++msgstr ""
++"Boss Rush"
++
++
++msgctxt "MsgArenaCupName8"
++msgid "10785"
++msgstr ""
++"Crossbone Isle"
++
++
++msgctxt "MsgArenaCupNext"
++msgid "10786"
++msgstr ""
++"Next cup"
++
++
++msgctxt "MsgArenaCupReplay"
++msgid "10787"
++msgstr ""
++"Replay"
++
++
++msgctxt "MsgArenaCupSide"
++msgid "10788"
++msgstr ""
++"Side cups"
++
++
++msgctxt "MsgArenaCupReplayPrompt"
++msgid "10789"
++msgstr ""
++"Replay which cup?{end_now}"
++
++
++msgctxt "MsgArenaCupGroupEarly"
++msgid "10790"
++msgstr ""
++"Early cups"
++
++
++msgctxt "MsgArenaCupGroupLate"
++msgid "10791"
++msgstr ""
++"Later cups"
++
++
++msgctxt "MsgArenaCupSidePrompt"
++msgid "10792"
++msgstr ""
++"Which side cup\n"
++"will you enter?{end_now}"
++
++
++msgctxt "MsgArenaGearReward"
++msgid "10793"
++msgstr ""
++"A find from the\n"
++"dungeon! It is yours.{end_wait}"
++
++
++msgctxt "MsgArenaDjinnNoRoom"
++msgid "10794"
++msgstr ""
++"Your Djinn are full!\n"
++"Make room, then win\n"
++"this round again.{end_wait}"
++
++
++msgctxt "MsgArenaCupConfirm0"
++msgid "10795"
++msgstr ""
++"Enter the\n"
++"Tret Cup?{end_now}"
++
++
++msgctxt "MsgArenaCupCleared0"
++msgid "10796"
++msgstr ""
++"You cleared the\n"
++"Tret Cup!\n"
++"Congratulations!{end_wait}"
++
++
++msgctxt "MsgArenaCupFirst0"
++msgid "10797"
++msgstr ""
++"Well done!\n"
++"You cleared the\n"
++"Tret Cup!{page_break}Your party grows\n"
++"stronger. All of you\n"
++"rise to level 15!{page_break}Djinn for sale at\n"
++"the party manager:\n"
++"Granite.{page_break}New goods at the\n"
++"shops of Vault.{page_break}The Mercury Cup is\n"
++"now open!{end_wait}"
++
++
++msgctxt "MsgArenaCup0DjinnForge"
++msgid "10798"
++msgstr ""
++"You won the Djinni\n"
++"Forge!\n"
++"It joins your party.{end_wait}"
++
++
++msgctxt "MsgArenaCup0DjinnBreeze"
++msgid "10799"
++msgstr ""
++"You won the Djinni\n"
++"Breeze!\n"
++"It joins your party.{end_wait}"
++
++
++msgctxt "MsgArenaCupConfirm1"
++msgid "10800"
++msgstr ""
++"Enter the\n"
++"Mercury Cup?{end_now}"
++
++
++msgctxt "MsgArenaCupCleared1"
++msgid "10801"
++msgstr ""
++"You cleared the\n"
++"Mercury Cup!\n"
++"Congratulations!{end_wait}"
++
++
++msgctxt "MsgArenaCupFirst1"
++msgid "10802"
++msgstr ""
++"Well done!\n"
++"You cleared the\n"
++"Mercury Cup!{page_break}Your party grows\n"
++"stronger. All of you\n"
++"rise to level 18!{page_break}New goods at the\n"
++"shops of Bilibin.{page_break}The Mogall Cup is\n"
++"now open!{end_wait}"
++
++
++msgctxt "MsgArenaCup1DjinnSleet"
++msgid "10803"
++msgstr ""
++"You won the Djinni\n"
++"Sleet!\n"
++"It joins your party.{end_wait}"
++
++
++msgctxt "MsgArenaCupConfirm2"
++msgid "10804"
++msgstr ""
++"Enter the\n"
++"Mogall Cup?{end_now}"
++
++
++msgctxt "MsgArenaCupCleared2"
++msgid "10805"
++msgstr ""
++"You cleared the\n"
++"Mogall Cup!\n"
++"Congratulations!{end_wait}"
++
++
++msgctxt "MsgArenaCupFirst2"
++msgid "10806"
++msgstr ""
++"Well done!\n"
++"You cleared the\n"
++"Mogall Cup!{page_break}Your party grows\n"
++"stronger. All of you\n"
++"rise to level 20!{page_break}New goods at the\n"
++"shops of Imil.{page_break}The Altin Cup is now\n"
++"open!{end_wait}"
++
++
++msgctxt "MsgArenaCup2DjinnZephyr"
++msgid "10807"
++msgstr ""
++"You won the Djinni\n"
++"Zephyr!\n"
++"It joins your party.{end_wait}"
++
++
++msgctxt "MsgArenaCup2DjinnQuartz"
++msgid "10808"
++msgstr ""
++"You won the Djinni\n"
++"Quartz!\n"
++"It joins your party.{end_wait}"
++
++
++msgctxt "MsgArenaCupConfirm3"
++msgid "10809"
++msgstr ""
++"Enter the\n"
++"Altin Cup?{end_now}"
++
++
++msgctxt "MsgArenaCupCleared3"
++msgid "10810"
++msgstr ""
++"You cleared the\n"
++"Altin Cup!\n"
++"Congratulations!{end_wait}"
++
++
++msgctxt "MsgArenaCupFirst3"
++msgid "10811"
++msgstr ""
++"Well done!\n"
++"You cleared the\n"
++"Altin Cup!{page_break}Your party grows\n"
++"stronger. All of you\n"
++"rise to level 25!{page_break}Djinn for sale at\n"
++"the party manager:\n"
++"Smog, Sap and Kite.{page_break}New goods at the\n"
++"shops of Kolima,\n"
++"Xian and Altin.{page_break}The Tolbi Cup is now\n"
++"open!{end_wait}"
++
++
++msgctxt "MsgArenaCup3DjinnSpritz"
++msgid "10812"
++msgstr ""
++"You won the Djinni\n"
++"Spritz!\n"
++"It joins your party.{end_wait}"
++
++
++msgctxt "MsgArenaCupConfirm4"
++msgid "10813"
++msgstr ""
++"Enter the\n"
++"Tolbi Cup?{end_now}"
++
++
++msgctxt "MsgArenaCupCleared4"
++msgid "10814"
++msgstr ""
++"You cleared the\n"
++"Tolbi Cup!\n"
++"Congratulations!{end_wait}"
++
++
++msgctxt "MsgArenaCupFirst4"
++msgid "10815"
++msgstr ""
++"Well done!\n"
++"You cleared the\n"
++"Tolbi Cup!{page_break}Your party grows\n"
++"stronger. All of you\n"
++"rise to level 27!{page_break}Djinn for sale at\n"
++"the party manager:\n"
++"Ember and Mist.{page_break}New goods at the\n"
++"shops of Kalay.{page_break}The Lunpa Cup is now\n"
++"open!{end_wait}"
++
++
++msgctxt "MsgArenaCup4DjinnSquall"
++msgid "10816"
++msgstr ""
++"You won the Djinni\n"
++"Squall!\n"
++"It joins your party.{end_wait}"
++
++
++msgctxt "MsgArenaCupConfirm5"
++msgid "10817"
++msgstr ""
++"Enter the\n"
++"Lunpa Cup?{end_now}"
++
++
++msgctxt "MsgArenaCupCleared5"
++msgid "10818"
++msgstr ""
++"You cleared the\n"
++"Lunpa Cup!\n"
++"Congratulations!{end_wait}"
++
++
++msgctxt "MsgArenaCupFirst5"
++msgid "10819"
++msgstr ""
++"Well done!\n"
++"You cleared the\n"
++"Lunpa Cup!{page_break}Your party grows\n"
++"stronger. All of you\n"
++"rise to level 35!{page_break}Djinn for sale at\n"
++"the party manager:\n"
++"Scorch, Ground,\n"
++"Torch and Tonic.{page_break}New goods at the\n"
++"shops of Lunpa,\n"
++"Stucco and Suhalla.{page_break}The Lighthouse Cup\n"
++"is now open!{end_wait}"
++
++
++msgctxt "MsgArenaCup5DjinnFlash"
++msgid "10820"
++msgstr ""
++"You won the Djinni\n"
++"Flash!\n"
++"It joins your party.{end_wait}"
++
++
++msgctxt "MsgArenaCup5DjinnDew"
++msgid "10821"
++msgstr ""
++"You won the Djinni\n"
++"Dew!\n"
++"It joins your party.{end_wait}"
++
++
++msgctxt "MsgArenaCupConfirm6"
++msgid "10822"
++msgstr ""
++"Enter the\n"
++"Lighthouse Cup?{end_now}"
++
++
++msgctxt "MsgArenaCupCleared6"
++msgid "10823"
++msgstr ""
++"You cleared the\n"
++"Lighthouse Cup!\n"
++"Congratulations!{end_wait}"
++
++
++msgctxt "MsgArenaCupFirst6"
++msgid "10824"
++msgstr ""
++"Well done!\n"
++"You cleared the\n"
++"Lighthouse Cup!{page_break}Your party grows\n"
++"stronger. All of you\n"
++"rise to level 50!{page_break}Djinn for sale at\n"
++"the party manager:\n"
++"Vine, Corona and\n"
++"Hail.{page_break}New goods at the\n"
++"shops of Suhalla.{page_break}The Boss Rush and\n"
++"Crossbone Isle are\n"
++"now open!{end_wait}"
++
++
++msgctxt "MsgArenaCup6DjinnLuff"
++msgid "10825"
++msgstr ""
++"You won the Djinni\n"
++"Luff!\n"
++"It joins your party.{end_wait}"
++
++
++msgctxt "MsgArenaCupConfirm7"
++msgid "10826"
++msgstr ""
++"Enter the\n"
++"Boss Rush?{end_now}"
++
++
++msgctxt "MsgArenaCupCleared7"
++msgid "10827"
++msgstr ""
++"You cleared the\n"
++"Boss Rush!\n"
++"Congratulations!{end_wait}"
++
++
++msgctxt "MsgArenaCupFirst7"
++msgid "10828"
++msgstr ""
++"Well done!\n"
++"You cleared the\n"
++"Boss Rush!{end_wait}"
++
++
++msgctxt "MsgArenaCupConfirm8"
++msgid "10829"
++msgstr ""
++"Enter the\n"
++"Crossbone Isle?{end_now}"
++
++
++msgctxt "MsgArenaCupCleared8"
++msgid "10830"
++msgstr ""
++"You cleared the\n"
++"Crossbone Isle!\n"
++"Congratulations!{end_wait}"
++
++
++msgctxt "MsgArenaCupFirst8"
++msgid "10831"
++msgstr ""
++"Well done!\n"
++"You cleared the\n"
++"Crossbone Isle!{page_break}Djinn for sale at\n"
++"the party manager:\n"
++"Bane.{page_break}New goods at the\n"
++"shops of Lalivero.{end_wait}"
++
++# END GENERATED CUPS
+-- 
+2.53.0
+
