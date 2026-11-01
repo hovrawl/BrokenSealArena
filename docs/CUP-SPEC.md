@@ -57,6 +57,31 @@ Answers to the rest (owner, 2026-11-01):
   Ape, Hydros, Kraken, Toadonpa, the Lizards, Menardi and Saturos, Fusion Dragon) cap the
   cups they already own. The builder should check the Djinn-battle scenes first.
 
+### Proposed: five main cups (the owner's idea, 2026-11-01; for the owner to confirm)
+
+The story's scripted bosses are nine (levels from `cup-candidates.md`): Tret L14; Saturos
+(Mercury Lighthouse) L18; Killer Ape L18; Hydros Statue L20; Manticore L22; Kraken L25;
+Toadonpa L27; Storm and Tempest Lizard L28; Saturos and Menardi L38 with the Fusion Dragon L39.
+The caped strangers (Mystery Man and Woman, L10, four sprite slots) are too strong an opener
+by their stats, and **Deadbeard (L43, Crossbone Isle) is kept for the post-game**. Grouping the
+bosses by level gives **five main cups**, one per bracket, with the party's level before each
+one being 10, 20, 30, 40 and 50 (the first four first clears raise it; the fifth opens the
+extras):
+
+| Cup | Party level | Regions (mobs) | Bosses |
+|---|---|---|---|
+| 1 | 10 | Sol Sanctum and Vale, Goma Cave, Kolima Forest, Tret Tree | Tret (L14) |
+| 2 | 20 | Bilibin, Mercury Lighthouse, Fuchin Falls, Mogall Forest | Saturos (L18), Killer Ape (L18) |
+| 3 | 30 | Altin Peak, Lamakan Desert, Vault, Altmiller Cave | Hydros Statue (L20), Manticore (L22) |
+| 4 | 40 | Tolbi, Colosso, Gondowan and Lunpa, Suhalla | Kraken (L25), Toadonpa (L27), Storm and Tempest Lizard (L28); the Colosso trio (L25) is a candidate round |
+| 5 | 50 | Suhalla Gate, Babi, Venus Lighthouse | Saturos and Menardi (L38), then the Fusion Dragon (L39): the last dungeon |
+
+After cup 5: the Boss Rush and the other side cups, then Crossbone Isle (Deadbeard) as the
+first post-game challenge. This leaves the unlocks per cup (Djinn, shops, gear) to be
+spread over five steps (section 2.2's eleven-cup table folds into it: its Djinn and shop
+columns add up the same, grouped five ways). **Open:** the cup 4 load (four bosses, check
+the round count), the strangers as a side cup, and the gear rewards per cup.
+
 Still open: what 50 to 99 contains (later), and the exact cup list and order.
 
 ## 0. Summary

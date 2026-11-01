@@ -130,3 +130,8 @@
   start purse 1500 coins; the first-clear reward is gear tied to the cup's region; cups are
   named by place, one per boss early and grouped later; regions with no story boss are capped
   by their Djinn battle. See `docs/CUP-SPEC.md` (revision).
+- **Five main cups (proposal, 2026-11-01)**: bosses grouped by level into five cups (Tret; Saturos
+  and Killer Ape; Hydros and Manticore; Kraken, Toadonpa and the Lizards; Saturos, Menardi and
+  the Fusion Dragon), party level before each 10, 20, 30, 40, 50. Deadbeard/Crossbone Isle is
+  the first post-game challenge; the caped strangers are too strong an opener. See
+  `docs/CUP-SPEC.md`.
