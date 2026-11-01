@@ -485,6 +485,33 @@ stock-data caveats of patch 17 (Isaac's HP halved, Confuse as Delude) are gone.
   `01a3234`, the one before the re-slice (the branch that held them in `~/alchemy`
   has been deleted).
 
+## 27. The cup framework (patch 0027)
+
+Implements docs/CUP-SPEC.md (owner's revision). **A cup is data** and never sets the
+party or its level.
+
+- **Source of truth: `scripts/cupdata.py`.** `scripts/gen-cups.py` (run in WSL) writes
+  `include/module/arena_cups.h`, `src/battle/arena_cups.c` (teams; its own object, row in
+  `objects.tsv`, `rom_tail_00`, because bank 07 had no room), `src/scene/arena_cup_info.inc`
+  (info, rewards, shop rows; included by `arena_menu.c`), `src/shop/shop/arena_djinn_gate.inc`
+  and the message block at the end of `text/en.po` (between the GENERATED CUPS comments:
+  keep it last). `scripts/cup-check.py` verifies enemy ids, sprite slots (six), the Djinn
+  (each obtained once) and items; `scripts/cup-gear.py` lists chests by cup.
+- **Cups:** 0 to 6 the main cups A Tret, B Mercury, C Mogall, D Altin, E Tolbi, F Lunpa,
+  G Lighthouse; 7 Boss Rush (side, opens after G); 8 Crossbone Isle (side, Deadbeard).
+  The Monster Gauntlet is gone. Old saves' tournament byte 0 or 1 now names other cups.
+- **State:** `FLAG_ARENA_PROGRESS` 0x7f0, `FLAG_ARENA_SIDE_CLEARED` 0x7e8, reward bits
+  0x7a0 to 0x7df (35 used). Persistent; the Pause-menu save keeps them.
+- **Attendant:** Solo then Next cup / Replay / Side cups (icon rows of at most four; Early
+  and Later groups when more than four are replayable), "Enter the X Cup?", Yes starts.
+  Only open cups are offered. The counter-style list of the spec was not built.
+- **First clear of a main cup:** the attendant's scene (what opens), the party raised to
+  the cup's level (`Unit_LevelUpTo`, never down), progress advances. Replays only
+  congratulate. Rewards (Djinni won in a round, chest gear) are given once, after the round.
+- **Manager:** Djinn counter lists only Djinn on sale (4 at the start, more per cup);
+  item shops follow the last cup cleared; the Psynergy shop is removed. New Game is level 10.
+- `main.ld` unchanged. Item shop rows other than Xian's were not visited in the arena.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

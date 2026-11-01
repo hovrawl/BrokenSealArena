@@ -1,0 +1,44 @@
+include to_solo.txt
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+poke 0x020004EA 2 7
+mash A 6
+wait 100
+shot /tmp/shots/t1.png
+mash A 6
+wait 100
+shot /tmp/shots/t2.png
+mash A 6
+wait 100
+shot /tmp/shots/t3.png
+mash A 6
+wait 100
+shot /tmp/shots/t4.png
+mash A 6
+wait 100
+shot /tmp/shots/t5.png
+mash A 6
+wait 100
+shot /tmp/shots/t6.png
+mash A 6
+wait 100
+shot /tmp/shots/t7.png
+mash A 6
+wait 100
+shot /tmp/shots/t8.png
+mash A 6
+wait 100
+shot /tmp/shots/t9.png
+mash A 6
+wait 100
+shot /tmp/shots/t10.png
+mash A 6
+wait 100
+shot /tmp/shots/t11.png
+mash A 6
+wait 100
+shot /tmp/shots/t12.png

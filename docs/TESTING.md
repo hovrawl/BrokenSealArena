@@ -148,3 +148,16 @@ themselves, and write nothing in the repository. Run them in WSL with `python3` 
   (`~/alchemy/out/tbs-en/tbs-en.map`).
 - The ROM is copied to the save directory first, so the run never touches
   `build\tbs-en.gba` or your own saves.
+
+## Cup scripts (patch 0027)
+
+The Gauntlet and Boss Rush scripts (`clear`, `rungs`, `rungs_rush`, `tournaments`,
+`to_rush`, `rush_*`, `resume_rush`) were removed. `to_solo.txt` now starts the first cup.
+- `cup_menu.txt`: nothing cleared: Solo goes to "Enter the Tret Cup?".
+- `cup_menu2.txt`, `cup_menu3.txt`: progress poked (0x0200013E) to 6 and 7: Next/Replay,
+  Early/Later groups, rows of four and two, Replay/Side cups, the side row.
+- `cup_clear.txt`: first clear of the Tret Cup (win count poked to 7 mid-battle): victory,
+  the unlock scene, level 15.
+- `cup_reward_item.txt`, `cup_reward_djinn.txt`: a gear round (Power Bread) and the Forge round.
+- `cup_rungs.txt`: the first frame of all 76 rounds of the 9 cups (generated; cup byte 0x0200013F).
+Poke map: cup 0x0200013F, progress 0x0200013E, side bits 0x0200013D, streak 0x020004EA.

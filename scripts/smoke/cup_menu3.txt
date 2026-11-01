@@ -1,0 +1,26 @@
+# All seven main cups cleared (poked): Replay/Side cups, the side cup row, the replay groups.
+include to_lobby.txt
+poke 0x0200013E 1 7
+press U 40
+press L 44
+press U 60
+press L 10
+press U 10
+tap A
+wait 150
+tap A
+wait 150
+shot /tmp/shots/n0.png
+tap R
+tap A
+wait 150
+shot /tmp/shots/n1.png
+tap B
+wait 100
+tap A
+wait 150
+shot /tmp/shots/n2.png
+tap R
+tap A
+wait 150
+shot /tmp/shots/n3.png

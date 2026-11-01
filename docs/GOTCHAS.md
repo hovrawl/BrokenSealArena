@@ -149,3 +149,14 @@
   bytes now, and the check that decides what ails a unit still reads three.
 - Python written through an inline heredoc in this environment had `\r\n` turn into a real
   newline inside a string. Write scripts with the Write or Edit tools.
+
+## Cups
+
+- Cup data is generated from `scripts/cupdata.py`; do not edit the generated files in
+  `~/alchemy`. The overlay (scene) and the battle code cannot share data, hence two outputs.
+- Bank 07 of the main image was full: new data went to its own object in `rom_tail_00`
+  (`objects.tsv`). Shifting bank starts in `main.ld` cascades to a "location counter" error.
+- A test cannot win by mashing A against a cup's later rounds: start cup A, then poke the
+  win count mid-battle (`cup_clear.txt`). Round 1 of a cup is tuned for the party's level,
+  not for the stock-game damage (a level-8 target Vermin hit Isaac for 43).
+- Python written through shell heredocs loses `\n`; write scripts with the Write tool.

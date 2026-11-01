@@ -1,0 +1,27 @@
+# The attendant's cup menus with six main cups cleared (poked): Next/Replay, the
+# Early/Later group row, a row of four, a row of two.
+include to_lobby.txt
+poke 0x0200013E 1 6
+press U 40
+press L 44
+press U 60
+press L 10
+press U 10
+tap A
+wait 150
+tap A
+wait 150
+shot /tmp/shots/m0.png
+tap R
+tap A
+wait 150
+shot /tmp/shots/m1.png
+tap A
+wait 150
+shot /tmp/shots/m2.png
+tap B
+wait 100
+tap R
+tap A
+wait 150
+shot /tmp/shots/m3.png

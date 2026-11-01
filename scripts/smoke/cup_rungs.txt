@@ -1,0 +1,766 @@
+# The first frame of every round of every cup (docs/CUP-SPEC.md): reach the series once, save a state,
+# then for each cup and round load it, poke the cup byte (0x0200013F) and the win count
+# (linkTallies[3] at 0x020004EA) and walk into the circle. Look at build\smoke\shots\sheet.png:
+# every team renders within six sprite slots. Written by scripts/smoke/gen-rungs.py.
+include to_solo.txt
+save /tmp/solo.state
+load /tmp/solo.state
+poke 0x0200013F 1 0
+poke 0x020004EA 2 0
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung0_00.png
+load /tmp/solo.state
+poke 0x0200013F 1 0
+poke 0x020004EA 2 1
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung0_01.png
+load /tmp/solo.state
+poke 0x0200013F 1 0
+poke 0x020004EA 2 2
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung0_02.png
+load /tmp/solo.state
+poke 0x0200013F 1 0
+poke 0x020004EA 2 3
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung0_03.png
+load /tmp/solo.state
+poke 0x0200013F 1 0
+poke 0x020004EA 2 4
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung0_04.png
+load /tmp/solo.state
+poke 0x0200013F 1 0
+poke 0x020004EA 2 5
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung0_05.png
+load /tmp/solo.state
+poke 0x0200013F 1 0
+poke 0x020004EA 2 6
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung0_06.png
+load /tmp/solo.state
+poke 0x0200013F 1 0
+poke 0x020004EA 2 7
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung0_07.png
+load /tmp/solo.state
+poke 0x0200013F 1 1
+poke 0x020004EA 2 0
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung1_00.png
+load /tmp/solo.state
+poke 0x0200013F 1 1
+poke 0x020004EA 2 1
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung1_01.png
+load /tmp/solo.state
+poke 0x0200013F 1 1
+poke 0x020004EA 2 2
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung1_02.png
+load /tmp/solo.state
+poke 0x0200013F 1 1
+poke 0x020004EA 2 3
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung1_03.png
+load /tmp/solo.state
+poke 0x0200013F 1 1
+poke 0x020004EA 2 4
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung1_04.png
+load /tmp/solo.state
+poke 0x0200013F 1 1
+poke 0x020004EA 2 5
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung1_05.png
+load /tmp/solo.state
+poke 0x0200013F 1 1
+poke 0x020004EA 2 6
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung1_06.png
+load /tmp/solo.state
+poke 0x0200013F 1 1
+poke 0x020004EA 2 7
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung1_07.png
+load /tmp/solo.state
+poke 0x0200013F 1 2
+poke 0x020004EA 2 0
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung2_00.png
+load /tmp/solo.state
+poke 0x0200013F 1 2
+poke 0x020004EA 2 1
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung2_01.png
+load /tmp/solo.state
+poke 0x0200013F 1 2
+poke 0x020004EA 2 2
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung2_02.png
+load /tmp/solo.state
+poke 0x0200013F 1 2
+poke 0x020004EA 2 3
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung2_03.png
+load /tmp/solo.state
+poke 0x0200013F 1 2
+poke 0x020004EA 2 4
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung2_04.png
+load /tmp/solo.state
+poke 0x0200013F 1 2
+poke 0x020004EA 2 5
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung2_05.png
+load /tmp/solo.state
+poke 0x0200013F 1 2
+poke 0x020004EA 2 6
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung2_06.png
+load /tmp/solo.state
+poke 0x0200013F 1 3
+poke 0x020004EA 2 0
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung3_00.png
+load /tmp/solo.state
+poke 0x0200013F 1 3
+poke 0x020004EA 2 1
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung3_01.png
+load /tmp/solo.state
+poke 0x0200013F 1 3
+poke 0x020004EA 2 2
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung3_02.png
+load /tmp/solo.state
+poke 0x0200013F 1 3
+poke 0x020004EA 2 3
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung3_03.png
+load /tmp/solo.state
+poke 0x0200013F 1 3
+poke 0x020004EA 2 4
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung3_04.png
+load /tmp/solo.state
+poke 0x0200013F 1 3
+poke 0x020004EA 2 5
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung3_05.png
+load /tmp/solo.state
+poke 0x0200013F 1 3
+poke 0x020004EA 2 6
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung3_06.png
+load /tmp/solo.state
+poke 0x0200013F 1 3
+poke 0x020004EA 2 7
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung3_07.png
+load /tmp/solo.state
+poke 0x0200013F 1 3
+poke 0x020004EA 2 8
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung3_08.png
+load /tmp/solo.state
+poke 0x0200013F 1 4
+poke 0x020004EA 2 0
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung4_00.png
+load /tmp/solo.state
+poke 0x0200013F 1 4
+poke 0x020004EA 2 1
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung4_01.png
+load /tmp/solo.state
+poke 0x0200013F 1 4
+poke 0x020004EA 2 2
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung4_02.png
+load /tmp/solo.state
+poke 0x0200013F 1 4
+poke 0x020004EA 2 3
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung4_03.png
+load /tmp/solo.state
+poke 0x0200013F 1 4
+poke 0x020004EA 2 4
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung4_04.png
+load /tmp/solo.state
+poke 0x0200013F 1 4
+poke 0x020004EA 2 5
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung4_05.png
+load /tmp/solo.state
+poke 0x0200013F 1 4
+poke 0x020004EA 2 6
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung4_06.png
+load /tmp/solo.state
+poke 0x0200013F 1 4
+poke 0x020004EA 2 7
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung4_07.png
+load /tmp/solo.state
+poke 0x0200013F 1 5
+poke 0x020004EA 2 0
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung5_00.png
+load /tmp/solo.state
+poke 0x0200013F 1 5
+poke 0x020004EA 2 1
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung5_01.png
+load /tmp/solo.state
+poke 0x0200013F 1 5
+poke 0x020004EA 2 2
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung5_02.png
+load /tmp/solo.state
+poke 0x0200013F 1 5
+poke 0x020004EA 2 3
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung5_03.png
+load /tmp/solo.state
+poke 0x0200013F 1 5
+poke 0x020004EA 2 4
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung5_04.png
+load /tmp/solo.state
+poke 0x0200013F 1 5
+poke 0x020004EA 2 5
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung5_05.png
+load /tmp/solo.state
+poke 0x0200013F 1 5
+poke 0x020004EA 2 6
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung5_06.png
+load /tmp/solo.state
+poke 0x0200013F 1 5
+poke 0x020004EA 2 7
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung5_07.png
+load /tmp/solo.state
+poke 0x0200013F 1 5
+poke 0x020004EA 2 8
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung5_08.png
+load /tmp/solo.state
+poke 0x0200013F 1 5
+poke 0x020004EA 2 9
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung5_09.png
+load /tmp/solo.state
+poke 0x0200013F 1 6
+poke 0x020004EA 2 0
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung6_00.png
+load /tmp/solo.state
+poke 0x0200013F 1 6
+poke 0x020004EA 2 1
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung6_01.png
+load /tmp/solo.state
+poke 0x0200013F 1 6
+poke 0x020004EA 2 2
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung6_02.png
+load /tmp/solo.state
+poke 0x0200013F 1 6
+poke 0x020004EA 2 3
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung6_03.png
+load /tmp/solo.state
+poke 0x0200013F 1 6
+poke 0x020004EA 2 4
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung6_04.png
+load /tmp/solo.state
+poke 0x0200013F 1 6
+poke 0x020004EA 2 5
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung6_05.png
+load /tmp/solo.state
+poke 0x0200013F 1 6
+poke 0x020004EA 2 6
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung6_06.png
+load /tmp/solo.state
+poke 0x0200013F 1 6
+poke 0x020004EA 2 7
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung6_07.png
+load /tmp/solo.state
+poke 0x0200013F 1 6
+poke 0x020004EA 2 8
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung6_08.png
+load /tmp/solo.state
+poke 0x0200013F 1 6
+poke 0x020004EA 2 9
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung6_09.png
+load /tmp/solo.state
+poke 0x0200013F 1 7
+poke 0x020004EA 2 0
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung7_00.png
+load /tmp/solo.state
+poke 0x0200013F 1 7
+poke 0x020004EA 2 1
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung7_01.png
+load /tmp/solo.state
+poke 0x0200013F 1 7
+poke 0x020004EA 2 2
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung7_02.png
+load /tmp/solo.state
+poke 0x0200013F 1 7
+poke 0x020004EA 2 3
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung7_03.png
+load /tmp/solo.state
+poke 0x0200013F 1 7
+poke 0x020004EA 2 4
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung7_04.png
+load /tmp/solo.state
+poke 0x0200013F 1 7
+poke 0x020004EA 2 5
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung7_05.png
+load /tmp/solo.state
+poke 0x0200013F 1 8
+poke 0x020004EA 2 0
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung8_00.png
+load /tmp/solo.state
+poke 0x0200013F 1 8
+poke 0x020004EA 2 1
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung8_01.png
+load /tmp/solo.state
+poke 0x0200013F 1 8
+poke 0x020004EA 2 2
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung8_02.png
+load /tmp/solo.state
+poke 0x0200013F 1 8
+poke 0x020004EA 2 3
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung8_03.png
+load /tmp/solo.state
+poke 0x0200013F 1 8
+poke 0x020004EA 2 4
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung8_04.png
+load /tmp/solo.state
+poke 0x0200013F 1 8
+poke 0x020004EA 2 5
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung8_05.png
+load /tmp/solo.state
+poke 0x0200013F 1 8
+poke 0x020004EA 2 6
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung8_06.png
+load /tmp/solo.state
+poke 0x0200013F 1 8
+poke 0x020004EA 2 7
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung8_07.png
+load /tmp/solo.state
+poke 0x0200013F 1 8
+poke 0x020004EA 2 8
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung8_08.png
+load /tmp/solo.state
+poke 0x0200013F 1 8
+poke 0x020004EA 2 9
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 300
+shot /tmp/shots/rung8_09.png
