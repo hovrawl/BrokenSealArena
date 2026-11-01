@@ -35,6 +35,9 @@ import struct
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import alchemy_dir  # noqa: E402
+
 
 # ---------------------------------------------------------------------------
 # IPS, symbols
@@ -569,7 +572,7 @@ def main():
     ap.add_argument("--ips", required=True)
     ap.add_argument("--rom", required=True)
     ap.add_argument("--elf", required=True)
-    ap.add_argument("--src", default=os.path.expanduser("~/alchemy/games/tbs"))
+    ap.add_argument("--src", default=alchemy_dir.GAME)
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--report")
     ap.add_argument("tables", nargs="*")

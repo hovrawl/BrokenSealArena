@@ -1,24 +1,27 @@
-# Rebuild TBS (English) in WSL and copy the ROM to build\tbs-en.gba
-# Usage: .\build.ps1 [-Verify]   (-Verify also runs compare; only passes for unmodified source)
-param([switch]$Verify)
+# Windows wrapper: builds Broken Seal Arena inside WSL with scripts/build.sh and
+# leaves the ROM in build\tbs-en.gba (build\tbs-en.new.gba if an emulator holds
+# the first open).
+#   .\build.ps1 [-WorkDir DIR] [-Distro NAME] [-Verify]
+# -WorkDir  where the upstream clone lives, as a path INSIDE WSL (for example
+#           '~/alchemy'). Without it: the file .alchemy-dir in this folder if
+#           there is one, else ~/brokenseal-arena/alchemy in the WSL home. It must
+#           not be under /mnt/c: building on a Windows drive is far too slow and
+#           breaks file modes.
+# -Distro   the WSL distribution (default: your default one).
+# -Verify   also runs upstream's compare (passes only for unmodified source).
+# See docs\BUILDING.md.
+param([string]$WorkDir, [string]$Distro, [switch]$Verify)
 $ErrorActionPreference = 'Stop'
-$dest = Join-Path $PSScriptRoot 'build\tbs-en.gba'
-# ARENA_LINK4: the half-size opponent sheets are made from the game's own, and
-# the ROM is 20 KB longer than the original's 8 MB (main.ld moves the last
-# region on by 0x5000 to make room, and the image is padded to match).
-$gen = 'python3 /mnt/c/Dev/NahFarn/BrokenSealArena/scripts/gen-opponent-sprites.py ~/alchemy/games/tbs/src/graphics/sprite'
-$genTrophies = 'python3 /mnt/c/Dev/NahFarn/BrokenSealArena/scripts/gen-trophy-sprites.py ~/alchemy/games/tbs/src/graphics/sprite'
-$cmd = "$gen && $genTrophies && cd ~/alchemy && make -j`$(nproc) tbs-en ROM_END_tbs=0x08806000"
-if ($Verify) { $cmd += ' && make compare-tbs-en' }
-wsl -d Ubuntu -- bash -lc $cmd
+$wsl = @(); if ($Distro) { $wsl = @('-d', $Distro) }
+# C:\a\b -> /mnt/c/a/b
+$root = (wsl @wsl -- wslpath -a ($PSScriptRoot.Replace('\', '/'))).Trim()
+if (-not $root) { throw "WSL is not available (see docs\BUILDING.md)" }
+$args2 = @()
+if ($WorkDir) { $args2 += @('--work-dir', $WorkDir) }
+elseif (-not (Test-Path (Join-Path $PSScriptRoot '.alchemy-dir'))) { $args2 += @('--work-dir', '~/brokenseal-arena/alchemy') }
+if ($Verify) { $args2 += '--verify' }
+wsl @wsl -- bash "$root/scripts/build.sh" @args2
 if ($LASTEXITCODE -ne 0) { throw "Build failed" }
-$src = '\\wsl.localhost\Ubuntu\home\nathan\alchemy\out\tbs-en\tbs-en.gba'
-try {
-  Copy-Item $src $dest -Force -ErrorAction Stop
-  Write-Host "ROM: $dest"
-} catch {
-  # An emulator holding the ROM open locks it; leave that copy alone.
-  $alt = Join-Path $PSScriptRoot 'build\tbs-en.new.gba'
-  Copy-Item $src $alt -Force
-  Write-Host "ROM is in use; wrote $alt instead"
-}
+$dest = Join-Path $PSScriptRoot 'build\tbs-en.gba'
+if (Test-Path (Join-Path $PSScriptRoot 'build\tbs-en.new.gba')) { Write-Host "Note: build\tbs-en.new.gba is the newer ROM (the other is in use)." }
+Write-Host "ROM: $dest"

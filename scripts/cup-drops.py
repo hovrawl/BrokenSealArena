@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Lists the equipment that the enemies of each cup's story stretch drop in the story game.
 
-Usage: cup-drops.py [GAME_DIR]   (default ~/alchemy/games/tbs)
+Usage: cup-drops.py [GAME_DIR]   (default: the working copy, see alchemy_dir.py)
 
 An enemy row of enemy_table.c can carry one drop (`.item`, with `.itemChance`: the chance
 is 1 in 2 to the power itemChance - 1). Two lists per cup (only equipment: weapons, armour,
@@ -19,10 +19,11 @@ import sys
 sys.dont_write_bytecode = True
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import alchemy_dir  # noqa: E402
 import cupdata  # noqa: E402
 import cupstretch  # noqa: E402
 
-game = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser("~/alchemy/games/tbs")
+game = sys.argv[1] if len(sys.argv) > 1 else alchemy_dir.GAME
 EQUIP = {"ITEM_TYPE_WEAPON", "ITEM_TYPE_ARMOR", "ITEM_TYPE_SHIELD", "ITEM_TYPE_HELM",
          "ITEM_TYPE_BOOTS", "ITEM_TYPE_RING", "ITEM_TYPE_SHIRT"}
 

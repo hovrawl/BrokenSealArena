@@ -3,7 +3,8 @@
 Run once in WSL (patch 0044); re-run scripts/gen-cups.py afterwards."""
 import re
 
-PO = '/home/nathan/alchemy/games/tbs/text/en.po'
+from alchemy_dir import ALCHEMY, GAME  # noqa: E402
+PO = GAME + '/text/en.po'
 BEGIN = '# BEGIN GENERATED CUPS'
 MSGS = [
     ('MsgArenaCvLine', 'Line'),

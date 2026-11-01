@@ -1,0 +1,47 @@
+# On every push to main, build the kit zip (patches + build scripts + docs; no ROM)
+# and replace the single prerelease tagged "alpha" with it. Nothing is built or
+# tested here: the zip is only the recipe.
+name: Release alpha
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-alpha
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Build the zip
+        run: bash scripts/make-release.sh
+
+      - name: Replace the alpha prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          short="$(git rev-parse --short HEAD)"
+          {
+            echo "The latest main, as a kit for building the romhack yourself."
+            echo "This prerelease is replaced on every merge to main."
+            echo
+            echo "- Commit: ${short} ($(date -u +%Y-%m-%d))"
+            echo "- How to build: [docs/BUILDING.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/docs/BUILDING.md)"
+            echo "- The zip holds patches and scripts only. There is no ROM; please don't share built ROMs."
+          } > "$RUNNER_TEMP/notes.md"
+          gh release delete alpha --cleanup-tag --yes || true
+          gh release create alpha dist/BrokenSealArena-alpha.zip \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Alpha (latest main)" \
+            --notes-file "$RUNNER_TEMP/notes.md"

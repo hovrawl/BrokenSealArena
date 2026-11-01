@@ -10,9 +10,14 @@ BrokenSealArena (this repo)
 └─ scripts/, docs/, AGENTS.md, .claude/
 ```
 
-The ROM is **built from source** (`~/alchemy`, in WSL): upstream at the pinned
-commit with the patches applied on a branch. The repo stores only the patches and
-the pin. A fresh machine runs `scripts/setup.sh` and gets the same tree.
+The ROM is **built from source** in a *work directory* (a clone of upstream at the
+pinned commit with the patches applied on a branch `arena`). The repo stores only
+the patches and the pin. A fresh machine runs `scripts/build.sh` and gets the same
+tree (see `docs/BUILDING.md`). The developer's work directory is `~/alchemy` in
+WSL, named in the git-ignored file `.alchemy-dir` in the repo root; the choice is
+read by every script, in this order: `$ALCHEMY_DIR`, `.alchemy-dir`,
+`work/alchemy` (`scripts/alchemy-dir.sh`, `alchemy_dir.py`, `wsl.ps1`). On Windows,
+keep it inside the WSL home, never under `/mnt/c`.
 
 ## Why patches over source, not xdelta/BPS
 
@@ -39,7 +44,7 @@ Never publish the ROM itself.
 
 ## Daily work
 
-See `AGENTS.md` (edit in `~/alchemy`, build, smoke-test, commit, export patches,
+See `AGENTS.md` (edit in the work directory, build, smoke-test, commit, export patches,
 document). Each patch should stay one coherent change, guarded by a switch, with
 a `docs/CHANGES.md` entry that includes port notes.
 
@@ -49,7 +54,7 @@ Upstream moves only when we choose. Try it first, with nothing real touched:
 
 ```powershell
 scripts\try-upstream.ps1                  # fetch, trial-rebase, build, smoke; back on arena after
-scripts\try-upstream.ps1 -Target REF      # any ref ~/alchemy knows
+scripts\try-upstream.ps1 -Target REF      # any ref the work directory knows
 ```
 
 It rebases a copy of `arena` onto the target on a scratch branch (`arena-trial`),
@@ -71,7 +76,7 @@ pinned commit.
 
 ```powershell
 scripts\update-upstream.ps1            # new upstream commits, files both sides touch
-scripts\update-upstream.ps1 -Apply     # rebase ~/alchemy's arena branch onto them
+scripts\update-upstream.ps1 -Apply     # rebase the work directory's arena branch onto them
 scripts\update-upstream.ps1 -Finish    # after resolving a conflict
 ```
 

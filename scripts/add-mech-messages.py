@@ -5,7 +5,8 @@ set of consecutive messages. Run once, then scripts/gen-cups.py to renumber the 
 Usage: python3 scripts/add-mech-messages.py [path to en.po]"""
 import sys
 
-PO = sys.argv[1] if len(sys.argv) > 1 else '/home/nathan/alchemy/games/tbs/text/en.po'
+from alchemy_dir import ALCHEMY, GAME  # noqa: E402
+PO = sys.argv[1] if len(sys.argv) > 1 else GAME + '/text/en.po'
 FIRST_ID = 10808
 
 TOPICS = [

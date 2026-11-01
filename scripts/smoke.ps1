@@ -10,12 +10,13 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$wslRoot = '/mnt/' + $root.Substring(0, 1).ToLower() + $root.Substring(2).Replace('\', '/')
+. "$PSScriptRoot\wsl.ps1"
+$wslRoot = $WslRoot
 $out = Join-Path $root 'build\smoke\shots'
 New-Item -ItemType Directory -Force $out | Out-Null
 Get-ChildItem $out -Filter *.png | Remove-Item
 
 $freshArg = if ($Fresh) { 'fresh' } else { 'keep' }
-wsl -d Ubuntu -- bash "$wslRoot/scripts/smoke/run.sh" $Script $freshArg
-wsl -d Ubuntu -- bash -c "cp /tmp/shots/*.png $wslRoot/build/smoke/shots/ 2>/dev/null; true"
+wsl @WslArgs -- bash "$wslRoot/scripts/smoke/run.sh" $Script $freshArg
+wsl @WslArgs -- bash -c "cp /tmp/shots/*.png $wslRoot/build/smoke/shots/ 2>/dev/null; true"
 Write-Host "Screenshots: $out"

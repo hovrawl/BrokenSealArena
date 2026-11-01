@@ -22,6 +22,9 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import alchemy_dir  # noqa: E402
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -81,7 +84,7 @@ def num(fields, key):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--src", default=os.path.expanduser("~/alchemy/games/tbs"))
+    ap.add_argument("--src", default=alchemy_dir.GAME)
     ap.add_argument("--dir", default=os.path.join(HERE, "..", "reloaded"))
     args = ap.parse_args()
     game = os.path.join(args.src, "src", "game")
