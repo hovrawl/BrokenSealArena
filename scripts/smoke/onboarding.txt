@@ -1,0 +1,40 @@
+# New Game on a fresh save. The A press that starts the game also talks to the
+# greeter beside the spawn, so this shows her introduction: two messages, six
+# pages, one page a tap. Then A again talks to her a second time (her stock
+# welcome). The flag FLAG_ARENA_ONBOARDED (0x7e0, byte 0xfc, at
+# 0x02000040 + 0xfc = 0x0200013C) is peeked: 0 during the intro, 1 after it.
+wait 900
+tap A
+wait 40
+shot /tmp/shots/ob1.png
+peek 0x0200013C 1
+tap A
+wait 40
+shot /tmp/shots/ob2.png
+tap A
+wait 40
+shot /tmp/shots/ob3.png
+tap A
+wait 40
+shot /tmp/shots/ob4.png
+tap A
+wait 40
+shot /tmp/shots/ob5.png
+tap A
+wait 40
+shot /tmp/shots/ob6.png
+tap A
+wait 60
+peek 0x0200013C 1
+tap A
+wait 40
+shot /tmp/shots/ob7_stock1.png
+tap A
+wait 40
+shot /tmp/shots/ob7_stock2.png
+tap A
+wait 40
+shot /tmp/shots/ob7_stock3.png
+tap A
+wait 60
+shot /tmp/shots/ob8_end.png

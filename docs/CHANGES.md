@@ -538,6 +538,25 @@ party or its level.
   item shops follow the last cup cleared; the Psynergy shop is removed. New Game is level 10.
 - `main.ld` unchanged. Item shop rows other than Xian's were not visited in the arena.
 
+## 31. Onboarding: the greeter's introduction (patch 0031)
+
+- **Behaviour:** the first time on a save that the player talks to the greeter
+  (`ACTOR_GREETER`, sprite 0x6c at (192, 272), beside the New Game spawn), she shows
+  `MsgArenaGreeterIntro1` and `2`, three pages each: cups one region at a time; talk to the
+  girl in the circle, choose Solo, enter the first cup; a win makes the party stronger and
+  puts new Djinn on sale at the party manager; shops and the next cup open, older cups can be
+  replayed; gear is found as cup rewards, side cups follow the main line; Multiplayer in the
+  circle for two players. After that she says her stock welcome.
+- **State:** `FLAG_ARENA_ONBOARDED` = 0x7e0, the byte at index 0xfc (verified free in
+  `flags.h`, GOTCHAS and CUP-SPEC 5.1). Set when the second message ends; `ArenaBoot_NewGame`
+  clears it. A Pause-menu save keeps it (`resume.txt` peeks it).
+- **Code:** `BattleArena_TalkToGreeter` in `battle_arena.c`, switch `ARENA_ONBOARDING`
+  (`arena_config.h`, default on). The two messages sit above the generated cup block in
+  `en.po`, which therefore moved by two ids; `gen-cups.py` was re-run.
+- **Not done:** no automatic start when the player walks near her; the scene's step triggers
+  are tile areas by id and the talk is enough. In a smoke run the A press that starts New Game
+  also talks to her, which is why `to_lobby.txt` now taps three more times.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

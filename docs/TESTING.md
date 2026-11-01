@@ -51,7 +51,9 @@ Combine them: `press AD 3`.
 ## Scripts here
 
 Prefixes (use them with `include`):
-- `to_lobby.txt`: New Game and the greeter's lines; ends with control of Isaac.
+- `to_lobby.txt`: New Game and the greeter's introduction (six pages); ends with control of Isaac.
+- `onboarding.txt`: the introduction page by page, the flag peeked (0x0200013C: 0 then 1),
+  then her stock welcome. `onboarding_seen.txt`: the flag poked to 1, stock welcome at once.
 - `to_manager.txt`: walk to the party manager (right counter) and talk to him.
 - `to_solo.txt`: talk to the attendant (left counter), choose Solo and the
   Monster Gauntlet.
