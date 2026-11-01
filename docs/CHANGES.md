@@ -476,6 +476,18 @@ stock-data caveats of patch 17 (Isaac's HP halved, Confuse as Delude) are gone.
   monsters, but their stats are the story game's retune: at level 50 the party is far ahead
   of the early rungs (a Skeleton hits for about 10), a balance pass for later.
 
+### 28. No win streak after a cup, no Game Tickets
+- Patch: `0028-Arena-no-win-streak-after-a-cup-and-the-shops-give-n.patch`
+- The attendant no longer tells the streak when a series ends (the best is kept for the endless
+  challenge); the shops give no Game Ticket after a purchase (`Shop_BuySpecialItem`).
+
+### 29. Equipment-only cup rewards, and the Djinn reset after a fight
+- Patch: `0029-Arena-cup-rewards-are-equipment-only-more-of-it-and-.patch`
+- Cup rewards are gear only; more of it (the Unicorn Ring, and drops of the cup's enemies, listed
+  by `scripts/cup-drops.py`). After each fight every Djinni is set again and the party's
+  recovery list is emptied (`ArenaMenu_RestoreDjinn`). Checked with `scripts/smoke/djinn_reset.txt`
+  (a Djinni poked onto standby is set again after the win) and `cup_reward_item.txt` (Fur Coat).
+
 ## Dropped on the way
 
 - The first training menu was a full-screen canvas-text window with its own list

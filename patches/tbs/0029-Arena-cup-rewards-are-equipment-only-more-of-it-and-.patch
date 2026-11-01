@@ -1,0 +1,212 @@
+From 4236332c2c1f982d2a1d18efb6ca70634843766a Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sun, 1 Nov 2026 15:25:04 +1100
+Subject: [PATCH] Arena: cup rewards are equipment only, more of it, and the
+ Djinn reset after a fight
+
+Rewards given in a cup are gear only (the Power Bread and the Mystic Draught are gone). More
+equipment is added: the Unicorn Ring (Mogall) and what the cup's enemies drop in the story:
+Prophet's Hat (Cerberus, Tolbi), Aura Gloves (Magicore, Lunpa), Feathered Robe, Spiked
+Armor, Blessed Mace and Zodiac Wand (Lighthouse). scripts/cup-drops.py lists the drops.
+
+After each fight every Djinni is set again and the party's recovery list is emptied
+(ArenaMenu_RestoreDjinn, after a win and on arriving after a loss), whether or not the cup
+heals.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/module/arena.h       |  2 +
+ games/tbs/src/scene/arena_cup_info.inc | 65 ++++++++++++++------------
+ games/tbs/src/scene/arena_menu.c       | 32 ++++++++++++-
+ games/tbs/src/scene/battle_arena.c     |  4 ++
+ 4 files changed, 72 insertions(+), 31 deletions(-)
+
+diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
+index de55bf6825..6a7aaedb88 100644
+--- a/games/tbs/include/module/arena.h
++++ b/games/tbs/include/module/arena.h
+@@ -38,6 +38,8 @@ s32 ArenaMenu_AttendantMode(void);
+ /// The coins a battle won, said by `actorId`; the party is healed if the
+ /// cup heals.
+ void ArenaMenu_ShowWin(s32 actorId, s32 reward);
++/// Every Djinni back to set and the recovery list emptied, after a fight.
++void ArenaMenu_RestoreDjinn(void);
+ /// Main cups cleared (FLAG_ARENA_PROGRESS), the cup of the series (clamped to
+ /// the table) and whether it heals the party after each win.
+ s32 ArenaCup_Progress(void);
+diff --git a/games/tbs/src/scene/arena_cup_info.inc b/games/tbs/src/scene/arena_cup_info.inc
+index 3d1a1fcdc9..cfde28eb2c 100644
+--- a/games/tbs/src/scene/arena_cup_info.inc
++++ b/games/tbs/src/scene/arena_cup_info.inc
+@@ -2,18 +2,18 @@
+ // Included by arena_menu.c. Global const data: a scene overlay has no static data of its own.
+ 
+ const struct ArenaCupReward gArenaCup0Rewards[] = {
+-    {3, 0, 0, 0, 191, 0},
+-    {4, 1, 1, 14, 0, 10798},
+-    {5, 0, 2, 0, 91, 0},
+-    {6, 0, 3, 0, 265, 0},
+-    {7, 1, 4, 22, 0, 10799},
++    {4, 1, 0, 14, 0, 10798},
++    {5, 0, 1, 0, 91, 0},
++    {6, 0, 2, 0, 265, 0},
++    {7, 1, 3, 22, 0, 10799},
+ };
+ const struct ArenaCupReward gArenaCup1Rewards[] = {
+-    {3, 0, 5, 0, 22, 0},
+-    {5, 1, 6, 8, 0, 10803},
+-    {6, 0, 7, 0, 76, 0},
++    {3, 0, 4, 0, 22, 0},
++    {5, 1, 5, 8, 0, 10803},
++    {6, 0, 6, 0, 76, 0},
+ };
+ const struct ArenaCupReward gArenaCup2Rewards[] = {
++    {2, 0, 7, 0, 266, 0},
+     {3, 1, 8, 23, 0, 10807},
+     {3, 0, 9, 0, 8, 0},
+     {5, 1, 10, 2, 0, 10808},
+@@ -25,49 +25,54 @@ const struct ArenaCupReward gArenaCup3Rewards[] = {
+ };
+ const struct ArenaCupReward gArenaCup4Rewards[] = {
+     {4, 1, 14, 26, 0, 10816},
+-    {4, 0, 15, 0, 237, 0},
+-    {5, 0, 16, 0, 132, 0},
++    {5, 0, 15, 0, 132, 0},
++    {6, 0, 16, 0, 163, 0},
+ };
+ const struct ArenaCupReward gArenaCup5Rewards[] = {
+     {3, 0, 17, 0, 170, 0},
+     {4, 0, 18, 0, 141, 0},
+-    {5, 1, 19, 19, 0, 10820},
+-    {6, 0, 20, 0, 95, 0},
+-    {7, 1, 21, 13, 0, 10821},
++    {4, 0, 19, 0, 134, 0},
++    {5, 1, 20, 19, 0, 10820},
++    {6, 0, 21, 0, 95, 0},
++    {7, 1, 22, 13, 0, 10821},
+ };
+ const struct ArenaCupReward gArenaCup6Rewards[] = {
+-    {3, 0, 22, 0, 113, 0},
+-    {4, 1, 23, 27, 0, 10825},
+-    {5, 0, 24, 0, 84, 0},
++    {3, 0, 23, 0, 113, 0},
++    {4, 1, 24, 27, 0, 10825},
++    {5, 0, 25, 0, 84, 0},
++    {5, 0, 26, 0, 112, 0},
++    {6, 0, 27, 0, 85, 0},
++    {7, 0, 28, 0, 49, 0},
++    {7, 0, 29, 0, 64, 0},
+ };
+ const struct ArenaCupReward gArenaCup8Rewards[] = {
+-    {1, 0, 25, 0, 151, 0},
+-    {2, 0, 26, 0, 267, 0},
+-    {3, 0, 27, 0, 268, 0},
+-    {4, 0, 28, 0, 24, 0},
+-    {5, 0, 29, 0, 96, 0},
+-    {6, 0, 30, 0, 98, 0},
+-    {7, 0, 31, 0, 50, 0},
+-    {8, 0, 32, 0, 83, 0},
+-    {9, 0, 33, 0, 11, 0},
+-    {10, 0, 34, 0, 38, 0},
++    {1, 0, 30, 0, 151, 0},
++    {2, 0, 31, 0, 267, 0},
++    {3, 0, 32, 0, 268, 0},
++    {4, 0, 33, 0, 24, 0},
++    {5, 0, 34, 0, 96, 0},
++    {6, 0, 35, 0, 98, 0},
++    {7, 0, 36, 0, 50, 0},
++    {8, 0, 37, 0, 83, 0},
++    {9, 0, 38, 0, 11, 0},
++    {10, 0, 39, 0, 38, 0},
+ };
+ 
+ const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT] = {
+     // Tret Cup
+-    {8, 2, 0, 15, 5, {0}, gArenaCup0Rewards, 10795, 10796, 10797, 0},
++    {8, 2, 0, 15, 4, {0}, gArenaCup0Rewards, 10795, 10796, 10797, 0},
+     // Mercury Cup
+     {8, 2, 1, 18, 3, {0}, gArenaCup1Rewards, 10800, 10801, 10802, 0},
+     // Mogall Cup
+-    {7, 2, 2, 20, 4, {0}, gArenaCup2Rewards, 10804, 10805, 10806, 0},
++    {7, 2, 2, 20, 5, {0}, gArenaCup2Rewards, 10804, 10805, 10806, 0},
+     // Altin Cup
+     {9, 2, 3, 25, 2, {0}, gArenaCup3Rewards, 10809, 10810, 10811, 0},
+     // Tolbi Cup
+     {8, 2, 4, 27, 3, {0}, gArenaCup4Rewards, 10813, 10814, 10815, 0},
+     // Lunpa Cup
+-    {10, 2, 5, 35, 5, {0}, gArenaCup5Rewards, 10817, 10818, 10819, 0},
++    {10, 2, 5, 35, 6, {0}, gArenaCup5Rewards, 10817, 10818, 10819, 0},
+     // Lighthouse Cup
+-    {10, 2, 6, 50, 3, {0}, gArenaCup6Rewards, 10822, 10823, 10824, 0},
++    {10, 2, 6, 50, 7, {0}, gArenaCup6Rewards, 10822, 10823, 10824, 0},
+     // Boss Rush
+     {6, 1, 7, 0, 0, {0}, 0, 10826, 10827, 10828, 0},
+     // Crossbone Isle
+diff --git a/games/tbs/src/scene/arena_menu.c b/games/tbs/src/scene/arena_menu.c
+index cc997dbcb7..1c87085b1f 100644
+--- a/games/tbs/src/scene/arena_menu.c
++++ b/games/tbs/src/scene/arena_menu.c
+@@ -197,13 +197,43 @@ s32 ArenaMenu_AttendantMode(void) {
+   }
+ }
+ 
++/// After a fight every Djinni is back to normal: set, none on standby or
++/// recovering (the party's recovery list is emptied). A fight leaves the party's
++/// Djinn spent, and the next round should not start with them gone (Djinn do
++/// not count down by steps in the arena).
++void ArenaMenu_RestoreDjinn(void) {
++  struct DjinnRecoveryTable *table =
++      (struct DjinnRecoveryTable *)Djinn_GetRecoveryTable(0);
++  s32 count = Party_CountMembers();
++  s32 i;
++  s32 element;
++  s32 index;
++
++  table->list.count = 0;
++  for (i = 0; i < count; i++) {
++    s32 unitId = gMainRoutineWork.party[i];
++    struct Unit *unit = &gMainRoutineWork.units[unitId];
++
++    for (element = 0; element < 4; element++) {
++      for (index = 0; index < 7; index++) {
++        if ((unit->djinnHeld[element] & (1 << index)) &&
++            !(unit->djinnSet[element] & (1 << index)))
++          Djinn_Set(unitId, element, index);
++      }
++    }
++    Unit_Calculate(unitId);
++  }
++}
++
+ /// The attendant reports the coins a battle just won, and the party is healed
+-/// for the next one, unless the cup does not heal.
++/// for the next one, unless the cup does not heal. The Djinn are set again
++/// either way.
+ void ArenaMenu_ShowWin(s32 actorId, s32 reward) {
+   MessageArgument_ClearAll();
+   MessageArgument_Push(reward, MESSAGE_ARGUMENT_NUMBER);
+   Event_SetMessageId(MsgArenaVictory);
+   FieldMessage_ShowAtActor(actorId, 0);
++  ArenaMenu_RestoreDjinn();
+   if (ArenaCup_Heals())
+     Party_RestoreHpPp(1);
+ }
+diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
+index 8e48f2375b..6bbaa9ce5e 100644
+--- a/games/tbs/src/scene/battle_arena.c
++++ b/games/tbs/src/scene/battle_arena.c
+@@ -1862,7 +1862,11 @@ s32 BattleArena_RunRoundResult(void) {
+   if (gMainRoutineWork.entrance != BATTLE_ARENA_AFTER_MONSTER_WIN ||
+       !GameFlag_Get(FLAG_MONSTER_BATTLE)) {
+     Party_RestoreHpPp(1);
++#if ARENA_TRAINING
++    ArenaMenu_RestoreDjinn();
++#else
+     DjinnRecovery_CountDownTwenty();
++#endif
+   }
+   return 0;
+ }
+-- 
+2.53.0
+

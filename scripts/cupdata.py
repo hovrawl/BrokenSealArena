@@ -200,13 +200,19 @@ MAIN_COUNT = sum(1 for c in CUPS if not c.side)
 # Cups A to C are complete for gear (every chest worth equipping); D to G give
 # what fits and the rest is listed by `cup-gear.py --missing`.
 GEAR = {
-    "Tret": {3: ["ITEM_POWER_BREAD"], 5: ["ITEM_FUR_COAT"], 6: ["ITEM_HEALING_RING"]},
+    # Equipment only (no consumables). Chest gear first; "drop" lines are what the round's
+    # enemies drop in the story (scripts/cup-drops.py lists them).
+    "Tret": {5: ["ITEM_FUR_COAT"], 6: ["ITEM_HEALING_RING"]},
     "Mercury": {3: ["ITEM_ELVEN_RAPIER"], 6: ["ITEM_PSYNERGY_ARMOR"]},
-    "Mogall": {3: ["ITEM_ARCTIC_BLADE"], 5: ["ITEM_ELVEN_SHIRT"]},
+    "Mogall": {2: ["ITEM_UNICORN_RING"], 3: ["ITEM_ARCTIC_BLADE"], 5: ["ITEM_ELVEN_SHIRT"]},
     "Altin": {3: ["ITEM_VULCAN_AXE"]},
-    "Tolbi": {4: ["ITEM_MYSTIC_DRAUGHT"], 5: ["ITEM_SPIRIT_GLOVES"]},
-    "Lunpa": {3: ["ITEM_MYTHRIL_CIRCLET"], 4: ["ITEM_VIRTUOUS_ARMLET"], 6: ["ITEM_WATER_JACKET"]},
-    "Lighthouse": {3: ["ITEM_ORACLES_ROBE"], 5: ["ITEM_ASURAS_ARMOR"]},
+    "Tolbi": {5: ["ITEM_SPIRIT_GLOVES"], 6: ["ITEM_PROPHETS_HAT"]},   # drop: Cerberus
+    "Lunpa": {3: ["ITEM_MYTHRIL_CIRCLET"], 4: ["ITEM_VIRTUOUS_ARMLET", "ITEM_AURA_GLOVES"],   # drop: Magicore
+              6: ["ITEM_WATER_JACKET"]},
+    "Lighthouse": {3: ["ITEM_ORACLES_ROBE"],
+                   5: ["ITEM_ASURAS_ARMOR", "ITEM_FEATHERED_ROBE"],   # drop: Wild Gryphon
+                   6: ["ITEM_SPIKED_ARMOR"],                          # drop: Chimera Mage
+                   7: ["ITEM_BLESSED_MACE", "ITEM_ZODIAC_WAND"]},     # drops: Thunder Lizard, Grand Golem
     "Crossbone": {1: ["ITEM_WARRIORS_HELM"], 2: ["ITEM_FAIRY_RING"], 3: ["ITEM_CLERICS_RING"],
                   4: ["ITEM_MYSTERY_BLADE"], 5: ["ITEM_STORM_GEAR"], 6: ["ITEM_NINJA_GARB"],
                   7: ["ITEM_WICKED_MACE"], 8: ["ITEM_DEMON_MAIL"], 9: ["ITEM_MURAMASA"],
