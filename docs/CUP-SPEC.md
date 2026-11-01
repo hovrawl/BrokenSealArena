@@ -288,3 +288,182 @@ is (used in `arena_menu.c:114`). Cheapest placement: put `ArenaCup_SetLevel` in 
 
 **Verdict:** a prototype is cheap (about 25 lines plus one far-call veneer) and safe (it replays the
 existing level-up on a zeroed unit). It is *not written* in this task.
+
+## 4. Data format: the cup table
+
+New file `src/battle/battle/arena_cups.c` (part of `battle.c`, like `arena_ladder.c`) and the
+declarations in `include/module/arena.h`. `arena_ladder.c` keeps `ArenaTeam` and `ARENA_TEAM`; its two
+`static const` ladders become entries of the cup table and `ArenaLadder_Select` reads the chosen cup.
+
+```c
+/// Flags of ArenaCup.flags.
+#define ARENA_CUP_SIDE       0x01  /* beside the line: not counted in progress */
+#define ARENA_CUP_HEALS      0x02  /* heal after each win (ARENA_HEALS today) */
+#define ARENA_CUP_KEEP_LEVEL 0x04  /* do not set the party level (legacy tournaments) */
+#define ARENA_CUP_STATS_OPEN 0x08  /* the stat counter is open in this cup (level 99 tier) */
+
+/// Themes (for the menu icon and the attendant's line; no engine effect).
+enum { ARENA_THEME_STORY, ARENA_THEME_MIXED, ARENA_THEME_BOSS, ARENA_THEME_STATUS,
+       ARENA_THEME_DJINN, ARENA_THEME_UNDEAD, ARENA_THEME_DRAGON };
+
+struct ArenaCup {
+  u8  partyLevel;       /* ArenaCup_SetLevel at start; 0 with KEEP_LEVEL */
+  u8  flags;            /* ARENA_CUP_* */
+  u8  roundCount;       /* rungs used from rounds[] */
+  u8  bossRound;        /* 0-based rung of the cap; usually roundCount - 1 */
+  u8  requires;         /* main-line cups cleared before this one opens */
+  u8  theme;            /* ARENA_THEME_* */
+  u8  shopTier;         /* highest shop town unlocked by clearing it (0 = none new) */
+  u8  unused;
+  u16 firstClearCoins;  /* paid once, when the progress byte advances */
+  u32 djinnMask;        /* Djinn unlocked by clearing it: bit = element * 7 + n (shop numbering) */
+  const struct ArenaTeam *rounds;   /* roundCount entries */
+};
+extern const struct ArenaCup gArenaCups[ARENA_CUP_COUNT];
+```
+
+- `ArenaTeam` stays `{u8 targetLevel; struct Formation formation;}` (12 bytes,
+  `arena_ladder.c:14-17`). `Formation` holds at most **five member kinds**, fixed counts when
+  `minimumCounts == maximumCounts` (`formations.h:18-27`). A cup round that wants randomness may set
+  `maximumCounts > minimumCounts`; the builder then spreads extras by free slots
+  (`formation.c:525-569`).
+- A cup is addressed by its **index in `gArenaCups`**. Ids 0 and 1 stay the Gauntlet and the Boss
+  Rush, so `FLAG_ARENA_TOURNAMENT` (0x7f8) values already in saves keep meaning the same cups
+  (`arena.h:21-25`, `arena_series.c:26-31`). Main-line cups follow (2 to 12); further side cups
+  after. `ARENA_TOURNAMENT_COUNT` becomes `ARENA_CUP_COUNT` (a `STATIC_ASSERT` on the table length).
+- `ARENA_ROUNDS(t)` and `ARENA_HEALS(t)` (`arena.h:33-39`) become `gArenaCups[t].roundCount` and
+  `flags & ARENA_CUP_HEALS`. `ArenaLadder_Select` (`arena_ladder.c:78-113`) takes the rung from
+  `gArenaCups[cup].rounds[min(streak, roundCount - 1)]` instead of the `?:` over two arrays
+  (`:94-95`); the margin code is unchanged.
+- **Messages.** The texts say the round count ("of 12", `arena_series.c:12-22`, GOTCHAS "two number
+  blanks"). With 13 or more cups of different lengths, do not carry a count in the text: use "Round {n}" for
+  give-up and next-round (two generic messages) and keep **one cleared message per cup** (it names the
+  cup), generated into `text/en.po` from the table by a script (`scripts/gen-cup-messages.py`).
+  **UNKNOWN**: how new `msgid` numbers are allocated and how `msg_ids.h` is produced; read
+  `docs/WORKFLOW.md` and the end of `en.po` first. The current layout `MsgArenaGiveUpPrompt + 3*t + kind`
+  (`arena_series.c:21-22`) goes away.
+
+### 4.1 Conversion of the existing tournaments
+
+```c
+static const struct ArenaTeam gGauntletRounds[12] = { /* the 12 ARENA_TEAM lines, unchanged */ };
+static const struct ArenaTeam gBossRushRounds[6]  = { /* the 6 ARENA_TEAM lines, unchanged */ };
+
+const struct ArenaCup gArenaCups[ARENA_CUP_COUNT] = {
+  /* 0 Monster Gauntlet */ {.partyLevel = 0,
+      .flags = ARENA_CUP_SIDE | ARENA_CUP_HEALS | ARENA_CUP_KEEP_LEVEL,
+      .roundCount = 12, .bossRound = 11, .requires = 0, .theme = ARENA_THEME_MIXED,
+      .rounds = gGauntletRounds},
+  /* 1 Boss Rush */        {.partyLevel = 0, .flags = ARENA_CUP_SIDE | ARENA_CUP_KEEP_LEVEL, /* no HEALS */
+      .roundCount = 6, .bossRound = 5, .requires = 0 /* GUESS: 4 */, .theme = ARENA_THEME_BOSS,
+      .rounds = gBossRushRounds},
+  /* 2 Vale Cup ... */
+};
+```
+
+`KEEP_LEVEL` keeps today's behaviour exactly (rung targets are absolute, `targetLevel` 10 to 45
+against a party of any level). The Boss Rush's `requires` is a **GUESS** (open after cup 4, or leave it
+at 0 as today, decision D3). Once the main cups exist, both side cups may switch to a party level (the
+Gauntlet's targets 10 to 45 suit a level-30 or 40 party; the Boss Rush's 14 to 45 suit 40).
+
+### 4.2 The six-sprite-slot limit and its check
+
+The battle has **six enemy sprite slots**; a small enemy takes 1, every other 2
+(`formation.c:510-523, 556-559`, comment `arena_ladder.c:20-23`; `BattleSprite_IsSmall`,
+`battle_sprite.c:48-57`, reads `gBattleSprites[index].isSmall`). Boss and Djinn rows are all "large".
+**The engine does not guard the minimums**: `freeSpriteSlots` is only decremented by
+`requiredSlots * minimumCount` (`:512-523`) and may go negative; extras are then skipped but the
+minimums are still listed. What an overflowing team does on screen is **UNKNOWN**; do not rely on it.
+So the limit must be enforced in the data:
+
+1. `scripts/cup-check.py` (new, run by the builder before every export; reads `arena_cups.c` and
+   reuses `cup-candidates.py`'s `parse_small` and slot sum): for every rung, sum
+   `minimumCount * (1 if small else 2)` and fail above 6; fail if `maximumCounts[i] <
+   minimumCounts[i]`, if a member id is a level-0 placeholder row, if more than five members are
+   used, if `roundCount` exceeds the array, or if `bossRound >= roundCount`. The generated candidates
+   already print `[n slots]` per formation with the same rule (`cup-candidates.py:297-310`).
+2. A `STATIC_ASSERT` that `sizeof(gArenaCups)/sizeof(gArenaCups[0]) == ARENA_CUP_COUNT`.
+3. Optional debug build: a runtime trap in `ArenaLadder_Select` if the slot sum exceeds six.
+
+Typical rungs under the limit: three large enemies, or one boss plus one large, or a large and
+several small ones. Which rows are small is in `gBattleSprites[].isSmall`; `cup-candidates.md` marks
+the large ones.
+
+## 5. Unlock state and saves
+
+### 5.1 Flags
+
+Persistent flags are those below 0x200 and from 0x400 up (0x200 to 0x2ff scene temp and 0x300 to
+0x3ff area temp are cleared on scene or area changes, `main_routine.c:421-427`, `flags.h:222-230`).
+The flag store is 4096 bits; byte flags start at a multiple of 8 and use the same numbering
+(`src/game/game/flags.c:7-12, 72-86`). Verification for 0x7f0 to 0x7f7:
+
+- no `#define` in `include/flags.h` has a value from 0x700 to 0x7ff (a grep of the whole header
+  returned nothing; the next named flag is 0x800);
+- the computed ranges stop short of it: Djinn from `FLAG_DJINN_FIRST` (`flags.h:26,35`), visited
+  areas 0x180 (`:221`), shop stock 0x400 plus a row (35 rows, to about 0x422, `:242`, `stock.c:323`),
+  enemy defeated 0x600 plus an enemy id (`battle_internal.h:147`; ids run to 8 + 165, so to about 0x6ad);
+- no code in `src` or `include` mentions a `0x7e..` or `0x7f..` flag (grep: only unrelated hex);
+- `docs/GOTCHAS.md:98-105` and `module/arena.h:15-20` list only 0x7f8 as claimed.
+
+So **0x7f0 to 0x7f7 and 0x7e0 to 0x7ef are free**; the whole band 0x700 to 0x7ff is unnamed.
+
+| Flag | Byte | Meaning | Written when |
+|---|---|---|---|
+| `FLAG_ARENA_TOURNAMENT` 0x7f8 (kept) | 0xff | **the chosen cup id** of the running or last series (index of `gArenaCups`) | Solo is chosen (`arena_menu.c:100`) |
+| `FLAG_ARENA_PROGRESS` 0x7f0 (new) | 0xfe | main-line cups cleared, 0 to 11 | a main cup is cleared, to `max(old, order + 1)` |
+| `FLAG_ARENA_SIDE_CLEARED` 0x7e8 (new) | 0xfd | bit n = side cup n cleared | a side cup is cleared |
+| 0x7e0 (reserve) | 0xfc | second side-cup byte, or grades for the trophy work | later |
+| 0x7d8 and below (reserve) | | trophies: best result per cup (for the file list) | later |
+
+Smoke access: `rush_clear.txt` pokes the tournament byte at **0x0200013F**, which is
+`gGameFlagBytes + 0xff`, so the base is 0x02000040 and progress is **0x0200013E**, side bits
+0x0200013D. (Inferred from that script; confirm with a `peek` of a known flag.)
+
+Progress is a **count**, not per-cup bits, because the line is linear. Per-cup records (trophies, best
+time, grade) belong to the later trophy work and need more bytes. **UNKNOWN**: how the File Screen
+could read a save's flags for the file list; the flags travel with the save but the list screen was
+not read.
+
+### 5.2 What survives a Pause-menu save and a resume (patches 7 and 9)
+
+A running series is exactly: `FLAG_MONSTER_BATTLE` (0x173, persistent), the win count
+`linkTallies[LINK_TALLY_MONSTER_STREAK]` in the saved `MainRoutineWork`, and the cup id byte 0x7f8
+(`CHANGES.md` entries 8 to 10). The party's level, stats and Djinn are in the saved units. So a cup
+needs **no new state to resume**: the level was set at series start and is in the save; the cup id is a
+persistent byte; progress is in 0x7f0. The Pause-menu save overrides the next scene and entrance to the
+arena door (entry 7) and does not clear `FLAG_MONSTER_BATTLE` (entry 9). Points to test:
+
+1. Progress is written at the clear (in `ArenaSeries_AfterWin` before `ArenaSeries_End`,
+   `arena_series.c:83-98`), after the battle. The clear message runs at once, so there is no way to
+   save between the last win and the progress write.
+2. **Replaying a cleared cup pays no first-clear coins** (unlocks are derived from the progress byte;
+   coins only when it advances).
+3. **Scene temp flags are saved raw** (GOTCHAS lines 77-80): keep no cup state in 0x200 to 0x3ff.
+4. `FLAG_MONSTER_BATTLE_WINS` (0x3f8, area temp) is reset at series start (`battle_arena.c:1197`);
+   unchanged.
+5. A save from before cups has tournament byte 0 or 1 and progress 0. It loads; the next series start
+   shows the confirm prompt and sets the level (section 6).
+6. New Game (`ArenaBoot_NewGame`) must zero progress and the side bits, set the start level
+   (`ARENA_START_LEVEL`, `arena.h:13`, now 50) and the purse (now 1500, `arena_boot.c:62`).
+
+### 5.3 How Djinn and items are unlocked
+
+Today the party manager sells **all 28 Djinn at 500 coins** with no gate (`arena_shop.c:302-303`,
+`ArenaShop_Buy` `:493-512`: `Djinn_GiveFar` then `Djinn_SetFar`), 32 Psynergy (`:304, 416-425`), stats
+(`:306-407`), and opens Xian's stock rows 16 to 18 (`arena_menu.c:75-77, 133-137`). Gating is by
+*derived stock*, never by a flag per item:
+
+| What | Gate | Where | Change |
+|---|---|---|---|
+| Djinn on sale | `unlocked` = OR of `djinnMask` of main cups with index below progress, plus the starters | `arena_shop.c:466-489, 538-600` (the Djinn panel is 3 by 4, `:25-29`) | hide or mark Djinn outside `unlocked` |
+| Item shops | town tier `T` = max `shopTier` of cleared cups; the manager opens the three rows of that town in `sStockTable` (weapons, armor, supplies) | `arena_menu.c:75-77, 133-137` replaces the constant `TRAINING_SHOP_FIRST_ROW` | one function `ArenaCup_ShopRow(kind)` |
+| Stat counter | open only if the unit's level is 99 (or the running cup has `ARENA_CUP_STATS_OPEN`) | `arena_menu.c:143-146` | a message when closed, section 6 |
+| Psynergy counter | candidate to retire (`PROGRESSION.md`: Psynergy is not bought) | `arena_menu.c:129-131` | decision D4 |
+| Cups open | `cup.requires <= progress` | attendant menu | section 6 |
+
+Items outside shops (the "Artifacts" lists in some rows) depend on `FLAG_SHOP_ARTIFACTS_STOCKED + row`
+(`stock.c:312-323`); **UNKNOWN** whether the arena's `Shop_Run` initialises them (rows 16 to 18 worked).
+Rows 1 to 15 and 19 to 34 are untested in the arena: smoke every row (plan step 6). The rows were
+authored for the story, so a town can sell gear far stronger or weaker than the cup suggests. The tier
+table in 2.2 is the first draft of the item curve; the balance pass owns it.
