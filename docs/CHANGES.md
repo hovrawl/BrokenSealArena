@@ -703,7 +703,7 @@ party or its level.
   base-stat changes of another kind (class change, a Lost Age port with other growth), it breaks.
 - Tests: `boost_reward.txt` (message and pool), `boost_shop.txt` (screens, Isaac, Garet, empty
   pool, Reset), `boost_resume.txt` (save, restart, Continue: pool kept), `boost_level.txt` (level
-  15). The screens are in `build\smoke\keepoost_*.png`.
+  15). The screens are in `build/smoke/keep/boost_*.png`.
 
 ## Planned
 
