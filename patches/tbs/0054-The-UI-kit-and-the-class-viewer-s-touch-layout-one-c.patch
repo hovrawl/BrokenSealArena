@@ -1,0 +1,1486 @@
+From e0491b89cfb83fd513d669bc3482c8bde190f87a Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 27 Nov 2026 08:04:25 +0000
+Subject: [PATCH] The UI kit, and the class viewer's touch layout (one code
+ path)
+
+include/arena/ui_kit.h: a screen lays itself out from a layout, the
+classic one (the GBA's 30 by 20 tiles, always taken on the GBA) or a
+touch one (desktop default: --ui classic|touch), whose rows are sized by
+--ui-size 16|24 and which spans the screen (the safe area off while it is
+open). Everything is drawn with the game's own windows, font, hand and
+icons.
+
+The class viewer reads its layout (CvLayout, ClassViewer_Layout): classic
+is the screen as it was; touch has a header of buttons ([L] [R], the
+filter, B Back; each presses its key), the line as a 3 by 2 grid of
+24-pixel rows that take taps, the detail under it, and its own windows
+for the Psynergy step. Grid movement works for any number of columns.
+Three new messages (MsgArenaUiBack, MsgArenaUiPrevious, MsgArenaUiNext).
+
+The port Makefile now rebuilds the text object when the GBA build
+regenerates messages.inc.
+
+This changes the GBA ROM (new messages, the layout reads).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8ykfbWFo924wEqysLhg
+---
+ games/tbs/include/arena/arena_cups.h    |   2 +-
+ games/tbs/include/arena/ui_kit.h        |  38 ++
+ games/tbs/src/scene/arena_cup_info.inc  |  82 ++---
+ games/tbs/src/shop/arena_class_viewer.c | 454 ++++++++++++++++++------
+ games/tbs/text/en.po                    | 134 +++----
+ port/Makefile                           |   3 +
+ port/README.md                          |   3 +
+ port/src/native_screen.c                |  23 +-
+ port/src/platform_headless.c            |   3 +
+ 9 files changed, 537 insertions(+), 205 deletions(-)
+ create mode 100644 games/tbs/include/arena/ui_kit.h
+
+diff --git a/games/tbs/include/arena/arena_cups.h b/games/tbs/include/arena/arena_cups.h
+index 412a96359b..2a6bbc95f1 100644
+--- a/games/tbs/include/arena/arena_cups.h
++++ b/games/tbs/include/arena/arena_cups.h
+@@ -70,6 +70,6 @@ extern const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT];
+ extern const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3];
+ extern const u8 gArenaCrossboneRows[3];
+ 
+-#define MSG_ARENA_CUP_NAME 10820
++#define MSG_ARENA_CUP_NAME 10823
+ 
+ #endif
+diff --git a/games/tbs/include/arena/ui_kit.h b/games/tbs/include/arena/ui_kit.h
+new file mode 100644
+index 0000000000..22405691c0
+--- /dev/null
++++ b/games/tbs/include/arena/ui_kit.h
+@@ -0,0 +1,38 @@
++#ifndef GUARD_ARENA_UI_KIT_H
++#define GUARD_ARENA_UI_KIT_H
++
++/// @file
++/// The UI kit: what our screens ask to lay themselves out, so one screen's code
++/// serves every build. A screen has a classic layout (the GBA's 30 by 20
++/// tiles, as the game's own screens are) and may have a touch layout (the full
++/// width of the screen, header buttons, rows big enough to tap). Both are drawn
++/// from the game's own windows, font, hand and icons (docs/UI.md, "Source
++/// accurate"). The GBA build always takes the classic layout, so the touch
++/// code compiles away there.
++///
++/// Desktop and phone builds choose with --ui classic|touch (default touch) and
++/// size the touch layout's rows with --ui-size 16|24 (default 24, about a
++/// fingertip on a phone; port/src/native_screen.c).
++
++#ifdef NATIVE
++extern int gUiTouch;     ///< 1: screens take their touch layouts
++extern int gUiRowHeight; ///< a touch layout's row, in pixels
++void Screen_SetUiSafeArea(int on);
++#define UI_TOUCH_LAYOUT (gUiTouch != 0)
++#define UI_ROW_HEIGHT gUiRowHeight
++/// A touch layout spans the whole screen: the 240-pixel safe area is off
++/// while it is open (DISPLAY_WIDTH is then the screen's width).
++#define UiScreen_BeginFullWidth() Screen_SetUiSafeArea(0)
++#define UiScreen_EndFullWidth() Screen_SetUiSafeArea(1)
++#else
++#define UI_TOUCH_LAYOUT 0
++#define UI_ROW_HEIGHT 16
++#define UiScreen_BeginFullWidth()
++#define UiScreen_EndFullWidth()
++#endif
++
++/// The screen's width in tiles: 30 on the GBA and in a classic layout, more in
++/// a full-width touch layout.
++#define UI_SCREEN_TILES (DISPLAY_WIDTH / 8)
++
++#endif
+diff --git a/games/tbs/src/scene/arena_cup_info.inc b/games/tbs/src/scene/arena_cup_info.inc
+index 3793d982ad..9d239daa7f 100644
+--- a/games/tbs/src/scene/arena_cup_info.inc
++++ b/games/tbs/src/scene/arena_cup_info.inc
+@@ -2,66 +2,66 @@
+ // Included by arena_menu.c. Global const data: a scene overlay has no static data of its own.
+ 
+ const struct ArenaCupReward gArenaCup0Rewards[] = {
+-    {2, 2, 0, 0, 0, 10838},
+-    {3, 2, 1, 2, 0, 10840},
+-    {4, 1, 0, 14, 0, 10847},
++    {2, 2, 0, 0, 0, 10841},
++    {3, 2, 1, 2, 0, 10843},
++    {4, 1, 0, 14, 0, 10850},
+     {5, 0, 1, 0, 91, 0},
+     {6, 0, 2, 0, 265, 0},
+-    {7, 1, 3, 22, 0, 10848},
++    {7, 1, 3, 22, 0, 10851},
+ };
+ const struct ArenaCupReward gArenaCup1Rewards[] = {
+-    {2, 2, 2, 3, 0, 10841},
++    {2, 2, 2, 3, 0, 10844},
+     {3, 0, 4, 0, 22, 0},
+-    {4, 2, 3, 3, 0, 10841},
+-    {5, 1, 5, 8, 0, 10852},
++    {4, 2, 3, 3, 0, 10844},
++    {5, 1, 5, 8, 0, 10855},
+     {6, 0, 6, 0, 76, 0},
+ };
+ const struct ArenaCupReward gArenaCup2Rewards[] = {
+-    {1, 2, 4, 5, 0, 10843},
++    {1, 2, 4, 5, 0, 10846},
+     {2, 0, 7, 0, 266, 0},
+-    {3, 1, 8, 23, 0, 10856},
++    {3, 1, 8, 23, 0, 10859},
+     {3, 0, 9, 0, 8, 0},
+-    {4, 2, 5, 2, 0, 10840},
+-    {5, 1, 10, 2, 0, 10857},
++    {4, 2, 5, 2, 0, 10843},
++    {5, 1, 10, 2, 0, 10860},
+     {5, 0, 11, 0, 93, 0},
+ };
+ const struct ArenaCupReward gArenaCup3Rewards[] = {
+-    {1, 2, 6, 1, 0, 10839},
+-    {2, 2, 7, 0, 0, 10838},
++    {1, 2, 6, 1, 0, 10842},
++    {2, 2, 7, 0, 0, 10841},
+     {3, 0, 12, 0, 36, 0},
+-    {4, 1, 13, 10, 0, 10861},
+-    {4, 2, 8, 5, 0, 10843},
+-    {5, 2, 9, 4, 0, 10842},
++    {4, 1, 13, 10, 0, 10864},
++    {4, 2, 8, 5, 0, 10846},
++    {5, 2, 9, 4, 0, 10845},
+     {6, 0, 14, 0, 130, 0},
+-    {7, 2, 10, 4, 0, 10842},
+-    {8, 2, 11, 4, 0, 10842},
++    {7, 2, 10, 4, 0, 10845},
++    {8, 2, 11, 4, 0, 10845},
+ };
+ const struct ArenaCupReward gArenaCup4Rewards[] = {
+-    {1, 2, 12, 2, 0, 10840},
++    {1, 2, 12, 2, 0, 10843},
+     {2, 0, 15, 0, 132, 0},
+-    {3, 2, 13, 0, 0, 10838},
+-    {4, 1, 16, 26, 0, 10865},
+-    {5, 2, 14, 1, 0, 10839},
++    {3, 2, 13, 0, 0, 10841},
++    {4, 1, 16, 26, 0, 10868},
++    {5, 2, 14, 1, 0, 10842},
+     {6, 0, 17, 0, 163, 0},
+ };
+ const struct ArenaCupReward gArenaCup5Rewards[] = {
+-    {1, 2, 15, 2, 0, 10840},
++    {1, 2, 15, 2, 0, 10843},
+     {2, 0, 18, 0, 95, 0},
+     {3, 0, 19, 0, 170, 0},
+-    {3, 2, 16, 0, 0, 10838},
++    {3, 2, 16, 0, 0, 10841},
+     {4, 0, 20, 0, 141, 0},
+     {4, 0, 21, 0, 134, 0},
+-    {4, 2, 17, 3, 0, 10841},
+-    {5, 1, 22, 19, 0, 10869},
++    {4, 2, 17, 3, 0, 10844},
++    {5, 1, 22, 19, 0, 10872},
+     {6, 0, 23, 0, 259, 0},
+-    {7, 1, 24, 13, 0, 10870},
+-    {8, 2, 18, 1, 0, 10839},
++    {7, 1, 24, 13, 0, 10873},
++    {8, 2, 18, 1, 0, 10842},
+ };
+ const struct ArenaCupReward gArenaCup6Rewards[] = {
+     {1, 0, 25, 0, 164, 0},
+     {2, 0, 26, 0, 113, 0},
+     {3, 0, 27, 0, 161, 0},
+-    {4, 1, 28, 27, 0, 10874},
++    {4, 1, 28, 27, 0, 10877},
+     {5, 0, 29, 0, 85, 0},
+     {5, 0, 30, 0, 162, 0},
+     {6, 0, 31, 0, 112, 0},
+@@ -74,38 +74,38 @@ const struct ArenaCupReward gArenaCup6Rewards[] = {
+ const struct ArenaCupReward gArenaCup8Rewards[] = {
+     {1, 0, 37, 0, 151, 0},
+     {2, 0, 38, 0, 267, 0},
+-    {2, 2, 19, 5, 0, 10843},
++    {2, 2, 19, 5, 0, 10846},
+     {3, 0, 39, 0, 268, 0},
+     {4, 0, 40, 0, 24, 0},
+     {5, 0, 41, 0, 96, 0},
+-    {5, 2, 20, 1, 0, 10839},
++    {5, 2, 20, 1, 0, 10842},
+     {6, 0, 42, 0, 98, 0},
+     {7, 0, 43, 0, 50, 0},
+     {8, 0, 44, 0, 83, 0},
+-    {8, 2, 21, 3, 0, 10841},
++    {8, 2, 21, 3, 0, 10844},
+     {9, 0, 45, 0, 11, 0},
+     {10, 0, 46, 0, 38, 0},
+ };
+ 
+ const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT] = {
+     // Tret Cup
+-    {8, 2, 0, 15, 6, 0, 0x0, gArenaCup0Rewards, 10844, 10845, 10846, 0x80},
++    {8, 2, 0, 15, 6, 0, 0x0, gArenaCup0Rewards, 10847, 10848, 10849, 0x80},
+     // Mercury Cup
+-    {8, 2, 1, 18, 5, 0, 0x0, gArenaCup1Rewards, 10849, 10850, 10851, 0x80},
++    {8, 2, 1, 18, 5, 0, 0x0, gArenaCup1Rewards, 10852, 10853, 10854, 0x80},
+     // Mogall Cup
+-    {7, 2, 2, 20, 7, 0, 0x0, gArenaCup2Rewards, 10853, 10854, 10855, 0x40},
++    {7, 2, 2, 20, 7, 0, 0x0, gArenaCup2Rewards, 10856, 10857, 10858, 0x40},
+     // Altin Cup
+-    {9, 2, 3, 25, 9, 0, 0x80, gArenaCup3Rewards, 10858, 10859, 10860, 0x100},
++    {9, 2, 3, 25, 9, 0, 0x80, gArenaCup3Rewards, 10861, 10862, 10863, 0x100},
+     // Tolbi Cup
+-    {8, 2, 4, 27, 6, 0, 0x40, gArenaCup4Rewards, 10862, 10863, 10864, 0x80},
++    {8, 2, 4, 27, 6, 0, 0x40, gArenaCup4Rewards, 10865, 10866, 10867, 0x80},
+     // Lunpa Cup
+-    {10, 2, 5, 35, 11, 0, 0x100, gArenaCup5Rewards, 10866, 10867, 10868, 0x200},
++    {10, 2, 5, 35, 11, 0, 0x100, gArenaCup5Rewards, 10869, 10870, 10871, 0x200},
+     // Lighthouse Cup
+-    {10, 2, 6, 50, 12, 0, 0x100, gArenaCup6Rewards, 10871, 10872, 10873, 0x200},
++    {10, 2, 6, 50, 12, 0, 0x100, gArenaCup6Rewards, 10874, 10875, 10876, 0x200},
+     // Boss Rush
+-    {6, 1, 7, 0, 0, 0, 0x0, 0, 10875, 10876, 10877, 0x3f},
++    {6, 1, 7, 0, 0, 0, 0x0, 0, 10878, 10879, 10880, 0x3f},
+     // Crossbone Isle
+-    {10, 3, 7, 0, 13, 0, 0x0, gArenaCup8Rewards, 10878, 10879, 10880, 0x200},
++    {10, 3, 7, 0, 13, 0, 0x0, gArenaCup8Rewards, 10881, 10882, 10883, 0x200},
+ };
+ 
+ const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3] = {
+diff --git a/games/tbs/src/shop/arena_class_viewer.c b/games/tbs/src/shop/arena_class_viewer.c
+index 37a11714e8..e18b0f1fa0 100644
+--- a/games/tbs/src/shop/arena_class_viewer.c
++++ b/games/tbs/src/shop/arena_class_viewer.c
+@@ -14,6 +14,7 @@
+ #include "ability_ids.h"
+ #include "game/character.h"
+ #include "arena/arena.h"
++#include "arena/ui_kit.h"
+ 
+ /// The class table has twenty lines: the classes whose ids share a tens digit
+ /// (Squire to Sovereign are ids 1 to 5, Guard to Phalanx 10 to 14, and so on).
+@@ -110,35 +111,187 @@ static void ClassViewer_DrawPercent(struct Window *window, s32 label, s32 value,
+   Text_DrawMessageAsTilesFar(MsgArenaCvPercent, window, x + 80, y);
+ }
+ 
+-/// The browse screen: the top panel gives the highlighted class (name, the
+-/// Djinn it needs, stats, ward, whether the party reaches it) and the list
+-/// window the classes of the line, red where the party's Djinn do not reach.
+-static void ClassViewer_DrawBrowse(struct Window *top, struct Window *list,
+-                                   s32 unitId, s32 line, s32 filter,
+-                                   const s32 *owned, const s32 *ids, s32 count,
+-                                   s32 cursor, struct Sprite **figures,
+-                                   s16 *positions) {
++/// A window's place, in tiles.
++struct CvRect {
++  s8 x, y, width, height;
++};
++
++/// Where the class viewer's parts go. The classic layout is the GBA's screen
++/// (a 30 by 11 panel over a 30 by 9 list, the same two windows for both
++/// steps); the touch layout spans the screen with a header of buttons, the
++/// line as a grid of big rows and the detail under it, and its own windows for
++/// the Psynergy step (docs/UI-SPECS.md, "Class viewer"; ui_kit.h).
++struct CvLayout {
++  s8 touch;
++  struct CvRect header;               ///< touch only: the buttons
++  struct CvRect grid[2];              ///< by step: the classes, the Psynergy
++  struct CvRect info[2];              ///< by step: the detail under or over it
++  s16 inner;                          ///< pixels inside a full-width window
++  s16 columns, columnWidth, rowHeight; ///< the class grid
++  s16 psyColumns, psyRows, psyColumnWidth, psyRowHeight;
++  s16 infoTop;  ///< the detail's first row: under the heading (classic) or 0
++  s16 titleX;   ///< touch: the header's line number or page
++  s16 filterX;  ///< touch: the filter button's left edge
++  s16 backX;    ///< touch: the Back button's left edge
++  s16 lineWord; ///< touch: room for the word "Line"
++};
++
++static void CvRect_Set(struct CvRect *rect, s32 x, s32 y, s32 width,
++                       s32 height) {
++  rect->x = x;
++  rect->y = y;
++  rect->width = width;
++  rect->height = height;
++}
++
++static void ClassViewer_Layout(struct CvLayout *l) {
++  s32 tiles = UI_SCREEN_TILES;
++  s32 row = UI_ROW_HEIGHT;
++  s32 gridTiles;
++
++  l->inner = (tiles - 2) * 8;
++  if (!UI_TOUCH_LAYOUT) {
++    l->touch = 0;
++    CvRect_Set(&l->grid[0], 0, 11, 30, 9);
++    CvRect_Set(&l->info[0], 0, 0, 30, 11);
++    CvRect_Set(&l->grid[1], 0, 0, 30, 11);
++    CvRect_Set(&l->info[1], 0, 11, 30, 9);
++    l->columns = 2;
++    l->columnWidth = CV_LIST_COLUMN_WIDTH;
++    l->rowHeight = 16;
++    l->psyColumns = 2;
++    l->psyRows = CV_PSY_PER_PAGE / 2;
++    l->psyColumnWidth = CV_LIST_COLUMN_WIDTH;
++    l->psyRowHeight = 16;
++    l->infoTop = 8;
++    return;
++  }
++  // Header 3 tiles (its buttons take taps across its whole 24 pixels), the
++  // line in two rows, the detail in what is left.
++  l->touch = 1;
++  gridTiles = 2 * row / 8 + 2;
++  CvRect_Set(&l->header, 0, 0, tiles, 3);
++  CvRect_Set(&l->grid[0], 0, 3, tiles, gridTiles);
++  CvRect_Set(&l->info[0], 0, 3 + gridTiles, tiles, 17 - gridTiles);
++  CvRect_Set(&l->grid[1], 0, 3, tiles, 3 * row / 8 + 2);
++  CvRect_Set(&l->info[1], 0, 3 + l->grid[1].height, tiles,
++             17 - l->grid[1].height);
++  l->columns = 3;
++  l->columnWidth = l->inner / 3;
++  l->rowHeight = row;
++  l->psyColumns = 2;
++  l->psyRows = 3;
++  l->psyColumnWidth = l->inner / 2;
++  l->psyRowHeight = row;
++  l->infoTop = 0;
++  // [L][R] Line 1/20 ... filter ... Back: the word "Line" when it fits.
++  l->titleX = 54;
++  l->lineWord = l->inner >= 256;
++  l->filterX = l->titleX + (l->lineWord ? 74 : 40) + 4;
++  l->backX = l->inner - 40;
++}
++
++static s32 CvWindow_Is(struct Window *window, const struct CvRect *rect) {
++  return window != 0 && window->x == rect->x && window->y == rect->y &&
++         window->width == rect->width && window->height == rect->height;
++}
++
++/// Opens step `stage`'s windows, keeping an open one already in its place
++/// (the classic layout's two windows serve both steps) and closing the rest.
++static void ClassViewer_OpenStage(const struct CvLayout *l, s32 stage,
++                                  struct Window **grid, struct Window **info) {
++  struct Window *open[2];
++  struct Window *keepGrid = 0;
++  struct Window *keepInfo = 0;
++  s32 i;
++
++  open[0] = *grid;
++  open[1] = *info;
++  for (i = 0; i < 2; i++) {
++    if (keepGrid == 0 && CvWindow_Is(open[i], &l->grid[stage])) {
++      keepGrid = open[i];
++      open[i] = 0;
++    } else if (keepInfo == 0 && CvWindow_Is(open[i], &l->info[stage])) {
++      keepInfo = open[i];
++      open[i] = 0;
++    }
++  }
++  for (i = 0; i < 2; i++) {
++    if (open[i] != 0)
++      Window_CloseFar(open[i], 2);
++  }
++  if (keepInfo == 0)
++    keepInfo = Window_CreateFar(l->info[stage].x, l->info[stage].y,
++                                l->info[stage].width, l->info[stage].height,
++                                WINDOW_FLAG_INSTANT);
++  if (keepGrid == 0)
++    keepGrid = Window_CreateFar(l->grid[stage].x, l->grid[stage].y,
++                                l->grid[stage].width, l->grid[stage].height,
++                                WINDOW_FLAG_INSTANT);
++  *grid = keepGrid;
++  *info = keepInfo;
++}
++
++/// The touch header's buttons: [L] [R] at the left, Back at the right; the
++/// title and the filter (or the page) are drawn by the step.
++static void ClassViewer_DrawHeader(const struct CvLayout *l,
++                                   struct Window *header) {
++  WindowSprite_PrepareForRedrawFar(header);
++  Text_DrawMessageAsTilesFar(MsgArenaUiPrevious, header, 6, 0);
++  Text_DrawMessageAsTilesFar(MsgArenaUiNext, header, 32, 0);
++  Text_DrawMessageAsTilesFar(MsgArenaUiBack, header, l->backX + 4, 0);
++}
++
++/// The browse screen: the heading (the character, "Line n/m" and the filter;
++/// in the classic layout the panel's first row, in the touch layout the
++/// header), the line's classes in the grid, red where the party's Djinn do not
++/// reach, and the highlighted class's Djinn and stats in the detail.
++static void ClassViewer_DrawBrowse(const struct CvLayout *l,
++                                   struct Window *header, struct Window *info,
++                                   struct Window *list, s32 unitId, s32 line,
++                                   s32 filter, const s32 *owned, const s32 *ids,
++                                   s32 count, s32 cursor,
++                                   struct Sprite **figures, s16 *positions) {
+   struct Unit *unit = Unit_GetFar(unitId);
++  s32 top = l->infoTop;
++  s32 right = l->inner / 2;
+   s32 i;
+ 
+-  WindowSprite_PrepareForRedrawFar(top);
++  WindowSprite_PrepareForRedrawFar(info);
+   WindowSprite_PrepareForRedrawFar(list);
+-  Text_DrawStringAtOffsetFar(unit->name, top, 0, 0);
+-  Text_DrawMessageAsTilesFar(MsgArenaCvLine, top, 52, 0);
+-  Text_DrawNumberInWindowFar(line + 1, 2, top, 86, 0);
+-  Text_DrawStringInWindowFar(gMenu_SlashString, top, 102, 0);
+-  Text_DrawNumberInWindowFar(CV_LINE_COUNT, 2, top, 110, 0);
+-  Text_DrawMessageAsTilesFar(filter != 0 ? MsgArenaCvTagNow : MsgArenaCvTagAll,
+-                             top, 134, 0);
++  if (l->touch) {
++    s32 x = l->titleX;
++
++    ClassViewer_DrawHeader(l, header);
++    if (l->lineWord) {
++      Text_DrawMessageAsTilesFar(MsgArenaCvLine, header, x, 0);
++      x += 34;
++    }
++    Text_DrawNumberInWindowFar(line + 1, 2, header, x, 0);
++    Text_DrawStringInWindowFar(gMenu_SlashString, header, x + 16, 0);
++    Text_DrawNumberInWindowFar(CV_LINE_COUNT, 2, header, x + 24, 0);
++    Text_DrawMessageAsTilesFar(filter != 0 ? MsgArenaCvTagNow
++                                           : MsgArenaCvTagAll,
++                               header, l->filterX + 4, 0);
++  } else {
++    Text_DrawStringAtOffsetFar(unit->name, info, 0, 0);
++    Text_DrawMessageAsTilesFar(MsgArenaCvLine, info, 52, 0);
++    Text_DrawNumberInWindowFar(line + 1, 2, info, 86, 0);
++    Text_DrawStringInWindowFar(gMenu_SlashString, info, 102, 0);
++    Text_DrawNumberInWindowFar(CV_LINE_COUNT, 2, info, 110, 0);
++    Text_DrawMessageAsTilesFar(filter != 0 ? MsgArenaCvTagNow
++                                           : MsgArenaCvTagAll,
++                               info, 134, 0);
++  }
+   if (count == 0) {
+-    Text_DrawMessageAsTilesFar(MsgArenaNone, top, 0, 8);
++    Text_DrawMessageAsTilesFar(MsgArenaNone, info, 0, top);
+     Text_DrawMessageAsTilesFar(MsgArenaNone, list, 16, 8);
+     return;
+   }
+ 
+   for (i = 0; i < count; i++) {
+-    s32 x = (i % 2) * CV_LIST_COLUMN_WIDTH + 24;
+-    s32 y = (i / 2) * 16 + 8;
++    s32 x = (i % l->columns) * l->columnWidth + 24;
++    s32 y = (i / l->columns) * l->rowHeight + 8;
+     s32 reach = ClassViewer_Reach(unitId, ids[i], owned);
+ 
+     if (reach != 0)
+@@ -151,32 +304,36 @@ static void ClassViewer_DrawBrowse(struct Window *top, struct Window *list,
+     const struct ClassDefinition *class = &gClass_DefinitionTable[ids[cursor]];
+     s32 reach = ClassViewer_Reach(unitId, ids[cursor], owned);
+     s32 element;
++    s32 band = top + 8; // the Djinn's band of sixteen pixels
+ 
+-    Text_DrawMessageAsTilesFar(MsgClassName + ids[cursor], top, 0, 8);
+-    Text_DrawMessageAsTilesFar(MsgArenaCvReachNow + reach, top, 112, 8);
+-    // The Djinn row is a band of sixteen pixels (24 is its text row): an
+-    // animated figure of each element, as the Djinn panel shows them, and the
+-    // number of that element's Djinn the class needs.
+-    Text_DrawMessageAsTilesFar(MsgArenaCvDjinn, top, 0, 24);
++    Text_DrawMessageAsTilesFar(MsgClassName + ids[cursor], info, 0, top);
++    Text_DrawMessageAsTilesFar(MsgArenaCvReachNow + reach, info, right, top);
++    // An animated figure of each element, as the Djinn panel shows them, and
++    // the number of that element's Djinn the class needs.
++    Text_DrawMessageAsTilesFar(MsgArenaCvDjinn, info, 0, band + 8);
+     for (element = 0; element < ELEMENT_COUNT; element++) {
+       s32 x = 64 + element * 40;
+ 
+       figures[element] = Sprite_CreateFar(SPRITE_VENUS_DJINNI + element);
+       if (figures[element] != 0) {
+         Sprite_StartAnimationFar(figures[element], 2);
+-        positions[element * 2] = 8 + x + 8;
+-        positions[element * 2 + 1] = 8 + 16 + 15;
++        positions[element * 2] = info->x * 8 + 8 + x + 8;
++        positions[element * 2 + 1] = info->y * 8 + 8 + band + 15;
+       }
+       Text_DrawNumberInWindowFar(ClassViewer_Need(unitId, ids[cursor], element),
+-                                 2, top, x + 16, 24);
++                                 2, info, x + 16, band + 8);
+     }
+-    ClassViewer_DrawPercent(top, MsgArenaCvHp, class->hp * 5, 0, 32);
+-    ClassViewer_DrawPercent(top, MsgArenaCvPp, class->pp * 5, 0, 40);
+-    ClassViewer_DrawPercent(top, MsgArenaCvAttack, class->attack * 5, 0, 48);
+-    ClassViewer_DrawPercent(top, MsgArenaCvDefense, class->defense * 5, 112, 32);
+-    ClassViewer_DrawPercent(top, MsgArenaCvAgility, class->agility * 5, 112, 40);
+-    ClassViewer_DrawPercent(top, MsgArenaCvLuck, class->luck * 5, 112, 48);
+-    ClassViewer_DrawPercent(top, MsgArenaCvWard, class->ward, 0, 56);
++    ClassViewer_DrawPercent(info, MsgArenaCvHp, class->hp * 5, 0, top + 24);
++    ClassViewer_DrawPercent(info, MsgArenaCvPp, class->pp * 5, 0, top + 32);
++    ClassViewer_DrawPercent(info, MsgArenaCvAttack, class->attack * 5, 0,
++                            top + 40);
++    ClassViewer_DrawPercent(info, MsgArenaCvDefense, class->defense * 5, right,
++                            top + 24);
++    ClassViewer_DrawPercent(info, MsgArenaCvAgility, class->agility * 5, right,
++                            top + 32);
++    ClassViewer_DrawPercent(info, MsgArenaCvLuck, class->luck * 5, right,
++                            top + 40);
++    ClassViewer_DrawPercent(info, MsgArenaCvWard, class->ward, 0, top + 48);
+   }
+ }
+ 
+@@ -197,77 +354,140 @@ static s32 ClassViewer_ListPsynergy(s32 classId, s32 *abilities, s32 *levels) {
+   return count;
+ }
+ 
+-/// The Psynergy screen: the page of eight the highlight is on in the top panel
+-/// (an icon and a name for what the character's level has, a red name and the
+-/// level it needs for what it has not) and the class and the highlighted
+-/// Psynergy's level and PP in the window under it.
+-static void ClassViewer_DrawPsynergy(struct Window *top, struct Window *list,
++/// The Psynergy screen: the page the highlight is on in the grid (an icon and
++/// a name for what the character's level has, a red name and the level it
++/// needs for what it has not), and the class, the character and the
++/// highlighted Psynergy's level and PP in the detail (the class and the page
++/// in the header, in the touch layout).
++static void ClassViewer_DrawPsynergy(const struct CvLayout *l,
++                                     struct Window *header,
++                                     struct Window *grid, struct Window *info,
+                                      s32 unitId, s32 classId,
+                                      const s32 *abilities, const s32 *levels,
+                                      s32 count, s32 cursor) {
+   struct Unit *unit = Unit_GetFar(unitId);
+-  s32 first = cursor - cursor % CV_PSY_PER_PAGE;
++  s32 perPage = l->psyColumns * l->psyRows;
++  s32 first = cursor - cursor % perPage;
++  s32 pages = (count + perPage - 1) / perPage;
++  s32 rowLevel = l->touch ? 0 : 16;
+   s32 slot;
+ 
+-  WindowSprite_PrepareForRedrawFar(top);
+-  WindowSprite_PrepareForRedrawFar(list);
+-  for (slot = 0; slot < CV_PSY_PER_PAGE && first + slot < count; slot++) {
+-    s32 x = (slot % 2) * CV_LIST_COLUMN_WIDTH;
+-    s32 y = (slot / 2) * 16;
++  WindowSprite_PrepareForRedrawFar(grid);
++  WindowSprite_PrepareForRedrawFar(info);
++  for (slot = 0; slot < perPage && first + slot < count; slot++) {
++    s32 x = (slot % l->psyColumns) * l->psyColumnWidth;
++    s32 y = (slot / l->psyColumns) * l->psyRowHeight;
+     s32 known = levels[first + slot] <= unit->level;
+ 
+     if (known) {
+       struct WindowSprite *icon = WindowSprite_CreateFromResourceFar(
+-          ICON_KIND_ABILITY, abilities[first + slot], top, x + 16, y + 4);
++          ICON_KIND_ABILITY, abilities[first + slot], grid, x + 16, y + 4);
+ 
+       if (icon != 0)
+         icon->depth = 252;
+     } else {
+       Text_SetColorFar(TEXT_COLOR_RED);
+-      Text_DrawNumberInWindowFar(levels[first + slot], 2, top, x + 16, y + 8);
++      Text_DrawNumberInWindowFar(levels[first + slot], 2, grid, x + 16, y + 8);
+     }
+-    Text_DrawMessageAsTilesFar(MsgAbilityName + abilities[first + slot], top,
++    Text_DrawMessageAsTilesFar(MsgAbilityName + abilities[first + slot], grid,
+                                x + 36, y + 8);
+     Text_SetColorFar(TEXT_COLOR_WHITE);
+   }
+ 
+-  Text_DrawMessageAsTilesFar(MsgClassName + classId, list, 0, 0);
+-  Text_DrawStringAtOffsetFar(unit->name, list, 120, 0);
+-  Text_DrawStringAtOffsetFar(gMenu_LvString, list, 168, 0);
+-  Text_DrawNumberInWindowFar(unit->level, 2, list, 192, 0);
++  if (l->touch) {
++    ClassViewer_DrawHeader(l, header);
++    if (pages > 1) {
++      Text_DrawNumberInWindowFar(cursor / perPage + 1, 1, header, l->titleX,
++                                 0);
++      Text_DrawStringInWindowFar(gMenu_SlashString, header, l->titleX + 8, 0);
++      Text_DrawNumberInWindowFar(pages, 1, header, l->titleX + 16, 0);
++    }
++    Text_DrawMessageAsTilesFar(MsgClassName + classId, header,
++                               l->titleX + 30, 0);
++    Text_DrawStringAtOffsetFar(unit->name, info, 0, 8);
++    Text_DrawStringAtOffsetFar(gMenu_LvString, info, 48, 8);
++    Text_DrawNumberInWindowFar(unit->level, 2, info, 72, 8);
++  } else {
++    Text_DrawMessageAsTilesFar(MsgClassName + classId, info, 0, 0);
++    Text_DrawStringAtOffsetFar(unit->name, info, 120, 0);
++    Text_DrawStringAtOffsetFar(gMenu_LvString, info, 168, 0);
++    Text_DrawNumberInWindowFar(unit->level, 2, info, 192, 0);
++  }
+   if (count > 0) {
+     s32 level = levels[cursor];
+ 
+-    Text_DrawMessageAsTilesFar(MsgArenaCvLv, list, 0, 16);
+-    Text_DrawNumberInWindowFar(level, 2, list, 24, 16);
+-    Text_DrawMessageAsTilesFar(MsgArenaCvPp, list, 56, 16);
+-    Text_DrawNumberInWindowFar(Ability_Get(abilities[cursor])->ppCost, 2, list,
+-                               80, 16);
++    Text_DrawMessageAsTilesFar(MsgArenaCvLv, info, 0, rowLevel);
++    Text_DrawNumberInWindowFar(level, 2, info, 24, rowLevel);
++    Text_DrawMessageAsTilesFar(MsgArenaCvPp, info, 56, rowLevel);
++    Text_DrawNumberInWindowFar(Ability_Get(abilities[cursor])->ppCost, 2, info,
++                               80, rowLevel);
+     if (level > unit->level)
+       Text_SetColorFar(TEXT_COLOR_RED);
+     Text_DrawMessageAsTilesFar(level <= unit->level ? MsgArenaCvLearned
+                                                     : MsgArenaCvNotYet,
+-                               list, 120, 16);
++                               info, 120, rowLevel);
+     Text_SetColorFar(TEXT_COLOR_WHITE);
+   }
+-  Text_DrawMessageAsTilesFar(MsgArenaCvLegend, list, 0, 40);
+-  if (count > CV_PSY_PER_PAGE) {
+-    Text_DrawNumberInWindowFar(cursor / CV_PSY_PER_PAGE + 1, 1, list, 192, 40);
+-    Text_DrawStringInWindowFar(gMenu_SlashString, list, 200, 40);
+-    Text_DrawNumberInWindowFar((count + CV_PSY_PER_PAGE - 1) / CV_PSY_PER_PAGE,
+-                               1, list, 208, 40);
++  Text_DrawMessageAsTilesFar(MsgArenaCvLegend, info, 0, l->touch ? 16 : 40);
++  if (!l->touch && pages > 1) {
++    Text_DrawNumberInWindowFar(cursor / perPage + 1, 1, info, 192, 40);
++    Text_DrawStringInWindowFar(gMenu_SlashString, info, 200, 40);
++    Text_DrawNumberInWindowFar(pages, 1, info, 208, 40);
++  }
++}
++
++#ifdef NATIVE
++/// Touch: the header's buttons press the keys they stand for (L, R, Select,
++/// B); a tap in the grid moves the highlight there, or on the highlighted
++/// entry presses A (arena_touch.h). Returns 1 after the highlight moved.
++static s32 ClassViewer_Touch(const struct CvLayout *l, struct Window *header,
++                             struct Window *grid, s32 stage, s32 count,
++                             s32 *cursor, s32 psyCount, s32 *psyCursor) {
++  s32 perPage = l->psyColumns * l->psyRows;
++
++  if (l->touch && header != 0) {
++    if (WindowTouch_Cell(header, 0, -8, 26, 24, 1, 1) == 0)
++      gKeysPressed |= KEY_L;
++    else if (WindowTouch_Cell(header, 26, -8, 26, 24, 1, 1) == 0)
++      gKeysPressed |= KEY_R;
++    else if (stage == 0 &&
++             WindowTouch_Cell(header, l->filterX, -8, l->backX - l->filterX - 4,
++                              24, 1, 1) == 0)
++      gKeysPressed |= KEY_SELECT;
++    else if (WindowTouch_Cell(header, l->backX, -8, l->inner - l->backX, 24, 1,
++                              1) == 0)
++      gKeysPressed |= KEY_B;
++  }
++  if (stage == 0)
++    return WindowTouch_Pick(grid, 0, 8 - (l->rowHeight - 8) / 2,
++                            l->columnWidth, l->rowHeight, l->columns, count,
++                            cursor);
++  {
++    s32 first = *psyCursor - *psyCursor % perPage;
++    s32 slot = *psyCursor - first;
++    s32 onPage = psyCount - first < perPage ? psyCount - first : perPage;
++
++    if (WindowTouch_Pick(grid, 0, 0, l->psyColumnWidth, l->psyRowHeight,
++                         l->psyColumns, onPage, &slot)) {
++      *psyCursor = first + slot;
++      return 1;
++    }
+   }
++  return 0;
+ }
++#endif
+ 
+-/// Arena romhack: the class viewer for one character (`unitId`). Opens a panel
+-/// over a list window and runs until B at the browse screen; returns 0. See the
+-/// file comment and docs/UI-SPECS.md for the screens. Called from the Battle
+-/// Arena overlay through SHOP.S.
++/// Arena romhack: the class viewer for one character (`unitId`). Opens its
++/// layout's windows (ClassViewer_Layout) and runs until B at the browse
++/// screen; returns 0. See the file comment and docs/UI-SPECS.md for the
++/// screens. Called from the Battle Arena overlay through SHOP.S.
+ s32 ClassViewer_Run(s32 unitId) {
+   struct ShopState *shop;
++  struct CvLayout layout;
+   struct Window *anchorWindow;
+-  struct Window *top;
+-  struct Window *list;
++  struct Window *header = 0;
++  struct Window *grid = 0;
++  struct Window *info = 0;
+   struct WindowSprite *anchor;
+   s32 owned[ELEMENT_COUNT];
+   s32 ids[CV_CLASSES_PER_LINE];
+@@ -280,7 +500,10 @@ s32 ClassViewer_Run(s32 unitId) {
+   s32 psyCount = 0;
+   s32 psyCursor = 0;
+   s32 stage = 0;
++  s32 shown = 0; // the step whose windows are open
+   s32 redraw = 1;
++  s32 columns;
++  s32 perPage;
+   s32 i;
+   s32 element;
+   struct Sprite *figures[ELEMENT_COUNT];
+@@ -290,6 +513,11 @@ s32 ClassViewer_Run(s32 unitId) {
+     figures[i] = 0;
+   while (gKeysHeld != 0)
+     wait(1);
++  if (UI_TOUCH_LAYOUT)
++    UiScreen_BeginFullWidth();
++  ClassViewer_Layout(&layout);
++  columns = layout.columns;
++  perPage = layout.psyColumns * layout.psyRows;
+   Shop_InitializeState();
+   shop = gMenuState;
+   // The Djinn the party owns, by element: every member's held Djinn, set or on
+@@ -313,8 +541,11 @@ s32 ClassViewer_Run(s32 unitId) {
+   anchor->kind = 0;
+   MenuCursor_SetPositionImmediate(&shop->cursor, -32, 112);
+   shop->cursor.anchor = anchor;
+-  top = Window_CreateFar(0, 0, 30, 11, WINDOW_FLAG_INSTANT);
+-  list = Window_CreateFar(0, 11, 30, 9, WINDOW_FLAG_INSTANT);
++  if (layout.touch)
++    header = Window_CreateFar(layout.header.x, layout.header.y,
++                              layout.header.width, layout.header.height,
++                              WINDOW_FLAG_INSTANT);
++  ClassViewer_OpenStage(&layout, 0, &grid, &info);
+   shop->cursorFrames = 12;
+ 
+   while (1) {
+@@ -325,22 +556,30 @@ s32 ClassViewer_Run(s32 unitId) {
+           Sprite_DestroyFar(figures[i]);
+         figures[i] = 0;
+       }
++      if (shown != stage) {
++        ClassViewer_OpenStage(&layout, stage, &grid, &info);
++        shown = stage;
++      }
+       if (stage == 0) {
+         count = ClassViewer_Fill(line, unitId, filter, owned, ids);
+         if (cursor >= count)
+           cursor = count > 0 ? count - 1 : 0;
+-        ClassViewer_DrawBrowse(top, list, unitId, line, filter, owned, ids,
+-                               count, cursor, figures, positions);
++        ClassViewer_DrawBrowse(&layout, header, info, grid, unitId, line,
++                               filter, owned, ids, count, cursor, figures,
++                               positions);
+         if (count > 0)
+-          MenuCursor_Place(list, (cursor % 2) * CV_LIST_COLUMN_WIDTH + 2,
+-                           (cursor / 2) * 16 + 8);
++          MenuCursor_Place(grid, (cursor % columns) * layout.columnWidth + 2,
++                           (cursor / columns) * layout.rowHeight + 8);
+       } else {
+-        ClassViewer_DrawPsynergy(top, list, unitId, ids[cursor], abilities,
+-                                 levels, psyCount, psyCursor);
++        ClassViewer_DrawPsynergy(&layout, header, grid, info, unitId,
++                                 ids[cursor], abilities, levels, psyCount,
++                                 psyCursor);
+         if (psyCount > 0)
+-          MenuCursor_Place(top,
+-                           (psyCursor % 2) * CV_LIST_COLUMN_WIDTH - 2,
+-                           (psyCursor % CV_PSY_PER_PAGE / 2) * 16 + 8);
++          MenuCursor_Place(
++              grid,
++              (psyCursor % layout.psyColumns) * layout.psyColumnWidth - 2,
++              (psyCursor % perPage / layout.psyColumns) * layout.psyRowHeight +
++                  8);
+       }
+     }
+     wait(1);
+@@ -349,6 +588,13 @@ s32 ClassViewer_Run(s32 unitId) {
+         ArenaFigure_Place(figures[i], positions[i * 2], positions[i * 2 + 1],
+                           CV_FIGURE_SCALE);
+     }
++#ifdef NATIVE
++    if (ClassViewer_Touch(&layout, header, grid, stage, count, &cursor,
++                          psyCount, &psyCursor)) {
++      redraw = 1;
++      continue;
++    }
++#endif
+ 
+     if ((gKeysPressed & KEY_B) != 0) {
+       Sound_PlayFar(SE_MENU_CANCEL);
+@@ -400,59 +646,61 @@ s32 ClassViewer_Run(s32 unitId) {
+           redraw = 1;
+         }
+       }
+-      if ((gKeysRepeat & KEY_LEFT) != 0 && cursor % 2 == 1) {
++      if ((gKeysRepeat & KEY_LEFT) != 0 && cursor % columns != 0) {
+         Sound_PlayFar(SE_MENU_CURSOR_MOVE);
+         cursor--;
+         redraw = 1;
+       }
+-      if ((gKeysRepeat & KEY_RIGHT) != 0 && cursor % 2 == 0 &&
++      if ((gKeysRepeat & KEY_RIGHT) != 0 && cursor % columns != columns - 1 &&
+           cursor + 1 < count) {
+         Sound_PlayFar(SE_MENU_CURSOR_MOVE);
+         cursor++;
+         redraw = 1;
+       }
+-      if ((gKeysRepeat & KEY_UP) != 0 && cursor - 2 >= 0) {
++      if ((gKeysRepeat & KEY_UP) != 0 && cursor - columns >= 0) {
+         Sound_PlayFar(SE_MENU_CURSOR_MOVE);
+-        cursor -= 2;
++        cursor -= columns;
+         redraw = 1;
+       }
+-      if ((gKeysRepeat & KEY_DOWN) != 0 && cursor + 2 < count) {
++      if ((gKeysRepeat & KEY_DOWN) != 0 && cursor + columns < count) {
+         Sound_PlayFar(SE_MENU_CURSOR_MOVE);
+-        cursor += 2;
++        cursor += columns;
+         redraw = 1;
+       }
+     } else {
+-      if ((gKeysRepeat & KEY_LEFT) != 0 && psyCursor % 2 == 1) {
++      s32 psyColumns = layout.psyColumns;
++
++      if ((gKeysRepeat & KEY_LEFT) != 0 && psyCursor % psyColumns != 0) {
+         Sound_PlayFar(SE_MENU_CURSOR_MOVE);
+         psyCursor--;
+         redraw = 1;
+       }
+-      if ((gKeysRepeat & KEY_RIGHT) != 0 && psyCursor % 2 == 0 &&
++      if ((gKeysRepeat & KEY_RIGHT) != 0 &&
++          psyCursor % psyColumns != psyColumns - 1 &&
+           psyCursor + 1 < psyCount) {
+         Sound_PlayFar(SE_MENU_CURSOR_MOVE);
+         psyCursor++;
+         redraw = 1;
+       }
+-      if ((gKeysRepeat & KEY_UP) != 0 && psyCursor - 2 >= 0) {
++      if ((gKeysRepeat & KEY_UP) != 0 && psyCursor - psyColumns >= 0) {
+         Sound_PlayFar(SE_MENU_CURSOR_MOVE);
+-        psyCursor -= 2;
++        psyCursor -= psyColumns;
+         redraw = 1;
+       }
+-      if ((gKeysRepeat & KEY_DOWN) != 0 && psyCursor + 2 < psyCount) {
++      if ((gKeysRepeat & KEY_DOWN) != 0 && psyCursor + psyColumns < psyCount) {
+         Sound_PlayFar(SE_MENU_CURSOR_MOVE);
+-        psyCursor += 2;
++        psyCursor += psyColumns;
+         redraw = 1;
+       }
+       if ((gKeysPressed & KEY_R) != 0 &&
+-          psyCursor - psyCursor % CV_PSY_PER_PAGE + CV_PSY_PER_PAGE <
+-              psyCount) {
++          psyCursor - psyCursor % perPage + perPage < psyCount) {
+         Sound_PlayFar(SE_MENU_CURSOR_MOVE);
+-        psyCursor = psyCursor - psyCursor % CV_PSY_PER_PAGE + CV_PSY_PER_PAGE;
++        psyCursor = psyCursor - psyCursor % perPage + perPage;
+         redraw = 1;
+       }
+-      if ((gKeysPressed & KEY_L) != 0 && psyCursor >= CV_PSY_PER_PAGE) {
++      if ((gKeysPressed & KEY_L) != 0 && psyCursor >= perPage) {
+         Sound_PlayFar(SE_MENU_CURSOR_MOVE);
+-        psyCursor = psyCursor - psyCursor % CV_PSY_PER_PAGE - CV_PSY_PER_PAGE;
++        psyCursor = psyCursor - psyCursor % perPage - perPage;
+         redraw = 1;
+       }
+     }
+@@ -462,10 +710,14 @@ s32 ClassViewer_Run(s32 unitId) {
+     if (figures[i] != 0)
+       Sprite_DestroyFar(figures[i]);
+   }
+-  Window_CloseFar(list, 2);
+-  Window_CloseFar(top, 2);
++  Window_CloseFar(grid, 2);
++  Window_CloseFar(info, 2);
++  if (header != 0)
++    Window_CloseFar(header, 2);
+   Window_CloseFar(anchorWindow, 2);
+   wait(1);
++  if (UI_TOUCH_LAYOUT)
++    UiScreen_EndFullWidth();
+   Shop_ReleaseState();
+   return 0;
+ }
+diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
+index e5eaf29a46..0c44af5d5a 100644
+--- a/games/tbs/text/en.po
++++ b/games/tbs/text/en.po
+@@ -65552,114 +65552,126 @@ msgstr ""
+ "third. Agility: turn\n"
+ "order. Luck: status.{end_wait}"
+ 
++msgctxt "MsgArenaUiBack"
++msgid "10820"
++msgstr "{button_icon:2}Back"
++
++msgctxt "MsgArenaUiPrevious"
++msgid "10821"
++msgstr "{button_icon:3}"
++
++msgctxt "MsgArenaUiNext"
++msgid "10822"
++msgstr "{button_icon:4}"
++
+ # BEGIN GENERATED CUPS (scripts/gen-cups.py; do not edit by hand)
+ 
+ msgctxt "MsgArenaCupName0"
+-msgid "10820"
++msgid "10823"
+ msgstr ""
+ "Tret Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName1"
+-msgid "10821"
++msgid "10824"
+ msgstr ""
+ "Mercury Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName2"
+-msgid "10822"
++msgid "10825"
+ msgstr ""
+ "Mogall Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName3"
+-msgid "10823"
++msgid "10826"
+ msgstr ""
+ "Altin Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName4"
+-msgid "10824"
++msgid "10827"
+ msgstr ""
+ "Tolbi Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName5"
+-msgid "10825"
++msgid "10828"
+ msgstr ""
+ "Lunpa Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName6"
+-msgid "10826"
++msgid "10829"
+ msgstr ""
+ "Lighthouse Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName7"
+-msgid "10827"
++msgid "10830"
+ msgstr ""
+ "Boss Rush"
+ 
+ 
+ msgctxt "MsgArenaCupName8"
+-msgid "10828"
++msgid "10831"
+ msgstr ""
+ "Crossbone Isle"
+ 
+ 
+ msgctxt "MsgArenaCupNext"
+-msgid "10829"
++msgid "10832"
+ msgstr ""
+ "Next cup"
+ 
+ 
+ msgctxt "MsgArenaCupReplay"
+-msgid "10830"
++msgid "10833"
+ msgstr ""
+ "Replay"
+ 
+ 
+ msgctxt "MsgArenaCupSide"
+-msgid "10831"
++msgid "10834"
+ msgstr ""
+ "Side cups"
+ 
+ 
+ msgctxt "MsgArenaCupReplayPrompt"
+-msgid "10832"
++msgid "10835"
+ msgstr ""
+ "Replay which cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupGroupEarly"
+-msgid "10833"
++msgid "10836"
+ msgstr ""
+ "Early cups"
+ 
+ 
+ msgctxt "MsgArenaCupGroupLate"
+-msgid "10834"
++msgid "10837"
+ msgstr ""
+ "Later cups"
+ 
+ 
+ msgctxt "MsgArenaCupSidePrompt"
+-msgid "10835"
++msgid "10838"
+ msgstr ""
+ "Which side cup\n"
+ "will you enter?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaGearReward"
+-msgid "10836"
++msgid "10839"
+ msgstr ""
+ "A find from the\n"
+ "dungeon! It is yours.{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaDjinnNoRoom"
+-msgid "10837"
++msgid "10840"
+ msgstr ""
+ "Your Djinn are full!\n"
+ "Make room, then win\n"
+@@ -65667,56 +65679,56 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaBoostGetHP"
+-msgid "10838"
++msgid "10841"
+ msgstr ""
+ "You can boost\n"
+ "HP once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetPP"
+-msgid "10839"
++msgid "10842"
+ msgstr ""
+ "You can boost\n"
+ "PP once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetAttack"
+-msgid "10840"
++msgid "10843"
+ msgstr ""
+ "You can boost\n"
+ "Attack once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetDefense"
+-msgid "10841"
++msgid "10844"
+ msgstr ""
+ "You can boost\n"
+ "Defense once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetAgility"
+-msgid "10842"
++msgid "10845"
+ msgstr ""
+ "You can boost\n"
+ "Agility once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetLuck"
+-msgid "10843"
++msgid "10846"
+ msgstr ""
+ "You can boost\n"
+ "Luck once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaCupConfirm0"
+-msgid "10844"
++msgid "10847"
+ msgstr ""
+ "Enter the\n"
+ "Tret Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared0"
+-msgid "10845"
++msgid "10848"
+ msgstr ""
+ "You cleared the\n"
+ "Tret Cup!\n"
+@@ -65724,7 +65736,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst0"
+-msgid "10846"
++msgid "10849"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65738,7 +65750,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup0DjinnForge"
+-msgid "10847"
++msgid "10850"
+ msgstr ""
+ "You won the Djinni\n"
+ "Forge!\n"
+@@ -65746,7 +65758,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup0DjinnBreeze"
+-msgid "10848"
++msgid "10851"
+ msgstr ""
+ "You won the Djinni\n"
+ "Breeze!\n"
+@@ -65754,14 +65766,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm1"
+-msgid "10849"
++msgid "10852"
+ msgstr ""
+ "Enter the\n"
+ "Mercury Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared1"
+-msgid "10850"
++msgid "10853"
+ msgstr ""
+ "You cleared the\n"
+ "Mercury Cup!\n"
+@@ -65769,7 +65781,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst1"
+-msgid "10851"
++msgid "10854"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65781,7 +65793,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup1DjinnSleet"
+-msgid "10852"
++msgid "10855"
+ msgstr ""
+ "You won the Djinni\n"
+ "Sleet!\n"
+@@ -65789,14 +65801,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm2"
+-msgid "10853"
++msgid "10856"
+ msgstr ""
+ "Enter the\n"
+ "Mogall Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared2"
+-msgid "10854"
++msgid "10857"
+ msgstr ""
+ "You cleared the\n"
+ "Mogall Cup!\n"
+@@ -65804,7 +65816,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst2"
+-msgid "10855"
++msgid "10858"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65816,7 +65828,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup2DjinnZephyr"
+-msgid "10856"
++msgid "10859"
+ msgstr ""
+ "You won the Djinni\n"
+ "Zephyr!\n"
+@@ -65824,7 +65836,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup2DjinnQuartz"
+-msgid "10857"
++msgid "10860"
+ msgstr ""
+ "You won the Djinni\n"
+ "Quartz!\n"
+@@ -65832,14 +65844,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm3"
+-msgid "10858"
++msgid "10861"
+ msgstr ""
+ "Enter the\n"
+ "Altin Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared3"
+-msgid "10859"
++msgid "10862"
+ msgstr ""
+ "You cleared the\n"
+ "Altin Cup!\n"
+@@ -65847,7 +65859,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst3"
+-msgid "10860"
++msgid "10863"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65862,7 +65874,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup3DjinnSpritz"
+-msgid "10861"
++msgid "10864"
+ msgstr ""
+ "You won the Djinni\n"
+ "Spritz!\n"
+@@ -65870,14 +65882,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm4"
+-msgid "10862"
++msgid "10865"
+ msgstr ""
+ "Enter the\n"
+ "Tolbi Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared4"
+-msgid "10863"
++msgid "10866"
+ msgstr ""
+ "You cleared the\n"
+ "Tolbi Cup!\n"
+@@ -65885,7 +65897,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst4"
+-msgid "10864"
++msgid "10867"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65899,7 +65911,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup4DjinnSquall"
+-msgid "10865"
++msgid "10868"
+ msgstr ""
+ "You won the Djinni\n"
+ "Squall!\n"
+@@ -65907,14 +65919,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm5"
+-msgid "10866"
++msgid "10869"
+ msgstr ""
+ "Enter the\n"
+ "Lunpa Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared5"
+-msgid "10867"
++msgid "10870"
+ msgstr ""
+ "You cleared the\n"
+ "Lunpa Cup!\n"
+@@ -65922,7 +65934,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst5"
+-msgid "10868"
++msgid "10871"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65938,7 +65950,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup5DjinnFlash"
+-msgid "10869"
++msgid "10872"
+ msgstr ""
+ "You won the Djinni\n"
+ "Flash!\n"
+@@ -65946,7 +65958,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup5DjinnDew"
+-msgid "10870"
++msgid "10873"
+ msgstr ""
+ "You won the Djinni\n"
+ "Dew!\n"
+@@ -65954,14 +65966,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm6"
+-msgid "10871"
++msgid "10874"
+ msgstr ""
+ "Enter the\n"
+ "Lighthouse Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared6"
+-msgid "10872"
++msgid "10875"
+ msgstr ""
+ "You cleared the\n"
+ "Lighthouse Cup!\n"
+@@ -65969,7 +65981,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst6"
+-msgid "10873"
++msgid "10876"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65985,7 +65997,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup6DjinnLuff"
+-msgid "10874"
++msgid "10877"
+ msgstr ""
+ "You won the Djinni\n"
+ "Luff!\n"
+@@ -65993,14 +66005,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm7"
+-msgid "10875"
++msgid "10878"
+ msgstr ""
+ "Enter the\n"
+ "Boss Rush?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared7"
+-msgid "10876"
++msgid "10879"
+ msgstr ""
+ "You cleared the\n"
+ "Boss Rush!\n"
+@@ -66008,7 +66020,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst7"
+-msgid "10877"
++msgid "10880"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -66016,14 +66028,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm8"
+-msgid "10878"
++msgid "10881"
+ msgstr ""
+ "Enter the\n"
+ "Crossbone Isle?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared8"
+-msgid "10879"
++msgid "10882"
+ msgstr ""
+ "You cleared the\n"
+ "Crossbone Isle!\n"
+@@ -66031,7 +66043,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst8"
+-msgid "10880"
++msgid "10883"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+diff --git a/port/Makefile b/port/Makefile
+index 00160b28d4..b5d9e9419a 100644
+--- a/port/Makefile
++++ b/port/Makefile
+@@ -140,6 +140,9 @@ $(BUILD)/obj/%.o: %.c
+ 	@mkdir -p $(@D)
+ 	$(CC) $(GAME_CFLAGS) -MMD -MP -c -o $@ $<
+ # Game data in assembly, made host-assembler friendly first.
++# The game's text is assembled from what the GBA build generates from en.po.
++$(BUILD)/obj/games/$(GAME)/text/messages.o: $(GBA)/text/messages.inc
++
+ $(BUILD)/obj/%.o: %.s port/tools/arm2host_s.py
+ 	@mkdir -p $(@D)
+ 	$(PYTHON) port/tools/arm2host_s.py $< $(@:.o=.host.s) -I $(GBA) --defsym $(DEFINE)=1 $(COFF)
+diff --git a/port/README.md b/port/README.md
+index cd47c6748c..d967ec2860 100644
+--- a/port/README.md
++++ b/port/README.md
+@@ -171,3 +171,6 @@ Hooks in upstream files, all under `#ifdef NATIVE` (or `UBFIX`):
+ - The headless build runs a script's `reset` (as the mGBA driver does): it
+   starts itself again with `--resume N` at the command after the reset, with
+   the save on disk, so `save_continue.txt` works.
++- `--ui classic|touch` (or `TBS_UI`, default touch) picks the screens' layouts
++  (`include/arena/ui_kit.h`); `--ui-size 16|24` (or `TBS_UI_SIZE`, default 24)
++  sizes a touch layout's rows.
+diff --git a/port/src/native_screen.c b/port/src/native_screen.c
+index a77dae9946..7c3f4f08b1 100644
+--- a/port/src/native_screen.c
++++ b/port/src/native_screen.c
+@@ -36,13 +36,34 @@ static int Width_Parse(const char *text) {
+   return width;
+ }
+ 
++// The UI kit's choices (include/arena/ui_kit.h): touch layouts, and their
++// rows' height.
++int gUiTouch = 1;
++int gUiRowHeight = 24;
++
+ void Screen_ChooseWidth(int argc, char **argv) {
+   const char *choice = getenv("TBS_WIDTH");
++  const char *ui = getenv("TBS_UI");
++  const char *size = getenv("TBS_UI_SIZE");
+   int i;
+ 
+-  for (i = 1; i + 1 < argc; i++)
++  for (i = 1; i + 1 < argc; i++) {
+     if (!strcmp(argv[i], "--width"))
+       choice = argv[i + 1];
++    else if (!strcmp(argv[i], "--ui"))
++      ui = argv[i + 1];
++    else if (!strcmp(argv[i], "--ui-size"))
++      size = argv[i + 1];
++  }
++  if (ui && *ui)
++    gUiTouch = strcmp(ui, "classic") != 0;
++  if (size && *size) {
++    gUiRowHeight = atoi(size);
++    if (gUiRowHeight < 16)
++      gUiRowHeight = 16;
++    if (gUiRowHeight > 24)
++      gUiRowHeight = 24; // larger rows need scrolling lists (not yet)
++  }
+   if (choice && *choice)
+     gNativeDisplayWidth = Width_Parse(choice);
+   Screen_SetUiSafeArea(1);
+diff --git a/port/src/platform_headless.c b/port/src/platform_headless.c
+index 4ed1db38fb..f27dceae52 100644
+--- a/port/src/platform_headless.c
++++ b/port/src/platform_headless.c
+@@ -396,6 +396,9 @@ int Platform_Init(int argc, char **argv) {
+       sScale = atoi(argv[++i]);
+     } else if (!strcmp(argv[i], "--width") && i + 1 < argc) {
+       i++; // Screen_ChooseWidth took it
++    } else if ((!strcmp(argv[i], "--ui") || !strcmp(argv[i], "--ui-size")) &&
++               i + 1 < argc) {
++      i++; // Screen_ChooseWidth took it
+     } else if (!strcmp(argv[i], "--screen") && i + 1 < argc) {
+       i++; // NativeDev_ChooseScreen took it
+     } else if (!strcmp(argv[i], "--resume") && i + 1 < argc) {
+-- 
+2.43.0
+

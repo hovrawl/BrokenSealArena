@@ -1057,6 +1057,30 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
 - Not yet: `class_viewer.txt`'s walk to the scholar stops on the stairs in the
   native build; the screen is reached with `screen classviewer` instead.
 
+## 54. The UI kit, and the class viewer's touch layout (one code path)
+
+- The owner's direction (2026-11-27): the hack is a port whose source we
+  change towards our goals; everything must feel like Golden Sun ("source
+  accurate"); one UI code path with layouts, not separate desktop screens;
+  GBA byte-identity only as a check on pure refactors (`docs/UI.md`, intents
+  6 to 8). This patch changes the GBA ROM (three new messages, the class
+  viewer reading its layout).
+- `include/arena/ui_kit.h`: the classic layout (always on the GBA) or the
+  touch layout (desktop default; `--ui classic|touch`), touch rows sized by
+  `--ui-size 16|24` (default 24), full-width mode while a touch layout is open.
+- The class viewer now lays itself out from `CvLayout`: classic is the old
+  screen exactly; touch is the reviewed spec (header buttons L, R, filter,
+  Back; the line as a 3 by 2 grid of 24-pixel rows; the detail under it; the
+  Psynergy step with its own windows). Grid movement works for any number of
+  columns. Messages `MsgArenaUiBack`, `MsgArenaUiPrevious`, `MsgArenaUiNext`
+  (`scripts/add-ui-messages.py`, then `gen-cups.py`).
+- Port Makefile: the text object now rebuilds when the GBA build regenerates
+  `messages.inc` (new messages linked as undefined before).
+- Verified (headless): `touch_classviewer_240/288.txt` (tap a class, its
+  Psynergy, Back, next line, filter, Back out), `screen_classviewer.txt` with
+  `--ui classic` at 240 and 288 (same screen as before). The GBA ROM builds;
+  not run on mGBA here.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.
