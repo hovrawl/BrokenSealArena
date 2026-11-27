@@ -1023,6 +1023,24 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
   Items, then Weapons, into the weapon shop. The SDL side builds against the
   SDL 3.2 headers but was not run here.
 
+## 52. Native: touch on the shops and the Pause menu
+
+- `include/arena/arena_touch.h`: a tap on another choice in a window's grid
+  moves the selection there; a tap on the selected one presses A for that
+  frame, so the screen's own A code runs unchanged. Cells are placed from the
+  window's interior, like its sprites; cells under 24 pixels are widened at
+  the grid's edges (`Touch_TappedUiCell`).
+- Taps now work on the shops' stock row and page arrows, party row and bag
+  grid (buy, sell, the item picker), the arena's shops and member choosers, and
+  the Pause menu. Yes/No and the shop commands are icon rows, so they already
+  did (51). In the SDL build the right mouse button is B.
+- Verified (headless, 240 and 288): `touch_shop_*.txt` (Buy, a weapon, a member:
+  the purchase goes through), `touch_sell_*.txt` (Sell, a member, a bag slot
+  up to the sale's Yes/No), `touch_pause_*.txt` (Change settings).
+- Not yet: the GBA's bag icons are 16 pixels, under the 24-pixel target; the
+  custom screens are where bigger targets come in. No touch "back" except the
+  right mouse button.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

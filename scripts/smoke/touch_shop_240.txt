@@ -1,0 +1,27 @@
+# Touch in the weapon shop at width 240 (run with --width 240): into the shop
+# by taps (as touch_manager_240.txt), tap Buy, tap the third weapon to select
+# it and again to choose it, then the third party member the same way.
+include to_manager.txt
+touch 122 148
+wait 10
+touch 122 148
+wait 120
+touch 62 148
+wait 30
+touch 62 148
+wait 320
+touch 58 145
+wait 60
+shot /tmp/shots/s0.png
+touch 80 112
+wait 20
+shot /tmp/shots/s1.png
+touch 80 112
+wait 60
+shot /tmp/shots/s2.png
+touch 64 115
+wait 20
+shot /tmp/shots/s3.png
+touch 64 115
+wait 90
+shot /tmp/shots/s4.png

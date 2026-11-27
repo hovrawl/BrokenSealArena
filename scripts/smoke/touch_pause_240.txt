@@ -1,0 +1,12 @@
+# Touch on the Pause menu at width 240 (run with --width 240): open it, tap
+# Change settings to select it and again to choose it.
+include to_lobby.txt
+tap T
+wait 60
+shot /tmp/shots/p0.png
+touch 120 100
+wait 20
+shot /tmp/shots/p1.png
+touch 120 100
+wait 90
+shot /tmp/shots/p2.png

@@ -1,0 +1,439 @@
+From feaa74a93829471d7888e50bbdaf7bf759febb7d Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 27 Nov 2026 07:15:07 +0000
+Subject: [PATCH] Native: touch on the shops and the Pause menu
+
+include/arena/arena_touch.h: helpers that turn a tap on a window's grid of
+choices into what the keys do. A tap on another choice moves the
+selection there; a tap on the selected one presses A for that frame, so
+the screen's own A code runs unchanged. Cells are placed from the
+window's interior, as its sprites and cursor are; Touch_TappedUiCell
+widens cells smaller than the 24-pixel minimum at the grid's edges.
+
+Taps now work on the shops' stock row (with its page arrows), party row
+and bag grid (buying, selling, the item picker), the arena's shops and
+member choosers, and the Pause menu, beside the icon rows from patch 51.
+In the SDL build the right mouse button is B, so a mouse alone can back
+out.
+
+The GBA ROM is byte-identical.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8ykfbWFo924wEqysLhg
+---
+ games/tbs/include/arena/arena_touch.h       | 66 +++++++++++++++++++++
+ games/tbs/src/shop/arena_shop.c             | 14 +++++
+ games/tbs/src/shop/shop_buy.c               | 13 ++++
+ games/tbs/src/shop/shop_internal.h          | 35 +++++++++++
+ games/tbs/src/shop/shop_item_picker.c       | 13 ++++
+ games/tbs/src/shop/shop_sell.c              | 13 ++++
+ games/tbs/src/window/window_settings_menu.c | 11 ++++
+ port/README.md                              | 10 +++-
+ port/include/native/touch.h                 |  7 +++
+ port/src/native_touch.c                     | 43 ++++++++++++++
+ port/src/platform_sdl.c                     | 14 +++++
+ 11 files changed, 237 insertions(+), 2 deletions(-)
+ create mode 100644 games/tbs/include/arena/arena_touch.h
+
+diff --git a/games/tbs/include/arena/arena_touch.h b/games/tbs/include/arena/arena_touch.h
+new file mode 100644
+index 0000000000..31a6cf78c5
+--- /dev/null
++++ b/games/tbs/include/arena/arena_touch.h
+@@ -0,0 +1,66 @@
++#ifndef GUARD_ARENA_TOUCH_H
++#define GUARD_ARENA_TOUCH_H
++
++/// @file
++/// Touch for the game's own screens in the desktop build (native/touch.h):
++/// helpers that turn a tap on a window's grid of choices into the same moves
++/// the keys make. A tap on another choice moves the selection there; a tap on
++/// the selected one presses A for that frame, so the screen's own A code
++/// runs. Positions are in pixels from the window's interior (one tile in from
++/// its corner), as the window's sprites and cursor are placed.
++/// Desktop only; the GBA build has none of it.
++
++#ifdef NATIVE
++#include "native/touch.h"
++
++/// The grid cell tapped this frame, cells as for Touch_TappedUiCell but from
++/// the window's interior; -1 when none.
++static inline s32 WindowTouch_Cell(struct Window *window, s32 x, s32 y,
++                                   s32 cellWidth, s32 cellHeight, s32 columns,
++                                   s32 count) {
++  if (window == 0)
++    return -1;
++  return Touch_TappedUiCell(window->x * 8 + 8 + x, window->y * 8 + 8 + y,
++                            cellWidth, cellHeight, columns, count);
++}
++
++/// Applies a tap on a grid of choices to *selection: returns 1 after moving
++/// it to the tapped choice (with the cursor sound), so the caller redraws;
++/// on the selected choice it sets KEY_A in gKeysPressed and returns 0.
++static inline s32 WindowTouch_Pick(struct Window *window, s32 x, s32 y,
++                                   s32 cellWidth, s32 cellHeight, s32 columns,
++                                   s32 count, s32 *selection) {
++  s32 cell = WindowTouch_Cell(window, x, y, cellWidth, cellHeight, columns,
++                              count);
++
++  if (cell < 0)
++    return 0;
++  if (cell == *selection) {
++    gKeysPressed |= KEY_A;
++    return 0;
++  }
++  Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++  *selection = cell;
++  return 1;
++}
++
++/// The party row of the shops and the party manager (figures from
++/// Menu_CreatePartyFigures(window, 2, 0, 8, 0): one every 24 pixels, standing
++/// on the window's interior): as WindowTouch_Pick for the member index.
++static inline s32 WindowTouch_PickMember(struct Window *window, s32 count,
++                                         s32 *memberIndex) {
++  s32 index = (*memberIndex % count + count) % count;
++  s32 moved = WindowTouch_Pick(window, -4, -24, 24, 36, count, count, &index);
++
++  if (moved || (gKeysPressed & KEY_A))
++    *memberIndex = index;
++  return moved;
++}
++
++/// The bag grid of the shops (Shop_DrawMemberItems: SHOP_INVENTORY_COLUMNS
++/// 16-pixel icons a row, from 8 pixels into the window's interior).
++#define WINDOW_TOUCH_BAG(window, count, slot)                                  \
++  WindowTouch_Pick((window), 8, 0, 16, 16, 5, (count), (slot))
++
++#endif
++#endif
+diff --git a/games/tbs/src/shop/arena_shop.c b/games/tbs/src/shop/arena_shop.c
+index 0f61baad5b..8c6c845691 100644
+--- a/games/tbs/src/shop/arena_shop.c
++++ b/games/tbs/src/shop/arena_shop.c
+@@ -251,6 +251,13 @@ s32 ItemPicker_ChooseMember(s32 mode) {
+         ArenaFigure_Place(figures[i], positions[i * 2], positions[i * 2 + 1],
+                           ARENA_FIGURE_SCALE);
+     }
++#ifdef NATIVE
++    if (WindowTouch_PickMember(partyWindow, shop->partyMemberCount,
++                               &memberIndex)) {
++      redraw = 1;
++      continue;
++    }
++#endif
+     if ((gKeysPressed & KEY_A) != 0) {
+       Sound_PlayFar(SE_MENU_CONFIRM);
+       result = unitId;
+@@ -784,6 +791,13 @@ s32 ArenaShop_Run(s32 kind, s32 unitId) {
+                               ? 0x10000
+                               : ARENA_FIGURE_SCALE);
+     }
++#ifdef NATIVE
++    if (ShopTouch_PickStock(stockWindow, count, &selected)) {
++      notice = 0;
++      redraw = 1;
++      continue;
++    }
++#endif
+     if ((gKeysPressed & KEY_A) != 0) {
+       Sound_PlayFar(SE_MENU_CONFIRM);
+       notice = ArenaShop_Buy(kind, unitId, shop->stockItemIds[selected]);
+diff --git a/games/tbs/src/shop/shop_buy.c b/games/tbs/src/shop/shop_buy.c
+index 6449ab839c..9eec775276 100644
+--- a/games/tbs/src/shop/shop_buy.c
++++ b/games/tbs/src/shop/shop_buy.c
+@@ -64,6 +64,12 @@ next_page:
+       Shop_DrawItemPrice(priceWindow, itemId, stockDefinition->price,
+                          SHOP_PRICE_KIND_BUY);
+     }
++#ifdef NATIVE
++    if (ShopTouch_PickStock(stockWindow, stockCount, &selectionIndex)) {
++      redraw = 1;
++      continue;
++    }
++#endif
+     if ((gKeysPressed & KEY_A) != 0) {
+       selected = selectionIndex;
+       Sound_PlayFar(SE_MENU_CONFIRM);
+@@ -151,6 +157,13 @@ next_page:
+       else
+         Shop_DrawEquipComparison(itemWindow, unitId, shop->selectedItem);
+     }
++#ifdef NATIVE
++    if (WindowTouch_PickMember(partyWindow, shop->partyMemberCount,
++                               &selectionIndex)) {
++      redraw = 1;
++      continue;
++    }
++#endif
+     if ((gKeysPressed & KEY_A) != 0) {
+       // Test for room by adding one and taking it out again, before the
+       // coins are checked; a full bag and a full stack get different lines
+diff --git a/games/tbs/src/shop/shop_internal.h b/games/tbs/src/shop/shop_internal.h
+index cd878f29e9..108a2ba6fc 100644
+--- a/games/tbs/src/shop/shop_internal.h
++++ b/games/tbs/src/shop/shop_internal.h
+@@ -202,4 +202,39 @@ enum {
+ #define SHOP_QUANTITY_CURSOR_X 128
+ #endif
+ 
++#ifdef NATIVE
++#include "arena/arena_touch.h"
++
++/// Touch on the stock row of the buying screens (Shop_DrawStock): a page of
++/// SHOP_STOCK_PAGE_ITEMS entries 32 pixels apart, a figure over each in the
++/// Djinn shop, and the page arrows at the right. As WindowTouch_Pick for the
++/// index into the whole stock; an arrow turns the page.
++static inline s32 ShopTouch_PickStock(struct Window *window, s32 count,
++                                      s32 *selected) {
++  s32 pageStart = *selected - *selected % SHOP_STOCK_PAGE_ITEMS;
++  s32 slot = *selected - pageStart;
++  s32 onPage = count - pageStart;
++
++  if (pageStart > 0 && WindowTouch_Cell(window, 212, -20, 24, 24, 1, 1) == 0) {
++    Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++    *selected = pageStart - SHOP_STOCK_PAGE_ITEMS;
++    return 1;
++  }
++  if (pageStart + SHOP_STOCK_PAGE_ITEMS < count &&
++      WindowTouch_Cell(window, 212, 20, 24, 24, 1, 1) == 0) {
++    Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++    *selected = pageStart + SHOP_STOCK_PAGE_ITEMS;
++    return 1;
++  }
++  if (onPage > SHOP_STOCK_PAGE_ITEMS)
++    onPage = SHOP_STOCK_PAGE_ITEMS;
++  if (WindowTouch_Pick(window, 0, -16, 32, 36, SHOP_STOCK_PAGE_ITEMS, onPage,
++                       &slot)) {
++    *selected = pageStart + slot;
++    return 1;
++  }
++  return 0;
++}
++#endif
++
+ #endif
+diff --git a/games/tbs/src/shop/shop_item_picker.c b/games/tbs/src/shop/shop_item_picker.c
+index c67a1d2675..afacaa4743 100644
+--- a/games/tbs/src/shop/shop_item_picker.c
++++ b/games/tbs/src/shop/shop_item_picker.c
+@@ -43,6 +43,13 @@ s32 ItemPicker_Run(s32 *selectedUnit, s32 *selectedSlot) {
+     }
+ 
+     wait(1);
++#ifdef NATIVE
++    if (WindowTouch_PickMember(partyWindow, shop->partyMemberCount,
++                               &memberIndex)) {
++      redraw = 1;
++      continue;
++    }
++#endif
+     if ((gKeysPressed & KEY_A) != 0) {
+       if (Inventory_CountFar(unitId) == 0) {
+         Sound_PlayFar(SE_MENU_CANCEL);
+@@ -171,6 +178,12 @@ s32 ItemPicker_SelectItem(s32 unitId) {
+ 
+     wait(1);
+ 
++#ifdef NATIVE
++    if (WINDOW_TOUCH_BAG(shop->itemWindow, inventoryCount, &slot)) {
++      redraw = 1;
++      continue;
++    }
++#endif
+     if ((gKeysPressed & KEY_A) != 0) {
+       discardStatus = Inventory_CheckDiscardFar(unitId, slot);
+       if (discardStatus == INVENTORY_DISCARD_ALLOWED) {
+diff --git a/games/tbs/src/shop/shop_sell.c b/games/tbs/src/shop/shop_sell.c
+index 589b34bc26..fd568a0700 100644
+--- a/games/tbs/src/shop/shop_sell.c
++++ b/games/tbs/src/shop/shop_sell.c
+@@ -33,6 +33,13 @@ s32 Shop_ChooseMember(void) {
+       Shop_DrawMemberItems(shop->itemWindow, unitId);
+     }
+ 
++#ifdef NATIVE
++    if (WindowTouch_PickMember(listWindow, shop->partyMemberCount,
++                               &memberIndex)) {
++      redraw = 1;
++      continue;
++    }
++#endif
+     if ((gKeysPressed & KEY_A) != 0) {
+       wait(1);
+       if (Inventory_CountFar(unitId) == 0) {
+@@ -121,6 +128,12 @@ s32 Shop_SelectSell(s32 unitId) {
+         Shop_DrawMessage(descriptionWindow, itemId + MsgItemPlainName);
+       }
+ 
++#ifdef NATIVE
++      if (WINDOW_TOUCH_BAG(shop->itemWindow, inventoryCount, &slot)) {
++        redraw = 1;
++        continue;
++      }
++#endif
+       if ((gKeysPressed & KEY_A) != 0) {
+         Sound_PlayFar(SE_MENU_CONFIRM);
+         result = 0;
+diff --git a/games/tbs/src/window/window_settings_menu.c b/games/tbs/src/window/window_settings_menu.c
+index f8f498dfbe..dc54c7408a 100644
+--- a/games/tbs/src/window/window_settings_menu.c
++++ b/games/tbs/src/window/window_settings_menu.c
+@@ -4,6 +4,9 @@
+ 
+ #include "window_internal.h"
+ #include "arena_config.h"
++#ifdef NATIVE
++#include "arena/arena_touch.h"
++#endif
+ 
+ /// The pixels a settings slider's marker runs across, from OPTION_SLIDER_X.
+ #define OPTION_SLIDER_WIDTH 60
+@@ -848,6 +851,14 @@ s32 PauseMenu_Choose(void) {
+     }
+     MenuTitle_Bob(pair);
+     wait(1);
++#ifdef NATIVE
++    // Touch (arena_touch.h): a row, the divider to divider band of each.
++    if (WindowTouch_Pick(window, 0, -8, (window->width - 2) * 8,
++                         PAUSE_MENU_ROW_HEIGHT, 1, rows, &selectedEntry)) {
++      redraw = 1;
++      continue;
++    }
++#endif
+     if (gKeysPressed & KEY_A) {
+       result = selectedEntry;
+       Sound_PlayFar(SE_MENU_CONFIRM);
+diff --git a/port/README.md b/port/README.md
+index 87d91ce114..affe002b4b 100644
+--- a/port/README.md
++++ b/port/README.md
+@@ -55,8 +55,14 @@ One pointer (`native/touch.h`, `native_touch.c`): the platform reports it
+ headless build's `touch X Y` script command taps at a screen pixel), and game
+ code asks `Touch_TappedRect` / `Touch_TappedUiRect` whether a rectangle was
+ tapped this frame. Tap targets are at least `TOUCH_TARGET_MIN` (24) pixels.
+-So far the icon rows (`IconMenu_Run`: the manager, the shop choice) take taps:
+-tap an icon to select it, tap it again to choose it.
++Game screens take taps through `include/arena/arena_touch.h`: a tap on another
++choice moves the selection there, a tap on the selected one presses A for that
++frame, so each screen's own A code runs (`WindowTouch_Pick`, cells from a
++window's interior; `Touch_TappedUiCell` widens small cells at the grid's edges
++to the 24-pixel minimum). Taps work on the icon rows (`IconMenu_Run`: the
++manager, the shop choice, shop commands, Yes/No), the shops' stock row and page
++arrows, party row and bag grid, the arena's shops and member choosers, and the
++Pause menu. In the SDL build the right mouse button is B.
+ 
+ The headless build takes the arena repo's smoke scripts (`scripts/smoke/*.txt`:
+ `wait`, `press`, `tap`, `mash`, `include`, `shot`, `peek`, `poke`) and writes
+diff --git a/port/include/native/touch.h b/port/include/native/touch.h
+index 5d36c9c83a..33e30f53e6 100644
+--- a/port/include/native/touch.h
++++ b/port/include/native/touch.h
+@@ -18,6 +18,13 @@
+ int Touch_TappedRect(int x, int y, int width, int height);
+ /// As Touch_TappedRect, for a rectangle in the safe area's coordinates.
+ int Touch_TappedUiRect(int x, int y, int width, int height);
++/// The cell of a grid (columns across, count cells in all, each cellWidth by
++/// cellHeight from (left, top), in the safe area's coordinates) that was
++/// tapped this frame, or -1. A cell smaller than TOUCH_TARGET_MIN takes taps
++/// up to half the difference past the grid's outer edges; inside, the cell
++/// under the finger wins. The press and the release must be in the same cell.
++int Touch_TappedUiCell(int left, int top, int cellWidth, int cellHeight,
++                       int columns, int count);
+ /// 1 while the pointer is down; its place in screen pixels.
+ int Touch_Held(int *x, int *y);
+ 
+diff --git a/port/src/native_touch.c b/port/src/native_touch.c
+index b9c57cecf6..9e709604fe 100644
+--- a/port/src/native_touch.c
++++ b/port/src/native_touch.c
+@@ -48,3 +48,46 @@ int Touch_Held(int *x, int *y) {
+   *y = sY;
+   return sDown;
+ }
++
++// The cell under (px, py), or -1: one axis at a time, with the outer edges
++// widened so a small cell is still TOUCH_TARGET_MIN across.
++static int Axis(int p, int start, int size, int cells) {
++  int pad = size < TOUCH_TARGET_MIN ? (TOUCH_TARGET_MIN - size) / 2 : 0;
++  int rel = p - start;
++
++  if (rel < -pad || rel >= size * cells + pad)
++    return -1;
++  if (rel < 0)
++    return 0;
++  if (rel >= size * cells)
++    return cells - 1;
++  return rel / size;
++}
++
++static int CellAt(int px, int py, int left, int top, int cellWidth,
++                  int cellHeight, int columns, int count) {
++  int rows = (count + columns - 1) / columns;
++  int column = Axis(px, left, cellWidth, columns);
++  int row = Axis(py, top, cellHeight, rows);
++  int cell;
++
++  if (column < 0 || row < 0)
++    return -1;
++  cell = row * columns + column;
++  return cell < count ? cell : -1;
++}
++
++int Touch_TappedUiCell(int left, int top, int cellWidth, int cellHeight,
++                       int columns, int count) {
++  int cell;
++
++  if (!sReleased || count <= 0 || columns <= 0)
++    return -1;
++  left += gNativeUiOffset;
++  cell = CellAt(sX, sY, left, top, cellWidth, cellHeight, columns, count);
++  if (cell < 0 || cell != CellAt(sPressX, sPressY, left, top, cellWidth,
++                                 cellHeight, columns, count))
++    return -1;
++  sReleased = 0;
++  return cell;
++}
+diff --git a/port/src/platform_sdl.c b/port/src/platform_sdl.c
+index 153f908d39..8abd54b620 100644
+--- a/port/src/platform_sdl.c
++++ b/port/src/platform_sdl.c
+@@ -23,6 +23,8 @@ static int sQuit;
+ // pixels. A click that goes down and up between two frames still shows as
+ // down for one frame (sUpPending).
+ static int sPointerX, sPointerY, sPointerDown, sUpPending;
++// The right button is B, for backing out with the mouse alone; same rule.
++static int sBackDown, sBackUpPending;
+ static Uint64 sNextFrame;
+ 
+ #define FRAME_NS (SDL_NS_PER_SECOND * 280896ull / 16777216ull) // 59.73 Hz
+@@ -90,6 +92,13 @@ static void Events_Poll(void) {
+         } else if (sPointerDown) {
+           sUpPending = 1;
+         }
++      } else if (event.button.button == SDL_BUTTON_RIGHT) {
++        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
++          sBackDown = 1;
++          sBackUpPending = 0;
++        } else if (sBackDown) {
++          sBackUpPending = 1;
++        }
+       }
+       break;
+     case SDL_EVENT_GAMEPAD_ADDED:
+@@ -156,6 +165,11 @@ u16 Platform_ReadKeys(void) {
+   if (k[SDL_SCANCODE_DOWN]) keys |= 128;
+   if (k[SDL_SCANCODE_S]) keys |= 256;
+   if (k[SDL_SCANCODE_A]) keys |= 512;
++  if (sBackDown) keys |= 2;
++  if (sBackUpPending) {
++    sBackDown = 0;
++    sBackUpPending = 0;
++  }
+   if (sGamepad) {
+     Sint16 x = SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTX);
+     Sint16 y = SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTY);
+-- 
+2.43.0
+
