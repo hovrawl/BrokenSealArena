@@ -1081,6 +1081,25 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
   `--ui classic` at 240 and 288 (same screen as before). The GBA ROM builds;
   not run on mGBA here.
 
+## 55. The UI kit's header and list; the mechanics list on the kit
+
+- `src/shop/arena_ui_kit.c` (included by `shop.c`): `UiHeader` (the touch
+  header: [L] [R], Back, taps as keys) and `UiList` (message rows, Up and Down
+  with wrap, page scrolling with the shop's arrows, tap to select, tap again
+  to choose). `docs/UI.md` section 3a lists the calls.
+- The mechanics topic list (`MechanicsGuide_Choose`) uses them. Classic is
+  the old window (4, 2, 22, 15) unchanged; touch is a full-width list of
+  24-pixel rows under a "Battle mechanics" header with Back. New message
+  `MsgArenaUiMechanicsTitle` (`add-ui-messages.py` now adds only the missing
+  ones). The class viewer draws its header through the kit.
+- ROM layout: the shop bank overflowed by 0x7d; the English banks from battle
+  onward move up 0x2000 (`GOTCHAS.md`, ROM layout).
+- Verified (headless): `touch_mechanics_240/288.txt` (list, tap a topic, the
+  page-down arrow, Down twice, Back), `screen_mechanics.txt` with
+  `--ui classic` (the old screen; Up wraps to the last topic),
+  `touch_classviewer_240/288.txt` again (unchanged). The GBA ROM builds; not
+  run on mGBA here.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

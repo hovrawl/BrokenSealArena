@@ -47,9 +47,12 @@
   0x08326000 and `build.ps1` pads to 0x08806000. Patch 0044 overflowed bank 06 again (by
   0x81d): bank 07 now starts at 0x080b7000 and bank 08 at 0x080c9d00 (the banks after have no
   room: 08 ends within 0x2ac of 09). The bank starts are `#define`s at the top of
-  `ld_script.ld`, one block per edition: English is the `#else` block. The next overflow
-  needs code moved to another bank or an object of its own (a line in the linker script);
-  `scripts/bank-slack.py` reads the map for the slack.
+  `ld_script.ld`, one block per edition: English is the `#else` block. Patch 0055 (the UI
+  kit) overflowed bank 06 again: every English bank from battle to the resource directory
+  moved up 0x2000 together (battle 0x080b9000), which only needs room at the end of the
+  image (it ends at 0x08805e76, `ROM_END` is 0x08806000). The next move needs `ROM_END`
+  in `scripts/build.sh` raised first. `scripts/bank-slack.py` reads the map, but its bank
+  edges are the old fixed ones: read the last object before each `*_BANK_START` instead.
 - A placement row's flag condition is only read when the actors are spawned. After
   changing the flag in the lobby, call `Event_SpawnActorPlacements(gFieldWork->tables[1],
   ACTOR_FIRST_PLACED)` again (it creates the new actors and resets the others' places).

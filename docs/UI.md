@@ -163,8 +163,23 @@ change costs nothing, before it costs a build.
   header button presses the key it shows (L, R, Select, B), so the screen's
   key code runs unchanged. Grids take taps with `WindowTouch_Pick`
   (`arena_touch.h`): a tap selects, a tap on the selection presses A.
-- Rows larger than 24 pixels need lists that scroll; until then `--ui-size`
-  stops at 24.
+- Widgets (`src/shop/arena_ui_kit.c`, included by `shop.c`; use these before
+  writing a screen's own):
+  - `UiHeader_Open()` makes the header; `UiHeader_Draw(header, buttons)` clears
+    it and draws `UI_HEADER_PAGES` ([L] [R]) and `UI_HEADER_BACK_BUTTON`; the
+    screen then draws its title, at `UI_HEADER_TITLE_X` after [L] [R], or at
+    x 6 without them. `UiHeader_Touch(header, buttons)` each frame turns taps
+    into keys (an empty macro on the GBA).
+  - `UiList`: a column of message rows (`labelBase + index`) in any window.
+    `UiList_Init(list, window, count, labelBase, rowHeight, top, textX,
+    cursor)`, `UiList_Draw`, and `UiList_Step` each frame, which returns
+    `UI_LIST_MOVED`, `UI_LIST_CHOSEN` or `UI_LIST_CANCELLED`. Up and Down wrap;
+    rows past the window scroll, with the shop's blinking page arrows at the
+    right edge (tap an arrow to scroll a page); a tap selects a row and a tap
+    on the selected row chooses it. Classic layouts pass 16-pixel rows, touch
+    layouts `UI_ROW_HEIGHT`.
+- Used by: class viewer (header), mechanics topic list (header with title,
+  list). `--ui-size` stops at 24 until every list scrolls.
 
 ## 4. Standard layouts we have already used
 
