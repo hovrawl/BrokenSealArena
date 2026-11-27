@@ -1,0 +1,18 @@
+# The class viewer opened straight from the lobby (desktop build only: the
+# screen command), for building and checking it without the walk. Run with
+# --width 240 or 288.
+include to_lobby.txt
+screen classviewer
+wait 60
+shot /tmp/shots/cv0.png
+tap D
+wait 10
+shot /tmp/shots/cv1.png
+tap A
+wait 20
+shot /tmp/shots/cv2.png
+tap B
+wait 20
+tap B
+wait 30
+shot /tmp/shots/cv3.png

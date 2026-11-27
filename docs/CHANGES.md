@@ -1041,6 +1041,22 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
   custom screens are where bigger targets come in. No touch "back" except the
   right mouse button.
 
+## 53. Native: the field Psynergy menu, and tools for building screens
+
+- The field Psynergy menu crashed the desktop build (since 46): it stores
+  through two sprites that do not exist, the second marker
+  (`MenuCursor_Create`'s comment) and the Psynergy cursor before it is made;
+  on the cartridge those stores land in the BIOS. Natively the marker is a
+  sprite no window carries and the cursor's store waits until it exists. The
+  menu now opens and works (seen in the class viewer script's shots).
+- `--screen NAME` / `TBS_SCREEN` / the headless `screen NAME` command open a
+  screen straight from the field (`classviewer`, `mechanics`), so screens can be
+  built and checked without the walk (`screen_classviewer.txt`).
+- The headless build runs `reset` (it starts itself again at the next command,
+  keeping the save), so `save_continue.txt` works natively.
+- Not yet: `class_viewer.txt`'s walk to the scholar stops on the stairs in the
+  native build; the screen is reached with `screen classviewer` instead.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.
