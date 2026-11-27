@@ -1,0 +1,3882 @@
+From ef068088aea3692fc1ac4f9ec525a33eec1ec064 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 27 Nov 2026 03:34:25 +0000
+Subject: [PATCH] Native: a desktop build of the game (spike)
+
+The game's C compiled for a PC (32-bit, -m32), with the GBA's memory regions
+mapped at their own addresses, C versions of the hand-written ARM routines,
+the overlays linked into the image, and a software stand-in for the display
+drawn line by line with the HBlank DMA and interrupts. A headless front end
+runs the arena's smoke scripts and writes PNG shots; an SDL3 front end opens
+a window. It boots into the arena and fights a battle to the win.
+
+Everything is in port/ (port/README.md). Upstream files get hooks under
+NATIVE: system/asm.h (the inline assembly), system/task.h
+(TASK_IN_OVERLAY), Overlay_Load; and a UBFIX guard for the Battle Arena's
+first placement, which shares a sprite with no previous actor. The GBA
+build is unchanged (same ROM).
+
+Gaps: no sound, battle effects draw nothing (the blitter's fragments are
+stubs), null stores the cartridge ignores crash (the field Psynergy menu).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8ymW43oDEDKD8HswP83
+---
+ games/tbs/include/system/asm.h              |   7 +
+ games/tbs/include/system/task.h             |   6 +
+ games/tbs/src/field/field_sequence_actors.c |   6 +
+ games/tbs/src/system/system_start_up.c      |   9 +
+ port/Makefile                               | 145 ++++++
+ port/README.md                              |  82 ++++
+ port/include/native/asm.h                   |  60 +++
+ port/include/native/native.h                |  89 ++++
+ port/include/native/overlay.h               |  25 +
+ port/src/native_decompress.c                | 493 ++++++++++++++++++++
+ port/src/native_flash.c                     | 112 +++++
+ port/src/native_graphics.c                  | 442 ++++++++++++++++++
+ port/src/native_platform.c                  | 388 +++++++++++++++
+ port/src/native_stubs.c                     |  69 +++
+ port/src/native_system.c                    | 354 ++++++++++++++
+ port/src/platform_headless.c                | 351 ++++++++++++++
+ port/src/platform_sdl.c                     | 159 +++++++
+ port/src/ppu.c                              | 414 ++++++++++++++++
+ port/tools/arm2host_s.py                    | 112 +++++
+ port/tools/far_aliases.py                   |  40 ++
+ port/tools/far_tables.py                    |  45 ++
+ port/tools/native_symbols.py                |  45 ++
+ port/tools/overlay_object.py                |  62 +++
+ port/tools/overlay_table.py                 |  36 ++
+ port/tools/ram_symbols.py                   |  47 ++
+ port/tools/sheet.py                         |  20 +
+ 26 files changed, 3618 insertions(+)
+ create mode 100644 port/Makefile
+ create mode 100644 port/README.md
+ create mode 100644 port/include/native/asm.h
+ create mode 100644 port/include/native/native.h
+ create mode 100644 port/include/native/overlay.h
+ create mode 100644 port/src/native_decompress.c
+ create mode 100644 port/src/native_flash.c
+ create mode 100644 port/src/native_graphics.c
+ create mode 100644 port/src/native_platform.c
+ create mode 100644 port/src/native_stubs.c
+ create mode 100644 port/src/native_system.c
+ create mode 100644 port/src/platform_headless.c
+ create mode 100644 port/src/platform_sdl.c
+ create mode 100644 port/src/ppu.c
+ create mode 100644 port/tools/arm2host_s.py
+ create mode 100644 port/tools/far_aliases.py
+ create mode 100644 port/tools/far_tables.py
+ create mode 100644 port/tools/native_symbols.py
+ create mode 100644 port/tools/overlay_object.py
+ create mode 100644 port/tools/overlay_table.py
+ create mode 100644 port/tools/ram_symbols.py
+ create mode 100644 port/tools/sheet.py
+
+diff --git a/games/tbs/include/system/asm.h b/games/tbs/include/system/asm.h
+index 750e4a6..ec9c909 100644
+--- a/games/tbs/include/system/asm.h
++++ b/games/tbs/include/system/asm.h
+@@ -1,6 +1,11 @@
+ #ifndef ALCHEMY_ASM_H
+ #define ALCHEMY_ASM_H
+ 
++#ifdef NATIVE
++// The native build has no ARM assembly: port/include/native/asm.h.
++#include "native/asm.h"
++#else
++
+ /// @file
+ /// Every piece of assembly the C holds, one macro to each instruction sequence
+ /// and one for a local kept in a register, each a fake match. The helpers that
+@@ -168,4 +173,6 @@
+   /* FAKEMATCH(asm): another name for a linked symbol, by an asm label. */     \
+   extern char symbol[] __asm__(name)
+ 
++#endif // NATIVE
++
+ #endif
+diff --git a/games/tbs/include/system/task.h b/games/tbs/include/system/task.h
+index 0e277d7..daa37aa 100644
+--- a/games/tbs/include/system/task.h
++++ b/games/tbs/include/system/task.h
+@@ -55,7 +55,13 @@ STATIC_ASSERT(offsetof(struct Task, flags) == 6);
+ /// Task_SuspendOverlayTasks suspends the others.
+ #define TASK_FLAG_KEEP_RUNNING 1
+ /// Whether the task's routine is in EWRAM, where a scene's overlay runs.
++#ifdef NATIVE
++// Natively the overlays' code is linked in the image (port/src).
++int Native_IsOverlayCode(unsigned address);
++#define TASK_IN_OVERLAY(task) Native_IsOverlayCode((task)->func)
++#else
+ #define TASK_IN_OVERLAY(task) (((task)->func >> 24) == EWRAM_START >> 24)
++#endif
+ 
+ /// 1 while wait() runs the frame pass's tasks (TASK_PASS_FRAME).
+ extern volatile u8 gTasksRunning;
+diff --git a/games/tbs/src/field/field_sequence_actors.c b/games/tbs/src/field/field_sequence_actors.c
+index d59a1b8..f2e0320 100644
+--- a/games/tbs/src/field/field_sequence_actors.c
++++ b/games/tbs/src/field/field_sequence_actors.c
+@@ -116,7 +116,13 @@ void Event_SpawnActorPlacements(struct ActorPlacement *entry, s32 slot) {
+       // sprite resource.
+       if (entry->flags & ACTOR_PLACEMENT_SHARE_PREVIOUS_SPRITE) {
+         previous = Actor_Lookup(actorIndex - 1);
++        // UB: a first row that shares (the Battle Arena's) has no previous
++        // actor; the cartridge reads BIOS open bus, which never matches.
++#ifdef UBFIX
++        if (previous != 0 && previous->spriteStorageKind == ACTOR_SPRITE_ONE &&
++#else
+         if (previous->spriteStorageKind == ACTOR_SPRITE_ONE &&
++#endif
+             actor->spriteStorageKind == ACTOR_SPRITE_ONE) {
+           sprite = previous->sprite;
+           sprite->retainCacheEntry = 1;
+diff --git a/games/tbs/src/system/system_start_up.c b/games/tbs/src/system/system_start_up.c
+index 3f81b81..9b7a08c 100644
+--- a/games/tbs/src/system/system_start_up.c
++++ b/games/tbs/src/system/system_start_up.c
+@@ -208,10 +208,19 @@ UNUSED void Code_ResolveLongBranches(u16 *pair, s32 byteLength) {
+ /// Decodes the compressed code resource `index` to `destination` and resolves
+ /// its long branches there, with a RAM copy of the ARM routine that does what
+ /// Code_ResolveLongBranches does; the copy is allocated and freed again.
++#ifdef NATIVE
++// Natively the overlays are linked in the image; this sets one up
++// (port/src/native_platform.c).
++void Native_LoadOverlay(unsigned index, void *destination);
++#endif
+ void Overlay_Load(u32 index, void *destination) {
+   void (*patchBranches)(void *, s32);
+   s32 codeSize;
+ 
++#ifdef NATIVE
++  Native_LoadOverlay(index, destination);
++  return;
++#endif
+   codeSize = Decompress_TaggedLz(Resource_GetTableEntry(index), destination);
+   RamCode_Load(patchBranches, Resource_PatchThumbBranch,
+                Resource_PatchThumbBranchCodeSize);
+diff --git a/port/Makefile b/port/Makefile
+new file mode 100644
+index 0000000..23557ea
+--- /dev/null
++++ b/port/Makefile
+@@ -0,0 +1,145 @@
++# The native build of The Broken Seal (Arena): the game's C compiled for the
++# host (32-bit for now), with the ARM assembly replaced by C in port/src and
++# a software stand-in for the GBA's display. Run from the repository root:
++#
++#   make tbs-en                      # once: the GBA build makes the assets,
++#                                    # text and the object lists this reads
++#   make -f port/Makefile            # out/native-tbs-en/tbs-native (SDL3)
++#   make -f port/Makefile HEADLESS=1 # no SDL: frames go to PNG files
++#
++# See port/README.md.
++
++EDITION  ?= tbs-en
++GAME     := tbs
++DEFINE   := TBS_EDITION_EN
++GBA      := out/$(EDITION)
++HEADLESS ?= 0
++BUILD    ?= out/native-$(EDITION)$(if $(filter 1,$(HEADLESS)),-headless)
++TARGET   := $(BUILD)/tbs-native
++
++CC       ?= gcc
++AS_HOST  ?= as
++PYTHON   ?= python3
++GBA_NM   ?= arm-none-eabi-nm
++ARCH     ?= -m32
++ASARCH   ?= --32
++SDL_CFLAGS ?= $(shell pkg-config --cflags sdl3 2>/dev/null)
++SDL_LIBS   ?= $(shell pkg-config --libs sdl3 2>/dev/null)
++
++ifeq ($(HEADLESS),1)
++PLATFORM := port/src/platform_headless.c
++PLATFORM_LIBS :=
++else
++PLATFORM := port/src/platform_sdl.c
++PLATFORM_LIBS := $(SDL_LIBS)
++endif
++
++GAME_CFLAGS := $(ARCH) -std=gnu89 -O2 -g -fno-strict-aliasing -fwrapv -fno-pie \
++               -fno-stack-protector -ffreestanding -nostdinc -fcommon \
++               -DMODERN=1 -DNATIVE=1 -DUBFIX=1 -D$(DEFINE)=1 \
++               -Iport/include -Igames/$(GAME)/include -I$(GBA) -w
++PORT_CFLAGS := $(ARCH) -std=gnu99 -O2 -g -fno-strict-aliasing -fwrapv -fno-pie \
++               -DNATIVE=1 -D$(DEFINE)=1 -Iport/include -Wall -Wno-unused-function
++# Routines the game copies to RAM or the stack run there (as jumps back to
++# the host code), so EWRAM, IWRAM and the stack are executable.
++LDFLAGS     := $(ARCH) -no-pie -g -z execstack
++
++.SUFFIXES:
++.SECONDARY:
++.DEFAULT_GOAL := $(TARGET)
++
++ifeq ($(wildcard $(GBA)/objects.mk),)
++$(error $(GBA)/objects.mk is missing: run `make $(EDITION)` first)
++endif
++include $(GBA)/objects.mk
++
++# Assembly that is code, not data: each has a C replacement in port/src, or
++# (the sound driver) is left out for now. The RAM layouts (ewram, iwram,
++# iwram_high) become absolute symbols instead.
++ASM_CODE := games/tbs/src/battle/background_decode \
++            games/tbs/src/battle_effect/blitter_color_fragments \
++            games/tbs/src/battle_effect/blitter_fragments \
++            games/tbs/src/field/actor_update_far \
++            games/tbs/src/field/map_grid_convert \
++            games/tbs/src/field/picture_decode \
++            games/tbs/src/gamepak/rom_header \
++            games/tbs/src/menu/credits_background_decode \
++            games/tbs/src/menu/credits_background_expand \
++            games/tbs/src/scene/entry \
++            games/tbs/src/system/bios games/tbs/src/system/decompress_byte_lz \
++            games/tbs/src/system/decompress_tagged_lz games/tbs/src/system/entry \
++            games/tbs/src/system/heap_release games/tbs/src/system/inner_product \
++            games/tbs/src/system/irq games/tbs/src/system/irq_table \
++            games/tbs/src/system/iwram_entry games/tbs/src/system/iwram_routines \
++            games/tbs/src/system/trig games/tbs/src/window/decompress_4bpp \
++            games/tbs/src/window/expand_opaque games/tbs/src/window/message_decode \
++            games/tbs/src/system/ewram games/tbs/src/system/iwram \
++            games/tbs/src/system/iwram_high
++FAR_CALLS := $(basename $(wildcard games/tbs/src/gamepak/far_call/*.s))
++# The sound driver and its data: silent for now (port/src/sound_stub.c).
++SOUND := $(basename $(wildcard games/tbs/sound/*.s games/tbs/sound/songs/*.s games/tbs/sound/songs/*.mid)) \
++         $(basename $(wildcard games/tbs/src/sound/*.s games/tbs/src/sound/*.c))
++# The flash save library: port/src/native_flash.c keeps the save in a file.
++FLASH := $(basename $(wildcard games/tbs/src/gamepak/flash/*.c))
++SKIP := $(ASM_CODE) $(FAR_CALLS) $(SOUND) $(FLASH)
++
++stem = $(patsubst $(BUILD)/obj/%.o,%,$(1))
++MAIN_STEMS := $(filter-out $(SKIP),$(call stem,$(MAIN_OBJS)))
++overlay_stems = $(filter-out $(SKIP) %/imports,$(call stem,$(OVERLAY_OBJS_$(1))))
++obj = $(BUILD)/obj/$(1).o
++
++MAIN_GAME_OBJS := $(foreach s,$(MAIN_STEMS),$(call obj,$(s)))
++OVERLAY_RELOCS := $(foreach o,$(OVERLAYS),$(BUILD)/overlays/$(o).o)
++
++PORT_SRCS := $(filter-out port/src/platform_%.c,$(wildcard port/src/*.c)) $(PLATFORM)
++PORT_OBJS := $(PORT_SRCS:port/src/%.c=$(BUILD)/port/%.o)
++GEN_OBJS  := $(BUILD)/gen/ram_symbols.o $(BUILD)/gen/far_aliases.ld $(BUILD)/gen/overlay_table.o \
++             $(BUILD)/gen/far_tables.o $(BUILD)/gen/native_symbols.o
++
++$(TARGET): $(MAIN_GAME_OBJS) $(OVERLAY_RELOCS) $(PORT_OBJS) $(GEN_OBJS)
++	$(CC) $(LDFLAGS) -o $@ $^ $(PLATFORM_LIBS) -lm
++
++# Game C.
++$(BUILD)/obj/%.o: %.c
++	@mkdir -p $(@D)
++	$(CC) $(GAME_CFLAGS) -MMD -MP -c -o $@ $<
++# Game data in assembly, made host-assembler friendly first.
++$(BUILD)/obj/%.o: %.s port/tools/arm2host_s.py
++	@mkdir -p $(@D)
++	$(PYTHON) port/tools/arm2host_s.py $< $(@:.o=.host.s) -I $(GBA) --defsym $(DEFINE)=1
++	$(AS_HOST) $(ASARCH) -I $(GBA) -o $@ $(@:.o=.host.s)
++# The platform layer.
++$(BUILD)/port/%.o: port/src/%.c
++	@mkdir -p $(@D)
++	$(CC) $(PORT_CFLAGS) $(if $(filter platform_sdl.c,$(notdir $<)),$(SDL_CFLAGS)) -MMD -MP -c -o $@ $<
++
++# Each overlay is linked into one relocatable object; its own globals are made
++# local, its six entry points renamed after it, and its sections renamed so
++# the loader can find its code, restore its data and clear its BSS.
++.SECONDEXPANSION:
++$(BUILD)/overlays/%.o: $$(foreach s,$$(call overlay_stems,$$*),$$(call obj,$$(s))) port/tools/overlay_object.py
++	@mkdir -p $(@D)
++	$(PYTHON) port/tools/overlay_object.py $* $@ $(filter %.o,$^)
++
++$(BUILD)/gen/ram_symbols.s: port/tools/ram_symbols.py games/tbs/src/system/ewram.s games/tbs/src/system/iwram.s games/tbs/src/system/iwram_high.s
++	@mkdir -p $(@D)
++	$(PYTHON) $< $@ $(DEFINE) games/tbs/src/system/ewram.s=0x02000000 \
++	  games/tbs/src/system/iwram.s=0x03001400 games/tbs/src/system/iwram_high.s=0x030073a4
++$(BUILD)/gen/far_aliases.ld: port/tools/far_aliases.py $(wildcard games/tbs/src/gamepak/far_call/*.s) games/tbs/src/system/overlay/imports.inc
++	@mkdir -p $(@D)
++	$(PYTHON) $< $@ games/tbs/src/gamepak/far_call games/tbs/src/system/overlay/imports.inc
++$(BUILD)/gen/far_tables.s: port/tools/far_tables.py $(wildcard games/tbs/src/gamepak/far_call/*.s)
++	@mkdir -p $(@D)
++	$(PYTHON) $< $@ $(DEFINE) $(wildcard games/tbs/src/gamepak/far_call/*.s)
++$(BUILD)/gen/native_symbols.s: port/tools/native_symbols.py $(GBA)/$(EDITION).elf games/tbs/src/system/trig.s
++	@mkdir -p $(@D)
++	$(PYTHON) $< $@ $(GBA)/$(EDITION).elf $(GBA_NM) games/tbs/src/system/trig.s:Trig_SineTable
++$(BUILD)/gen/overlay_table.c: port/tools/overlay_table.py $(GBA)/objects.mk
++	@mkdir -p $(@D)
++	$(PYTHON) $< $@ $(OVERLAYS)
++$(BUILD)/gen/%.o: $(BUILD)/gen/%.s
++	$(AS_HOST) $(ASARCH) -o $@ $<
++$(BUILD)/gen/%.o: $(BUILD)/gen/%.c
++	$(CC) $(PORT_CFLAGS) -c -o $@ $<
++
++-include $(shell find $(BUILD) -name '*.d' 2>/dev/null)
+diff --git a/port/README.md b/port/README.md
+new file mode 100644
+index 0000000..c429943
+--- /dev/null
++++ b/port/README.md
+@@ -0,0 +1,82 @@
++# The native build (desktop spike)
++
++The game's C compiled for a PC instead of the GBA, with a software stand-in
++for the GBA's display. It boots, runs the arena and fights battles; it is a
++spike, so it is 32-bit, silent, and has gaps (below).
++
++## Build and run
++
++From the repository root, on Linux or WSL with `gcc-multilib`:
++
++```sh
++make tbs-en                          # the GBA build first: it makes the
++                                     # assets, text and object lists
++make -f port/Makefile HEADLESS=1     # out/native-tbs-en-headless/tbs-native
++make -f port/Makefile                # out/native-tbs-en/tbs-native (SDL3)
++```
++
++The SDL3 build needs a **32-bit** SDL3 that `pkg-config sdl3` finds (or pass
++`SDL_CFLAGS=... SDL_LIBS=...`). Keys: arrows, X (A), Z (B), Enter (Start),
++Backspace (Select), A and S (L and R); hold Tab to fast-forward; Escape quits.
++A gamepad works too.
++
++The headless build takes the arena repo's smoke scripts (`scripts/smoke/*.txt`:
++`wait`, `press`, `tap`, `mash`, `include`, `shot`, `peek`, `poke`) and writes
++the shots as PNG files:
++
++```sh
++out/native-tbs-en-headless/tbs-native --script ../scripts/smoke/battle.txt --shots build/native-shots
++python3 port/tools/sheet.py build/native-shots   # all shots on one page
++```
++
++The save is `tbs-native.sav` in the working directory (or `$TBS_SAVE`).
++No ROM is read: everything comes from the repository's sources and assets.
++
++## How it works
++
++- **Same addresses as the GBA.** EWRAM, IWRAM, I/O, palette, VRAM and OAM are
++  mapped at their GBA addresses (`native_platform.c`), and the game's RAM
++  globals (`ewram.s`, `iwram.s`, `iwram_high.s`) become absolute symbols at
++  their cartridge addresses (`tools/ram_symbols.py`). Pointers are 32 bits, so
++  the build is `-m32`, non-PIE.
++- **The assembly.** Data assembly is converted for the host assembler
++  (`tools/arm2host_s.py`). The hand-written ARM routines have C versions:
++  `native_system.c` (divide, square root, matrices, trigonometry, heap,
++  BIOS calls, interrupt tables), `native_decompress.c` (the LZ decoders,
++  OAM builder, canvas blends, resource transfer) and `native_graphics.c`
++  (icon and text decoding, sprite pictures, the world map's ground, map grid,
++  battle backgrounds). `include/native/asm.h` replaces `system/asm.h`'s
++  inline assembly.
++- **Code copied to RAM.** The game copies routines into RAM to run them. A
++  DMA whose source is host code writes a jump to the routine instead
++  (`Native_DmaStart`), so EWRAM, IWRAM and the stack are executable.
++- **Far calls** (`gamepak/far_call`) become linker aliases
++  (`tools/far_aliases.py`), and their tables data (`tools/far_tables.py`).
++- **Overlays.** Every scene overlay is linked into the image: each is
++  linked on its own (`ld -r`), its globals made local and its six entry points
++  renamed (`tools/overlay_object.py`). Loading one restores its data, clears
++  its BSS and writes its entry table into the overlay area
++  (`Native_LoadOverlay`, hooked from `Overlay_Load`).
++- **The frame.** `VBlankIntrWait`'s halt runs the display through a frame:
++  228 lines, each drawn by `ppu.c` with its HBlank DMA and interrupts, VBlank
++  (its DMA and the game's handler) at line 160.
++- **The display** (`ppu.c`): modes 0 to 5, text and affine backgrounds,
++  sprites (affine too), windows, blending. No mosaic yet.
++- `UBFIX` is on: the native build cannot read or write through null the way
++  the cartridge does (into the BIOS), so the guarded versions are used.
++
++Hooks in upstream files, all under `#ifdef NATIVE` (or `UBFIX`):
++`include/system/asm.h`, `include/system/task.h` (`TASK_IN_OVERLAY`),
++`src/system/system_start_up.c` (`Overlay_Load`),
++`src/field/field_sequence_actors.c` (a null `previous` actor).
++
++## Gaps
++
++- **Sound**: none (`native_stubs.c`); the m4a driver and mixer are ARM.
++- **Battle effects** draw nothing: the canvas blitter builds ARM code from
++  fragments; its fragments are `ret` stubs for now.
++- **Null stores the cartridge ignores** crash natively (one per site, fixed
++  under `UBFIX`). Known: the field Psynergy menu's missing markers
++  (`menu_psynergy.c`, `menu_shared.c`).
++- The credits' background decoder is a stub; soft reset restarts the process.
++- 32-bit only; 64-bit needs the game's pointer-as-`u32` habits fixed.
+diff --git a/port/include/native/asm.h b/port/include/native/asm.h
+new file mode 100644
+index 0000000..24f6513
+--- /dev/null
++++ b/port/include/native/asm.h
+@@ -0,0 +1,60 @@
++#ifndef NATIVE_ASM_H
++#define NATIVE_ASM_H
++
++/// @file
++/// The native build's replacements for system/asm.h: every ARM instruction
++/// sequence the game's C holds, as C or a call into the platform layer.
++
++void Native_Halt(void);
++void Native_Stop(void);
++void Native_DmaStart(volatile void *channel, unsigned source,
++                     unsigned destination, unsigned control);
++
++/// Halt: the platform runs the display up to the next interrupt.
++#define ASM_BIOS_HALT() Native_Halt()
++/// Stop (sleep mode): treated as a halt.
++#define ASM_BIOS_STOP() Native_Stop()
++
++/// The three DMA registers, written at once: the platform carries the
++/// transfer out (or arms it for its start timing).
++#define ASM_DMA_STORE(source, control, channel, destination)                   \
++  Native_DmaStart((channel), (source), (destination), (control))
++
++/// A call that returns through ip: a plain call of the native routine.
++#define ASM_CALL_RETURN_IP_MODERN(result, left, right, routine)                \
++  ((result) = ((int (*)(int, int))(routine))((left), (right)))
++#define ASM_CALL_RETURN_IP(result, factor, routine)                            \
++  ((result) = ((int (*)(int, int))(routine))((result), (factor)))
++
++/// The 64-bit signed product of two words, as its two halves.
++#define ASM_SMULL(high, low, left, right)                                      \
++  do {                                                                         \
++    long long product_ = (long long)(int)(left) * (int)(right);                \
++    (high) = (int)(product_ >> 32);                                            \
++    (low) = (unsigned)product_;                                                \
++  } while (0)
++#define ASM_ORR_SHIFTED(result, high, low)                                     \
++  ((result) = (int)((unsigned)(high) | ((unsigned)(low) >> 16)))
++
++/// The unit matrix: twelve words, 1.0 (0x10000) on the diagonal.
++#define ASM_MATRIX_UNIT(matrix)                                                \
++  do {                                                                         \
++    int *unit_ = (int *)(matrix);                                              \
++    int i_;                                                                    \
++    for (i_ = 0; i_ < 12; i_++)                                                \
++      unit_[i_] = (i_ % 4 == 0) ? 0x10000 : 0;                                 \
++  } while (0)
++#define ASM_MATRIX_UNIT_CURRENT(matrix) ASM_MATRIX_UNIT(matrix)
++
++/// The host keeps its own stack: wait() never moves it. Reading gives an
++/// address above every GBA region, so the frame wait's stack swap is skipped.
++#define ASM_STACK_POINTER_GET(variable)                                        \
++  ((variable) = (void *)__builtin_frame_address(0))
++#define ASM_STACK_POINTER_SET(value) ((void)(value))
++
++/// A local pinned to an ARM register is a plain local.
++#define ASM_REGISTER(declaration, name) declaration
++#define ASM_NOTHING() ((void)0)
++#define ASM_LINKED_NAME(symbol, name) extern char symbol[] __asm__(name)
++
++#endif
+diff --git a/port/include/native/native.h b/port/include/native/native.h
+new file mode 100644
+index 0000000..48b8a8d
+--- /dev/null
++++ b/port/include/native/native.h
+@@ -0,0 +1,89 @@
++#ifndef NATIVE_NATIVE_H
++#define NATIVE_NATIVE_H
++
++/// @file
++/// The platform layer's shared header: the GBA's memory map as the native
++/// build lays it out, and the services the replacement routines and the
++/// display stand-in share. Port code includes this, not the game's headers.
++
++#include <stddef.h>
++#include <stdint.h>
++#include <string.h>
++
++typedef int8_t s8;
++typedef uint8_t u8;
++typedef int16_t s16;
++typedef uint16_t u16;
++typedef int32_t s32;
++typedef uint32_t u32;
++typedef int64_t s64;
++typedef uint64_t u64;
++
++#if defined(TBS_EDITION_JA)
++#define EDITION_INTERNATIONAL 0
++#else
++#define EDITION_INTERNATIONAL 1
++#endif
++
++// The GBA regions, mapped at their own addresses (native_memory.c).
++#define EWRAM_BASE 0x02000000u
++#define EWRAM_SIZE 0x40000u
++#define IWRAM_BASE 0x03000000u
++#define IWRAM_SIZE 0x8000u
++#define IO_BASE 0x04000000u
++#define IO_SIZE 0x400u
++#define PALETTE_BASE 0x05000000u
++#define PALETTE_SIZE 0x400u
++#define VRAM_BASE 0x06000000u
++#define VRAM_SIZE 0x18000u
++#define OAM_BASE 0x07000000u
++#define OAM_SIZE 0x400u
++
++#define IO_REG16(offset) (*(volatile u16 *)(uintptr_t)(IO_BASE + (offset)))
++#define IO_REG32(offset) (*(volatile u32 *)(uintptr_t)(IO_BASE + (offset)))
++
++#define GBA_WIDTH 240
++#define GBA_HEIGHT 160
++
++/// Maps the regions; call before any game code runs.
++void Native_MapMemory(void);
++
++/// The frame step: runs the display to the next VBlank (rendering each line,
++/// with its HBlank DMA and interrupts), raises VBlank, presents the frame and
++/// reads input. ASM_BIOS_HALT and Stop come here.
++void Native_Halt(void);
++void Native_Stop(void);
++/// The three DMA registers written at once (Dma_Set).
++void Native_DmaStart(volatile void *channel, u32 source, u32 destination,
++                     u32 control);
++/// Restarts the game (the soft reset).
++void Native_SoftReset(void) __attribute__((noreturn));
++
++/// Whether `address` is native code (the start of a routine the game copies
++/// to RAM to run: a DMA from it writes a jump instead of bytes).
++int Native_IsCode(u32 address);
++
++/// The software display: draws line `y` of the current registers and VRAM
++/// into `line` (240 pixels, 0x00RRGGBB).
++void Ppu_RenderLine(int y, u32 *line);
++
++/// The platform (SDL or headless).
++int Platform_Init(int argc, char **argv);
++/// Shows a finished 240x160 frame and paces to 60 a second.
++void Platform_Present(const u32 *frame);
++/// The GBA's KEYINPUT bits, pressed = 1 (the game reads them inverted).
++u16 Platform_ReadKeys(void);
++/// Whether the player asked to quit.
++int Platform_ShouldQuit(void);
++void Platform_Shutdown(void);
++
++/// Debug output (stderr), and fatal errors.
++void Native_Log(const char *format, ...)
++    __attribute__((format(printf, 1, 2)));
++void Native_Fatal(const char *format, ...)
++    __attribute__((format(printf, 1, 2), noreturn));
++
++/// The frame counter the platform layer keeps (frames presented).
++extern u32 gNativeFrame;
++
++#endif
+diff --git a/port/include/native/overlay.h b/port/include/native/overlay.h
+new file mode 100644
+index 0000000..55eb6d3
+--- /dev/null
++++ b/port/include/native/overlay.h
+@@ -0,0 +1,25 @@
++#ifndef NATIVE_OVERLAY_H
++#define NATIVE_OVERLAY_H
++
++/// @file
++/// The scene overlays in the native build: all linked into the one image,
++/// found by resource number (port/tools/overlay_table.py writes the table).
++
++struct NativeOverlay {
++  const char *name;
++  unsigned resourceId;
++  void (*entry[6])(void);
++  char *dataStart, *dataEnd;
++  char *bssStart, *bssEnd;
++};
++
++extern const struct NativeOverlay gNativeOverlays[];
++extern const int gNativeOverlayCount;
++
++/// Loads overlay `resourceId`: writes its entry table at `destination` (the
++/// overlay area), restores its data and clears its BSS.
++void Native_LoadOverlay(unsigned resourceId, void *destination);
++/// Whether `address` is code of a scene overlay.
++int Native_IsOverlayCode(unsigned address);
++
++#endif
+diff --git a/port/src/native_decompress.c b/port/src/native_decompress.c
+new file mode 100644
+index 0000000..b41a424
+--- /dev/null
++++ b/port/src/native_decompress.c
+@@ -0,0 +1,493 @@
++/// @file
++/// C for the decoders and RAM-run kernels of src/system/decompress_tagged_lz.s
++/// and decompress_byte_lz.s: the tagged LZ (forms 0 and 1), the move-to-front
++/// LZ (form 2), the byte LZ, the halfword LZ, the I/O write queue's transfer,
++/// the OAM builder and the battle canvas fades.
++///
++/// The bit readers are written as the ARM keeps them: a reservoir read
++/// least significant bit first, and a count that is the bits held less 16,
++/// topped up by a halfword whenever it goes negative.
++
++#include "native/native.h"
++
++#define READ16(p) ((u32)(p)[0] | ((u32)(p)[1] << 8))
++
++/// The reservoir: bits, and count = bits held - 16.
++struct BitReader {
++  const u8 *src;
++  u32 bits;
++  s32 count;
++};
++
++static void Refill(struct BitReader *r) {
++  u32 half = READ16(r->src);
++
++  r->src += 2;
++  r->count += 16;
++  r->bits |= r->count >= 32 ? 0 : half << r->count;
++}
++
++static u32 Bit(struct BitReader *r) {
++  u32 bit = r->bits & 1;
++
++  r->bits >>= 1;
++  return bit;
++}
++
++/// Aligns the source to a halfword and fills the reservoir, as both LZ
++/// forms begin.
++static void StartReader(struct BitReader *r, const u8 *src) {
++  r->src = src;
++  r->bits = 0;
++  r->count = 0;
++  if ((uintptr_t)src & 1) {
++    r->bits = *r->src++;
++    r->count = 8;
++  }
++  r->count -= 16;
++  if (r->count < 0)
++    Refill(r);
++}
++
++/// The distance shared by forms 0 and 2: 5 bits after a 1, else 12 bits
++/// once 2048 bytes are out, else as many bits as the output so far needs.
++static u32 Distance(struct BitReader *r, const u8 *last, const u8 *base) {
++  u32 distance;
++
++  if (Bit(r)) {
++    distance = r->bits & 31;
++    r->count -= 6;
++    r->bits >>= 5;
++  } else {
++    u32 written = (u32)(last - base);
++
++    if (written >= 2048) {
++      distance = (r->bits & 0xfff) + 32;
++      r->bits >>= 12;
++      r->count -= 13;
++    } else {
++      u32 width = 0;
++
++      while (width < 11 && (written >> width) != 0)
++        width++;
++      distance = (r->bits & ((1u << width) - 1)) + 32;
++      r->bits >>= width;
++      r->count -= 1;
++      r->count -= width;
++    }
++  }
++  return distance;
++}
++
++/// The length code shared by forms 0 and 2 (form 2 stores one less).
++/// Returns 0 at the end of the stream.
++static u32 Length(struct BitReader *r) {
++  u32 length;
++
++  if (!Bit(r)) {
++    r->count -= 2;
++    return 2;
++  }
++  if (!Bit(r)) {
++    r->count -= 3;
++    return 3;
++  }
++  if (!Bit(r)) {
++    r->count -= 4;
++    length = 4;
++    goto checked;
++  }
++  if (!Bit(r)) {
++    r->count -= 5;
++    length = 5;
++    goto checked;
++  }
++  if (!Bit(r)) {
++    if (!Bit(r)) {
++      r->count -= 7;
++      length = 6;
++    } else {
++      r->count -= 7;
++      length = 7;
++    }
++    goto checked;
++  }
++  length = r->bits & 3;
++  r->bits >>= 2;
++  if (length != 0) {
++    length += 7;
++    r->count -= 8;
++    goto checked;
++  }
++  length = r->bits & 127;
++  if (length == 0)
++    return 0;
++  length += 10;
++  r->bits >>= 7;
++  r->count -= 15;
++checked:
++  if (r->count < 0)
++    Refill(r);
++  return length;
++}
++
++static s32 TaggedLzForm1(const u8 *src, u8 *dst) {
++  u8 *start = dst;
++
++  for (;;) {
++    u32 flags = *src++;
++    s32 bit;
++
++    for (bit = 7; bit >= 0; bit--) {
++      if (!(flags & (1u << bit))) {
++        *dst++ = *src++;
++      } else {
++        u32 b0 = *src++;
++        u32 b1 = *src++;
++        u32 distance = ((b0 & 0xf0) << 4) | b1;
++        u32 count = b0 & 15;
++
++        if (count == 0) {
++          if (distance == 0)
++            return (s32)(dst - start);
++          count = *src++ + 16;
++        }
++        do {
++          *dst = dst[-(s32)distance];
++          dst++;
++        } while (count-- > 0);
++      }
++    }
++  }
++}
++
++/// Decodes a tagged LZ resource: form 0 (bit LZ) or 1 (byte LZ with flag
++/// bytes); returns the bytes written (4 for any other tag, as the ARM).
++s32 Decompress_TaggedLzArm(const void *source, void *destination) {
++  const u8 *src = source;
++  u8 *last = (u8 *)destination - 1; // the last byte written
++  u8 *base = last + 33;
++  struct BitReader r;
++  u32 tag = *src++;
++
++  if (tag == 1)
++    return TaggedLzForm1(src, destination);
++  if (tag != 0)
++    return 4;
++  StartReader(&r, src);
++  for (;;) {
++    u32 length, distance;
++
++    if (Bit(&r)) {
++      *++last = (u8)r.bits;
++      r.bits >>= 8;
++      r.count -= 9;
++      if (r.count < 0)
++        Refill(&r);
++      continue;
++    }
++    length = Length(&r);
++    if (length == 0)
++      break;
++    distance = Distance(&r, last, base);
++    if (r.count < 0)
++      Refill(&r);
++    while (length--) {
++      last[1] = last[-(s32)distance];
++      last++;
++    }
++  }
++  return (s32)(last - ((u8 *)destination - 1));
++}
++
++/// Form 2: the bit LZ whose literals are two nibbles, each a position in a
++/// move-to-front list of the sixteen nibble values.
++s32 Decompress_MoveToFrontLzCommands(const void *source, void *destination) {
++  const u8 *src = source;
++  u8 *last = (u8 *)destination - 1;
++  u8 *base = last + 33;
++  u8 list[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
++  struct BitReader r;
++
++  if (*src++ != 2)
++    return 4;
++  StartReader(&r, src);
++  for (;;) {
++    u32 length, distance;
++
++    if (Bit(&r)) {
++      u32 width, used, low, high, i;
++
++      if (Bit(&r)) {
++        width = 2;
++        used = 6;
++      } else if (Bit(&r)) {
++        width = 3;
++        used = 9;
++      } else {
++        width = 4;
++        used = 11;
++      }
++      for (i = 0; i < 2; i++) {
++        u32 index = r.bits & ((1u << width) - 1);
++        u32 value = list[index];
++
++        r.bits >>= width;
++        memmove(list + 1, list, index);
++        list[0] = (u8)value;
++        if (i == 0)
++          low = value;
++        else
++          high = value;
++      }
++      r.count -= used;
++      if (r.count < 0)
++        Refill(&r);
++      *++last = (u8)(low | (high << 4));
++      continue;
++    }
++    length = Length(&r);
++    if (length == 0)
++      break;
++    distance = Distance(&r, last, base);
++    if (r.count < 0)
++      Refill(&r);
++    // (Form 2's ARM keeps the length one less and copies one byte first:
++    // the same count.)
++    while (length--) {
++      last[1] = last[-(s32)distance];
++      last++;
++    }
++  }
++  return (s32)(last - ((u8 *)destination - 1));
++}
++
++/// The byte LZ: a flag byte of 0 is eight literals; otherwise each flag,
++/// from bit 7, is a literal (0) or a match (1).
++s32 Decompress_ByteLzArm(const void *source, void *destination) {
++  const u8 *src = source;
++  u8 *dst = destination;
++
++  for (;;) {
++    u32 flags = *src++;
++    s32 bit;
++
++    if (flags == 0) {
++      memcpy(dst, src, 8);
++      dst += 8;
++      src += 8;
++      continue;
++    }
++    for (bit = 7; bit >= 0; bit--) {
++      if (!(flags & (1u << bit))) {
++        *dst++ = *src++;
++      } else {
++        u32 b0 = *src++;
++        u32 b1 = *src++;
++        const u8 *from = dst - (((b0 & 0xf0) << 4) + b1);
++        u32 count = b0 & 15;
++
++        if (count == 0) {
++          if (from == dst)
++            return (s32)(dst - (u8 *)destination);
++          count = *src++ + 16;
++        }
++        count += 1;
++        while (count--)
++          *dst++ = *from++;
++      }
++    }
++  }
++}
++
++/// The halfword LZ: sixteen flags a halfword, from bit 15; a match is
++/// distance (halfwords) << 5 | (length - 2), and 0 ends.
++void Decompress_HalfwordLz(const void *source, void *destination) {
++  const u16 *src = source;
++  u16 *dst = destination;
++
++  for (;;) {
++    u32 flags = *src++;
++    s32 bit;
++
++    for (bit = 15; bit >= 0; bit--) {
++      u32 value = *src++;
++
++      if (!(flags & (1u << bit))) {
++        *dst++ = (u16)value;
++      } else {
++        const u16 *from;
++        u32 count;
++
++        if (value == 0)
++          return;
++        from = dst - (value >> 5);
++        count = (value & 31) + 2;
++        while (count--)
++          *dst++ = *from++;
++      }
++    }
++  }
++}
++
++// --- The I/O write queue ---------------------------------------------------------
++
++/// Carries out `count` queued writes after the queue's first word: each is
++/// value, address and control; a size of 0 is a DMA through channel 3, and
++/// the modes OR or clear bits of what is there.
++void Resource_ExecuteTransfer(const u32 *queue, s32 count) {
++  queue += 1;
++  do {
++    u32 value = queue[0];
++    u32 address = queue[1];
++    u32 control = queue[2];
++    u32 size = control & 0x30000;
++
++    queue += 3;
++    if (size == 0) {
++      Native_DmaStart((volatile void *)(uintptr_t)(IO_BASE + 0xd4), value,
++                      address, control);
++      continue;
++    }
++    if (control & 0xc0000) {
++      u32 old = size < 0x20000   ? *(volatile u8 *)(uintptr_t)address
++                : size == 0x20000 ? *(volatile u16 *)(uintptr_t)address
++                                  : *(volatile u32 *)(uintptr_t)address;
++
++      value = (control & 0x40000) ? (old | value) : (old & ~value);
++    }
++    if (size < 0x20000)
++      *(volatile u8 *)(uintptr_t)address = (u8)value;
++    else if (size == 0x20000)
++      *(volatile u16 *)(uintptr_t)address = (u16)value;
++    else
++      *(volatile u32 *)(uintptr_t)address = value;
++  } while (--count > 0);
++}
++
++/// Resolves an unpacked overlay's long branches. Native overlays are linked
++/// code, never unpacked, so there is nothing to patch.
++void Resource_PatchThumbBranch(void *code, s32 size) {
++  (void)code;
++  (void)size;
++}
++
++// --- The OAM builder ---------------------------------------------------------------
++
++extern u32 gOamDepthLists[256];
++extern u8 gOamMatrixCount;
++extern u32 gOamMatrices[];
++
++/// Builds the frame's OAM in `work`: the depth slots' sprites from the
++/// farthest slot (the highest), 128 at most, the rest hidden; then the affine
++/// matrices into the fourth halfword of each entry.
++void Oam_BuildBufferKernel(void *work) {
++  u32 *out = work;
++  s32 left = 128;
++  s32 slot;
++  u16 *matrix;
++  s32 i;
++
++  for (slot = 255; slot >= 0; slot--) {
++    u32 *node = (u32 *)(uintptr_t)gOamDepthLists[slot];
++
++    while (node != NULL) {
++      out[0] = node[1];
++      out[1] = node[2];
++      out += 2;
++      if (--left == 0)
++        goto affine;
++      node = (u32 *)(uintptr_t)node[0];
++    }
++  }
++  while (left-- > 0) {
++    out[0] = 0x00c000c0;
++    out[1] = 0x00c000c0;
++    out += 2;
++  }
++affine:
++  matrix = (u16 *)((u8 *)work + 6);
++  for (i = 0; i < gOamMatrixCount; i++, matrix += 16) {
++    u32 ab = gOamMatrices[i * 2];
++    u32 cd = gOamMatrices[i * 2 + 1];
++
++    matrix[0] = (u16)ab;
++    matrix[4] = (u16)(ab >> 16);
++    matrix[8] = (u16)cd;
++    matrix[12] = (u16)(cd >> 16);
++  }
++}
++
++// --- The canvas fades (battle effects) ------------------------------------------
++// A canvas byte is a step 0 to 63 of a colour ramp. Each routine copies the
++// canvas to `destination` and shades the canvas in place.
++
++static void Canvas_Copy(const u8 *buffer, u8 *destination, u32 bytes) {
++  memcpy(destination, buffer, bytes & ~15u);
++}
++
++void Canvas_ScaleThreeQuartersArm(u8 *buffer, u8 *destination, u32 bytes) {
++  u32 *w = (u32 *)buffer;
++  u32 i;
++
++  Canvas_Copy(buffer, destination, bytes);
++  for (i = 0; i < bytes / 4; i++)
++    w[i] = ((w[i] * 3) >> 2) & 0x3f3f3f3f;
++}
++
++void Canvas_ScaleNonzeroThreeQuartersArm(u8 *buffer, u8 *destination,
++                                         u32 bytes) {
++  Canvas_ScaleThreeQuartersArm(buffer, destination, bytes);
++}
++
++void Canvas_HalveArm(u8 *buffer, u8 *destination, u32 bytes) {
++  u32 *w = (u32 *)buffer;
++  u32 i;
++
++  Canvas_Copy(buffer, destination, bytes);
++  for (i = 0; i < bytes / 4; i++)
++    w[i] = (w[i] >> 1) & 0x3f3f3f3f;
++}
++
++void Canvas_HalveNonzeroArm(u8 *buffer, u8 *destination, u32 bytes) {
++  Canvas_HalveArm(buffer, destination, bytes);
++}
++
++/// Lowers each byte by amount's byte, stopping at 0.
++void Canvas_DarkenArm(u8 *buffer, u32 amount, u8 *destination, u32 bytes) {
++  u32 *w = (u32 *)buffer;
++  u32 bias = 0x80808080u - amount;
++  u32 i;
++
++  Canvas_Copy(buffer, destination, bytes);
++  for (i = 0; i < bytes / 4; i++) {
++    u32 sum = w[i] + bias;
++    u32 keep = (sum >> 7) & 0x01010101;
++
++    w[i] = sum & (keep * 127);
++  }
++}
++
++void Canvas_DarkenPartialArm(u8 *buffer, u32 amount, u8 *destination,
++                             u32 bytes) {
++  Canvas_DarkenArm(buffer, amount, destination, bytes);
++}
++
++/// Raises each byte by amount's byte, stopping at 63.
++void Canvas_BrightenArm(u8 *buffer, u32 amount, u8 *destination, u32 bytes) {
++  u32 *w = (u32 *)buffer;
++  u32 i;
++
++  Canvas_Copy(buffer, destination, bytes);
++  for (i = 0; i < bytes / 4; i++) {
++    u32 v = w[i] + amount;
++    u32 over = v & 0x40404040;
++
++    w[i] = (v & ~over) | (over - (over >> 6));
++  }
++}
++
++void Canvas_BrightenPartialArm(u8 *buffer, u32 amount, u8 *destination,
++                               u32 bytes) {
++  Canvas_BrightenArm(buffer, amount, destination, bytes);
++}
+diff --git a/port/src/native_flash.c b/port/src/native_flash.c
+new file mode 100644
+index 0000000..3fe838e
+--- /dev/null
++++ b/port/src/native_flash.c
+@@ -0,0 +1,112 @@
++/// @file
++/// The save chip: the flash library's calls (src/gamepak/flash) over a 64 KB
++/// image kept in a file, written through at each sector program. The file is
++/// $TBS_SAVE, else tbs-native.sav in the working directory.
++
++#include "native/native.h"
++
++#include <stdio.h>
++#include <stdlib.h>
++
++#define FLASH_SECTOR_SIZE 0x1000
++#define FLASH_SECTORS 16
++
++static u8 sFlash[FLASH_SECTOR_SIZE * FLASH_SECTORS];
++static int sLoaded;
++
++static const char *Flash_Path(void) {
++  const char *path = getenv("TBS_SAVE");
++
++  return path && *path ? path : "tbs-native.sav";
++}
++
++static void Flash_Load(void) {
++  FILE *f;
++
++  if (sLoaded)
++    return;
++  sLoaded = 1;
++  memset(sFlash, 0xff, sizeof(sFlash));
++  f = fopen(Flash_Path(), "rb");
++  if (f) {
++    if (fread(sFlash, 1, sizeof(sFlash), f) != sizeof(sFlash))
++      Native_Log("save %s is short; the rest reads as erased", Flash_Path());
++    fclose(f);
++  }
++}
++
++static void Flash_Store(void) {
++  FILE *f = fopen(Flash_Path(), "wb");
++
++  if (!f) {
++    Native_Log("cannot write save %s", Flash_Path());
++    return;
++  }
++  fwrite(sFlash, 1, sizeof(sFlash), f);
++  fclose(f);
++}
++
++static u16 Native_EraseFlashSector(u16 sector) {
++  if (sector >= FLASH_SECTORS)
++    return 0x80ff;
++  Flash_Load();
++  memset(sFlash + sector * FLASH_SECTOR_SIZE, 0xff, FLASH_SECTOR_SIZE);
++  Flash_Store();
++  return 0;
++}
++
++static u16 Native_EraseFlashChip(void) {
++  Flash_Load();
++  memset(sFlash, 0xff, sizeof(sFlash));
++  Flash_Store();
++  return 0;
++}
++
++static u16 Native_ProgramFlashSector(u16 sector, u8 *source) {
++  if (sector >= FLASH_SECTORS)
++    return 0x80ff;
++  Flash_Load();
++  memcpy(sFlash + sector * FLASH_SECTOR_SIZE, source, FLASH_SECTOR_SIZE);
++  Flash_Store();
++  return 0;
++}
++
++// In EWRAM, as on the cartridge (ewram.s).
++extern u16 (*gEraseFlashChip)(void);
++extern u16 (*gEraseFlashSector)(u16 sector);
++extern u16 (*gProgramFlashSector)(u16 sector, u8 *source);
++
++s32 SetFlashTimerIntr(u8 timerIndex, void (**callback)(void)) {
++  (void)timerIndex;
++  (void)callback;
++  return 0;
++}
++
++/// Finds the chip: always there. Returns 0 (found).
++s32 IdentifyFlash(void) {
++  Flash_Load();
++  gEraseFlashChip = Native_EraseFlashChip;
++  gEraseFlashSector = Native_EraseFlashSector;
++  gProgramFlashSector = Native_ProgramFlashSector;
++  return 0;
++}
++
++void ReadFlash(u16 sector, u32 offset, u8 *destination, s32 size) {
++  u32 start = sector * FLASH_SECTOR_SIZE + offset;
++
++  Flash_Load();
++  if (start >= sizeof(sFlash))
++    return;
++  if (start + size > sizeof(sFlash))
++    size = sizeof(sFlash) - start;
++  memcpy(destination, sFlash + start, size);
++}
++
++/// 0 when the sector holds `source`.
++s32 VerifyFlashSector(u16 sector, u8 *source) {
++  Flash_Load();
++  if (sector >= FLASH_SECTORS)
++    return 0x80ff;
++  return memcmp(sFlash + sector * FLASH_SECTOR_SIZE, source,
++                FLASH_SECTOR_SIZE) != 0;
++}
+diff --git a/port/src/native_graphics.c b/port/src/native_graphics.c
+new file mode 100644
+index 0000000..ff1e1bd
+--- /dev/null
++++ b/port/src/native_graphics.c
+@@ -0,0 +1,442 @@
++/// @file
++/// C for the picture and text routines the game copies to RAM and runs:
++/// src/window/decompress_4bpp.s, expand_opaque.s and message_decode.s,
++/// src/field/picture_decode.s and map_grid_convert.s, and
++/// src/battle/background_decode.s.
++
++#include "native/native.h"
++
++// --- window/decompress_4bpp.s ----------------------------------------------------
++
++/// A bit stream read from words, least significant bit first.
++struct WordBits {
++  const u32 *src;
++  u32 bits; ///< with a stop bit above the bits left
++};
++
++static u32 WordBit(struct WordBits *r) {
++  u32 bit = r->bits & 1;
++
++  r->bits >>= 1;
++  if (r->bits == 0) {
++    u32 word = *r->src++;
++
++    bit = word & 1;
++    r->bits = 0x80000000u | (word >> 1);
++  }
++  return bit;
++}
++
++/// Starts a word stream at a byte address, skipping the bytes before it in
++/// its word.
++static void WordBitsStart(struct WordBits *r, const void *source) {
++  u32 offset = (uintptr_t)source & 3;
++
++  r->src = (const u32 *)((uintptr_t)source & ~3u);
++  r->bits = 1;
++  if (offset != 0) {
++    u32 word = *r->src++;
++
++    r->bits = (0x80000000u | (word >> 1)) >> (offset * 8 - 1);
++  }
++}
++
++/// Unpacks a 4bpp icon to one byte a pixel: a 0 bit repeats the front of a
++/// move-to-front list of the sixteen colours, a 1 starts a code that picks
++/// position 1 to 15 (and moves it to the front), or ends the picture.
++void Tile_Decompress4bpp(const void *source, u8 *destination) {
++  u8 list[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
++  struct WordBits r;
++
++  WordBitsStart(&r, source);
++  for (;;) {
++    u32 index;
++
++    if (!WordBit(&r)) {
++      *destination++ = list[0];
++      continue;
++    }
++    if (!WordBit(&r)) {
++      index = !WordBit(&r) ? 1 : (WordBit(&r) ? 3 : 2);
++    } else if (!WordBit(&r)) {
++      index = WordBit(&r) ? 5 : 4;
++    } else if (!WordBit(&r)) {
++      index = 6;
++    } else if (!WordBit(&r)) {
++      index = WordBit(&r) ? 8 : 7;
++    } else if (!WordBit(&r)) {
++      index = 9;
++    } else if (!WordBit(&r)) {
++      index = WordBit(&r) ? 11 : 10;
++    } else if (!WordBit(&r)) {
++      index = 12;
++    } else if (!WordBit(&r)) {
++      index = WordBit(&r) ? 14 : 13;
++    } else if (!WordBit(&r)) {
++      index = 15;
++    } else {
++      return;
++    }
++    {
++      u8 value = list[index];
++
++      memmove(list + 1, list, index);
++      list[0] = value;
++      *destination++ = value;
++    }
++  }
++}
++
++/// Packs a byte-a-pixel picture `width` tiles wide and `height` tile rows
++/// tall into 4bpp tiles; Masked keeps what is there under colour 0.
++static void Tile_Expand(const u8 *source, u32 *destination, u32 width,
++                        u32 height, int masked) {
++  u32 row, tile, line;
++
++  for (row = 0; row < height; row++) {
++    for (tile = 0; tile < width; tile++) {
++      for (line = 0; line < 8; line++) {
++        const u8 *p = source + (row * 8 + line) * width * 8 + tile * 8;
++        u32 packed = 0, mask = 0;
++        int k;
++
++        for (k = 0; k < 8; k++) {
++          u32 pixel = p[k] & 15;
++
++          packed |= pixel << (k * 4);
++          if (pixel)
++            mask |= 15u << (k * 4);
++        }
++        if (masked && mask != 0xffffffffu)
++          packed |= *destination & ~mask;
++        *destination++ = packed;
++      }
++    }
++  }
++}
++
++void Tile_ExpandMasked(const u8 *source, u32 *destination, u32 width,
++                       u32 height) {
++  Tile_Expand(source, destination, width, height, 1);
++}
++
++void Tile_ExpandOpaque(const u8 *source, u32 *destination, u32 width,
++                       u32 height) {
++  Tile_Expand(source, destination, width, height, 0);
++}
++
++// --- window/message_decode.s -------------------------------------------------------
++
++struct MessageReader {
++  u32 previousCode;
++  const u8 *words;
++  u32 bits;
++};
++
++/// Camelot's own C of the symbol decoder, which the game keeps unused
++/// (window_messages.c): the same Huffman walk the ARM routine makes.
++s32 Text_DecodeSymbolInC(struct MessageReader *reader);
++
++s32 Text_DecodeSymbol(struct MessageReader *reader) {
++  return Text_DecodeSymbolInC(reader);
++}
++
++struct MessageBank {
++  u32 start;
++  const u8 *lengths;
++};
++extern const struct MessageBank Text_MessageBanks[];
++
++/// Points the reader at message `message`'s first bit: its bank's start plus
++/// the lengths of the messages before it (a length of 255 continues).
++void Message_FindArm(struct MessageReader *reader, s32 message) {
++  const struct MessageBank *bank = &Text_MessageBanks[(u32)message >> 8];
++  u32 address = bank->start;
++  const u8 *length = bank->lengths;
++  u32 count = message & 255;
++  u32 bits = 1;
++
++  while (count--) {
++    u32 step;
++
++    do {
++      step = *length++;
++      address += step;
++    } while (step == 255);
++  }
++  if (address & 3) {
++    u32 offset = address & 3;
++    u32 word;
++
++    address &= ~3u;
++    word = *(const u32 *)(uintptr_t)address;
++    address += 4;
++    bits = (0x80000000u | (word >> 1)) >> (offset * 8 - 1);
++  }
++  reader->previousCode = 0;
++  reader->words = (const u8 *)(uintptr_t)address;
++  reader->bits = bits;
++}
++
++// --- field/picture_decode.s ----------------------------------------------------------
++
++extern const u8 gSpriteColorTables[];
++extern u8 gDecodeFillByte;
++/// The 224 bytes after the decoder: the code-copy size of the field's sprite
++/// draw ends here.
++u8 gRender_DecodePictureEnd[224];
++
++/// Draws a sprite picture into a byte-a-pixel buffer. A byte above 223 skips
++/// that many less 223 pixels and 0 ends the picture. Mode 0 copies the bytes,
++/// modes 1 to 6 and 9 to 12 map them through a colour table, 7 and 8 paint
++/// 15, 13 the fill byte, 14 paints 1 and 15 paints 0. Returns the source
++/// after what it read.
++const u8 *Render_DecodePicture(const u8 *source, u8 *destination, s32 mode) {
++  if (mode == 0) {
++    // The word reads begin at the word holding the first byte; a word whose
++    // bytes AND to nonzero (none is 0) is copied without the end test.
++    const u32 *word = (const u32 *)((uintptr_t)source & ~3u);
++    u32 skip = (uintptr_t)source & 3;
++    u32 w = *word++;
++    int checked = 1;
++    u32 i;
++
++    for (;;) {
++      for (i = skip; i < 4; i++) {
++        u32 b = (w >> (i * 8)) & 255;
++
++        if (checked && b == 0)
++          return (const u8 *)word;
++        if (b > 223)
++          destination += b - 223;
++        else
++          *destination++ = (u8)b;
++      }
++      skip = 0;
++      w = *word++;
++      {
++        u32 x = w & (w >> 16);
++
++        checked = (x & (x >> 8)) == 0;
++      }
++    }
++  }
++  if (mode == 7 || mode == 8 || mode == 13 || mode == 14 || mode == 15) {
++    u8 fill = mode == 13 ? gDecodeFillByte : mode == 14 ? 1 : mode == 15 ? 0 : 15;
++    u32 b;
++
++    while ((b = *source++) != 0) {
++      if (b > 223)
++        destination += b - 223;
++      else
++        *destination++ = fill;
++    }
++    return source;
++  }
++  {
++    u32 table = mode >= 9 ? (u32)mode - 2 : (u32)mode;
++    const u8 *map = gSpriteColorTables + (table - 1) * 256;
++    u32 b;
++
++    for (;;) {
++      b = *source++;
++      if (b > 223) {
++        destination += b - 223;
++        continue;
++      }
++      if (b == 0)
++        return source;
++      *destination++ = map[b];
++    }
++  }
++}
++
++/// The world map's tilted ground: 160 lines of 240 pixels, each line a start
++/// and a step through a 64 by 64 map of 8 by 8 cells, with a second map and
++/// tile set (4 KB and 16 KB below) wherever the first gives colour 0. Writes
++/// 8bpp tiles, 30 to a row.
++void TileMap_DrawRows(const u8 *lines, u8 *pixels, const u8 *tiles,
++                      const u8 *map) {
++  s32 row, cell, k;
++  u8 *out = pixels;
++
++  for (row = 0; row < 160; row++) {
++    s32 stepX = *(const s16 *)(lines + 0);
++    s32 stepY = *(const s16 *)(lines + 4);
++    u32 x = *(const u32 *)(lines + 8) << 15;
++    u32 y = *(const u32 *)(lines + 12) << 15;
++
++    lines += 32;
++    for (cell = 0; cell < 30; cell++) {
++      for (k = 0; k < 8; k++) {
++        const u8 *at = map + (x >> 26) + (y >> 26) * 64;
++        u32 offset = ((y >> 20) & 0x38) + ((x << 6) >> 29);
++        const u8 *tile = tiles + offset;
++        u32 pixel = *at;
++
++        if (pixel != 0)
++          pixel = tile[pixel * 64];
++        if (pixel == 0) {
++          at -= 4096;
++          tile -= 16384;
++          pixel = tile[*at * 64];
++        }
++        out[k] = (u8)pixel;
++        x += (u32)stepX << 15;
++        y += (u32)stepY << 15;
++      }
++      out += 64;
++    }
++    out -= 1920;
++    out += 8;
++    if (((row + 1) & 7) == 0)
++      out += 1856;
++  }
++}
++
++// --- field/map_grid_convert.s --------------------------------------------------------
++
++/// Turns a decoded map's cells into cell words: each halfword cell to the
++/// low half of a word (a picture of 0xfff takes the next free number), then
++/// the two byte planes interleaved into the high halves.
++void Tile_ConvertMapGrid(const u16 *source, u16 *destination,
++                         const u8 *planes) {
++  u32 next = 0xfffff001u;
++  const u8 *second = planes + 16384;
++  u16 *out = destination;
++  s32 i;
++
++  for (i = 0; i < 16384; i++) {
++    u32 cell = *source++;
++
++    if (((cell << 20) & 0xffffffffu) == 0xfff00000u) {
++      cell += next;
++      if (next != 0)
++        next++;
++    }
++    *out = (u16)cell;
++    out += 2;
++  }
++  out = destination + 1;
++  for (i = 0; i < 4096; i++) {
++    u32 a = *(const u32 *)planes;
++    u32 b = *(const u32 *)second;
++    u32 low, high;
++
++    planes += 4;
++    second += 4;
++    low = (a & 0x00ff00ff) | ((b & 0x00ff00ff) << 8);
++    high = (b & 0xff00ff00) | ((a & 0xff00ff00) >> 8);
++    out[0] = (u16)low;
++    out[2] = (u16)high;
++    out[4] = (u16)(low >> 16);
++    out[6] = (u16)(high >> 16);
++    out += 8;
++  }
++}
++
++/// Copies a byte-a-pixel picture `width` by `height` (multiples of 8) into
++/// 8bpp tiles at `vram`, a row of tiles at a time.
++void Tile_CopyStrided(const u8 *source, u32 width, u32 height, u8 *vram) {
++  u32 tx, ty, line;
++
++  width &= ~7u;
++  height &= ~7u;
++  if (width == 0 || height == 0)
++    return;
++  for (ty = 0; ty < height; ty += 8) {
++    for (tx = 0; tx < width; tx += 8) {
++      for (line = 0; line < 8; line++) {
++        memcpy(vram, source + (ty + line) * width + tx, 8);
++        vram += 8;
++      }
++    }
++  }
++}
++
++// --- battle/background_decode.s --------------------------------------------------
++
++/// The battle background: 15 bands of 8 columns of 32 rows of 8 pixels,
++/// each pixel a 7-bit value (plus 0x60) changed by a bit command from the
++/// one before. Returns the source after the last halfword read.
++const u8 *BitDecoder_DecodeImage(const u8 *source, u8 *destination) {
++  u32 bits = source[0] | (source[1] << 8);
++  s32 count = 0;
++  u32 value = 0; // the pixel, in bits 25 to 31
++  u32 *out = (u32 *)destination;
++  s32 band, column, row, half, k;
++
++#define CONSUME(n)                                                             \
++  do {                                                                         \
++    count -= (n);                                                              \
++    if (count < 0) {                                                           \
++      u32 half_ = source[0] | (source[1] << 8);                                \
++      source += 2;                                                             \
++      count += 16;                                                             \
++      bits |= half_ << count;                                                  \
++    }                                                                          \
++  } while (0)
++
++  source += 2;
++  for (band = 0; band < 15; band++) {
++    for (column = 0; column < 8; column++) {
++      for (row = 0; row < 32; row++) {
++        for (half = 0; half < 2; half++) {
++          u32 word = 0;
++
++          for (k = 0; k < 4; k++) {
++            switch (bits & 7) {
++            case 0:
++            case 4:
++              bits >>= 2;
++              CONSUME(2);
++              break;
++            case 1:
++              value += ((bits & 8) + 8) << 22;
++              bits >>= 4;
++              CONSUME(4);
++              break;
++            case 5:
++              value -= ((bits & 8) + 8) << 22;
++              bits >>= 4;
++              CONSUME(4);
++              break;
++            case 3:
++              value += (((bits >> 3) & 7) + 3) << 25;
++              bits >>= 6;
++              CONSUME(6);
++              break;
++            case 7:
++              value -= (((bits >> 3) & 7) + 3) << 25;
++              bits >>= 6;
++              CONSUME(6);
++              break;
++            case 2: {
++              s32 delta = ((bits >> 4) & 15) + 11;
++
++              if (bits & 8)
++                delta = -delta;
++              value += (u32)delta << 25;
++              bits >>= 8;
++              CONSUME(8);
++              break;
++            }
++            case 6:
++              value = ((bits >> 10) | (bits << 22)) & 0xfe000000u;
++              bits >>= 10;
++              CONSUME(10);
++              break;
++            }
++            word |= (value >> 25) << (k * 8);
++          }
++          *out = word + 0x60606060u;
++          out += half == 0 ? 1 : 15;
++        }
++      }
++      out = (u32 *)((u8 *)out - 2048 + 8);
++    }
++    out = (u32 *)((u8 *)out - 64 + 2048);
++  }
++#undef CONSUME
++  return source;
++}
+diff --git a/port/src/native_platform.c b/port/src/native_platform.c
+new file mode 100644
+index 0000000..7c540be
+--- /dev/null
++++ b/port/src/native_platform.c
+@@ -0,0 +1,388 @@
++/// @file
++/// The native machine: the GBA's memory regions at their own addresses, the
++/// DMA channels, the display timing that drives a frame line by line (with
++/// its HBlank DMA and interrupts), the overlay loader, and main().
++
++#define _GNU_SOURCE
++#include "native/native.h"
++#include "native/overlay.h"
++
++#include <errno.h>
++#include <stdarg.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <sys/mman.h>
++#include <unistd.h>
++
++u32 gNativeFrame;
++
++// --- memory ------------------------------------------------------------------
++
++static void MapRegion(u32 base, u32 size) {
++  u32 length = (size + 4095) & ~4095u;
++  void *at = mmap((void *)(uintptr_t)base, length,
++                  PROT_READ | PROT_WRITE | PROT_EXEC,
++                  MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
++
++  if (at != (void *)(uintptr_t)base)
++    Native_Fatal("cannot map 0x%08x (%u bytes): %s", base, length,
++                 strerror(errno));
++}
++
++void Native_MapMemory(void) {
++  // RWX: the game copies routines into EWRAM and IWRAM and runs them there
++  // (natively each copy is a jump back to the routine, see Native_DmaStart).
++  MapRegion(EWRAM_BASE, EWRAM_SIZE);
++  MapRegion(IWRAM_BASE, IWRAM_SIZE);
++  MapRegion(IO_BASE, IO_SIZE);
++  MapRegion(PALETTE_BASE, PALETTE_SIZE);
++  MapRegion(VRAM_BASE, VRAM_SIZE);
++  MapRegion(OAM_BASE, OAM_SIZE);
++}
++
++extern char __executable_start[], etext[];
++extern char __start_native_overlay_text[] __attribute__((weak));
++extern char __stop_native_overlay_text[] __attribute__((weak));
++
++int Native_IsCode(u32 address) {
++  if (address >= (u32)(uintptr_t)__executable_start &&
++      address < (u32)(uintptr_t)etext)
++    return 1;
++  return Native_IsOverlayCode(address);
++}
++
++int Native_IsOverlayCode(unsigned address) {
++  return __start_native_overlay_text != NULL &&
++         address >= (u32)(uintptr_t)__start_native_overlay_text &&
++         address < (u32)(uintptr_t)__stop_native_overlay_text;
++}
++
++// --- DMA -----------------------------------------------------------------------
++
++#define DMA_ENABLE_BIT 0x80000000u
++#define DMA_REPEAT_BIT (1u << 25)
++#define DMA_WORDS_BIT (1u << 26)
++
++enum { TIMING_NOW, TIMING_VBLANK, TIMING_HBLANK, TIMING_SPECIAL };
++
++struct DmaChannel {
++  u32 source, destination; ///< where the next transfer starts
++  u32 reload;              ///< the destination a repeat reloads
++  u32 control;
++  int active;
++};
++
++static struct DmaChannel sDma[4];
++
++static u32 DmaRegister(int n) { return 0xb0 + 12 * n; }
++
++/// One transfer of a channel's count of units, advancing its addresses.
++static void Dma_Transfer(int n) {
++  struct DmaChannel *dma = &sDma[n];
++  u32 control = dma->control;
++  u32 count = control & 0xffff;
++  u32 size = (control & DMA_WORDS_BIT) ? 4 : 2;
++  s32 stepDst, stepSrc;
++  u32 src = dma->source & ~(size - 1);
++  u32 dst = dma->destination & ~(size - 1);
++
++  if (count == 0)
++    count = n == 3 ? 0x10000 : 0x4000;
++  switch ((control >> 21) & 3) {
++  case 1: stepDst = -(s32)size; break;
++  case 2: stepDst = 0; break;
++  default: stepDst = size; break;
++  }
++  switch ((control >> 23) & 3) {
++  case 1: stepSrc = -(s32)size; break;
++  case 2: stepSrc = 0; break;
++  default: stepSrc = size; break;
++  }
++  if (src < 0x02000000u || dst < 0x02000000u)
++    Native_Fatal("DMA%d from 0x%08x to 0x%08x (control 0x%08x)", n, src, dst,
++                 control);
++  if (size == 4) {
++    while (count--) {
++      *(volatile u32 *)(uintptr_t)dst = *(volatile u32 *)(uintptr_t)src;
++      src += stepSrc;
++      dst += stepDst;
++    }
++  } else {
++    while (count--) {
++      *(volatile u16 *)(uintptr_t)dst = *(volatile u16 *)(uintptr_t)src;
++      src += stepSrc;
++      dst += stepDst;
++    }
++  }
++  dma->source = src;
++  dma->destination = dst;
++}
++
++/// Finishes a transfer: a repeating channel waits for its next start
++/// (reloading its destination in mode 3), any other stops.
++static void Dma_Finish(int n) {
++  struct DmaChannel *dma = &sDma[n];
++
++  if ((dma->control & DMA_REPEAT_BIT) && ((dma->control >> 28) & 3) != TIMING_NOW) {
++    if (((dma->control >> 21) & 3) == 3)
++      dma->destination = dma->reload;
++    return;
++  }
++  dma->active = 0;
++  IO_REG32(DmaRegister(n) + 8) &= ~DMA_ENABLE_BIT;
++}
++
++void Native_DmaStart(volatile void *channel, u32 source, u32 destination,
++                     u32 control) {
++  u32 offset = (u32)(uintptr_t)channel - IO_BASE;
++  int n = (offset - 0xb0) / 12;
++  struct DmaChannel *dma;
++
++  if (offset < 0xb0 || offset > 0xd4 || (offset - 0xb0) % 12 != 0)
++    Native_Fatal("DMA start at 0x%08x", (u32)(uintptr_t)channel);
++  IO_REG32(offset) = source;
++  IO_REG32(offset + 4) = destination;
++  IO_REG32(offset + 8) = control;
++  dma = &sDma[n];
++  dma->active = 0;
++  if (!(control & DMA_ENABLE_BIT))
++    return;
++  // A copy of a routine to RAM, to run it there: write a jump to the
++  // routine instead (mov eax, routine; jmp eax).
++  if (Native_IsCode(source) && ((control >> 23) & 3) == 0) {
++    u8 *at = (u8 *)(uintptr_t)destination;
++
++    at[0] = 0xb8;
++    memcpy(at + 1, &source, 4);
++    at[5] = 0xff;
++    at[6] = 0xe0;
++    IO_REG32(offset + 8) &= ~DMA_ENABLE_BIT;
++    return;
++  }
++  dma->source = source;
++  dma->destination = destination;
++  dma->reload = destination;
++  dma->control = control;
++  dma->active = 1;
++  switch ((control >> 28) & 3) {
++  case TIMING_NOW:
++    Dma_Transfer(n);
++    Dma_Finish(n);
++    break;
++  case TIMING_SPECIAL: // the sound FIFOs: no sound yet
++    dma->active = 0;
++    break;
++  }
++}
++
++/// Runs the channels waiting for `timing`. A channel the game stopped by
++/// clearing its enable bit directly is dropped.
++static void Dma_Run(int timing) {
++  int n;
++
++  for (n = 0; n < 4; n++) {
++    struct DmaChannel *dma = &sDma[n];
++
++    if (!dma->active)
++      continue;
++    if (!(IO_REG32(DmaRegister(n) + 8) & DMA_ENABLE_BIT) ||
++        ((IO_REG32(DmaRegister(n) + 8) >> 28) & 3) != ((dma->control >> 28) & 3)) {
++      dma->active = 0;
++      continue;
++    }
++    if ((int)((dma->control >> 28) & 3) == timing) {
++      Dma_Transfer(n);
++      Dma_Finish(n);
++    }
++  }
++}
++
++// --- interrupts and the frame --------------------------------------------------
++
++#define REG_DISPSTAT_OFFSET 0x04
++#define REG_VCOUNT_OFFSET 0x06
++#define REG_KEYINPUT_OFFSET 0x130
++#define REG_KEYCNT_OFFSET 0x132
++#define REG_IE_OFFSET 0x200
++#define REG_IF_OFFSET 0x202
++#define REG_IME_OFFSET 0x208
++
++typedef void (*InterruptHandler)(void);
++extern InterruptHandler gIrqHandlers[14];
++
++static int sInInterrupt;
++static u32 sFrame[GBA_WIDTH * GBA_HEIGHT];
++
++/// Raises interrupt `irq` (its IE/IF bit number): calls its handler when the
++/// game has it enabled, as the resident dispatcher does.
++static void Irq_Raise(int irq) {
++  u16 bit = 1 << irq;
++
++  IO_REG16(REG_IF_OFFSET) |= bit;
++  if (sInInterrupt || !(IO_REG16(REG_IME_OFFSET) & 1) ||
++      !(IO_REG16(REG_IE_OFFSET) & bit))
++    return;
++  IO_REG16(REG_IF_OFFSET) &= ~bit;
++  sInInterrupt = 1;
++  gIrqHandlers[irq]();
++  sInInterrupt = 0;
++}
++
++static void Keys_Update(void) {
++  u16 pressed = Platform_ReadKeys() & 0x3ff;
++  u16 keycnt = IO_REG16(REG_KEYCNT_OFFSET);
++
++  IO_REG16(REG_KEYINPUT_OFFSET) = ~pressed & 0x3ff;
++  if (keycnt & 0x4000) {
++    u16 want = keycnt & 0x3ff;
++    int hit = (keycnt & 0x8000) ? (want && (pressed & want) == want)
++                                : (pressed & want) != 0;
++
++    if (hit)
++      Irq_Raise(12);
++  }
++}
++
++/// One line's timing: VCount match, the line's pixels, then its HBlank.
++static void Display_Line(int line) {
++  u16 stat = IO_REG16(REG_DISPSTAT_OFFSET);
++
++  IO_REG16(REG_VCOUNT_OFFSET) = line;
++  stat &= ~7;
++  if (line >= GBA_HEIGHT && line < 227)
++    stat |= 1;
++  if ((stat >> 8) == line)
++    stat |= 4;
++  IO_REG16(REG_DISPSTAT_OFFSET) = stat;
++  if ((stat & 4) && (stat & 0x20))
++    Irq_Raise(2);
++  if (line == GBA_HEIGHT) {
++    Platform_Present(sFrame);
++    gNativeFrame++;
++    Keys_Update();
++    Dma_Run(TIMING_VBLANK);
++    if (IO_REG16(REG_DISPSTAT_OFFSET) & 8)
++      Irq_Raise(0);
++  }
++  if (line < GBA_HEIGHT)
++    Ppu_RenderLine(line, sFrame + line * GBA_WIDTH);
++  IO_REG16(REG_DISPSTAT_OFFSET) |= 2;
++  if (line < GBA_HEIGHT)
++    Dma_Run(TIMING_HBLANK);
++  if (IO_REG16(REG_DISPSTAT_OFFSET) & 0x10)
++    Irq_Raise(1);
++  IO_REG16(REG_DISPSTAT_OFFSET) &= ~2;
++}
++
++/// The BIOS Halt: runs the display through one whole frame (228 lines), with
++/// VBlank at line 160, and returns. The game halts only to wait for VBlank.
++void Native_Halt(void) {
++  int line;
++
++  if (Platform_ShouldQuit()) {
++    Platform_Shutdown();
++    exit(0);
++  }
++  for (line = 0; line < 228; line++)
++    Display_Line(line);
++}
++
++/// The BIOS Stop (sleep until L+R): carries on at once.
++void Native_Stop(void) {}
++
++static char **sArgv;
++
++void Native_SoftReset(void) {
++  Native_Log("soft reset: restarting");
++  Platform_Shutdown();
++  execv("/proc/self/exe", sArgv);
++  Native_Fatal("cannot restart: %s", strerror(errno));
++}
++
++// --- overlays ------------------------------------------------------------------
++
++/// Each overlay's data as linked, restored at each load as the cartridge
++/// reloads it from ROM.
++static char **sOverlayData;
++
++static void Overlay_Snapshot(void) {
++  int i;
++
++  sOverlayData = calloc(gNativeOverlayCount, sizeof(*sOverlayData));
++  for (i = 0; i < gNativeOverlayCount; i++) {
++    const struct NativeOverlay *o = &gNativeOverlays[i];
++    size_t size = o->dataEnd - o->dataStart;
++
++    if (o->dataStart && size) {
++      sOverlayData[i] = malloc(size);
++      memcpy(sOverlayData[i], o->dataStart, size);
++    }
++  }
++}
++
++void Native_LoadOverlay(unsigned resourceId, void *destination) {
++  u32 *table = destination;
++  int i, k;
++
++  for (i = 0; i < gNativeOverlayCount; i++) {
++    const struct NativeOverlay *o = &gNativeOverlays[i];
++
++    if (o->resourceId != resourceId)
++      continue;
++    if (sOverlayData[i])
++      memcpy(o->dataStart, sOverlayData[i], o->dataEnd - o->dataStart);
++    if (o->bssStart)
++      memset(o->bssStart, 0, o->bssEnd - o->bssStart);
++    // The overlay area as the cartridge leaves it: the decoded code, then
++    // whatever followed. Its entry table is all the game reads.
++    for (k = 0; k < 6; k++) {
++      table[k * 2] = 0;
++      table[k * 2 + 1] = (u32)(uintptr_t)o->entry[k];
++    }
++    Native_Log("overlay %s (resource %u)", o->name, resourceId);
++    return;
++  }
++  Native_Fatal("no overlay with resource %u", resourceId);
++}
++
++// --- logging -------------------------------------------------------------------
++
++void Native_Log(const char *format, ...) {
++  va_list args;
++
++  fprintf(stderr, "[%6u] ", gNativeFrame);
++  va_start(args, format);
++  vfprintf(stderr, format, args);
++  va_end(args);
++  fputc('\n', stderr);
++}
++
++void Native_Fatal(const char *format, ...) {
++  va_list args;
++
++  fprintf(stderr, "[%6u] fatal: ", gNativeFrame);
++  va_start(args, format);
++  vfprintf(stderr, format, args);
++  va_end(args);
++  fputc('\n', stderr);
++  Platform_Shutdown();
++  abort();
++}
++
++// --- main ----------------------------------------------------------------------
++
++void System_Initialize(void);
++
++int main(int argc, char **argv) {
++  sArgv = argv;
++  if (Platform_Init(argc, argv) != 0)
++    return 1;
++  Native_MapMemory();
++  Overlay_Snapshot();
++  IO_REG16(REG_KEYINPUT_OFFSET) = 0x3ff;
++  // System_Entry: the stacks are the host's; the game starts here and never
++  // returns.
++  System_Initialize();
++  Platform_Shutdown();
++  return 0;
++}
+diff --git a/port/src/native_stubs.c b/port/src/native_stubs.c
+new file mode 100644
+index 0000000..4ac7817
+--- /dev/null
++++ b/port/src/native_stubs.c
+@@ -0,0 +1,69 @@
++/// @file
++/// What the spike leaves out, as stand-ins that keep the game running:
++/// the sound driver (silent), the battle effect blitter fragments (the
++/// built blitters return at once, so effects draw nothing), and the credits
++/// background decoder.
++
++#include "native/native.h"
++
++// --- the sound driver (src/sound, sound/): silent -------------------------------
++
++void m4aSoundMain(void) {}
++void Mixer_Enter(void) {}
++void Sound_Initialize(void) {}
++void Sound_Play(s32 id) { (void)id; }
++void Sound_UpdateBgmRamps(void) {}
++void Sound_SetBgmTempo(u16 scale) { (void)scale; }
++void Sound_SetBgmPitch(u16 pitch) { (void)pitch; }
++void Sound_SetBgmTempoPitchTarget(u16 target, u16 step) {
++  (void)target;
++  (void)step;
++}
++void Sound_SetBgmVolume(u16 volume) { (void)volume; }
++void Sound_SetBgmVolumeTarget(u16 target, u16 step) {
++  (void)target;
++  (void)step;
++}
++s32 Sound_GetBgmRestoreDelay(void) { return 0; }
++void SoundTest_Run(void) {}
++void Sound_StopAllMusicPlayers(void) {}
++void Sound_ResumeAllMusicPlayers(void) {}
++void Sound_UpdateCommandMask(void) {}
++/// No music has played (Sound_Play's "none yet").
++s32 Sound_GetCurrentBgm(void) { return 0xff; }
++void Sound_WaitForBgmRestore(void) {}
++
++// --- battle_effect/blitter_fragments.s ---------------------------------------------
++
++/// The blitter template and its pixel fragments, as x86 `ret` bytes: a
++/// blitter the builder splices from them returns at once. Sized past what
++/// any walk copies; the builder's end check fails, which it ignores.
++#define RETURNS 0xc3c3c3c3u
++#define FRAGMENT(name)                                                         \
++  const u32 name[8] = {RETURNS, RETURNS, RETURNS, RETURNS,                     \
++                       RETURNS, RETURNS, RETURNS, RETURNS}
++FRAGMENT(BattleEffect_CopyForward);
++FRAGMENT(BattleEffect_CopyReverse);
++FRAGMENT(BattleEffect_TransparentForward);
++FRAGMENT(BattleEffect_TransparentReverse);
++FRAGMENT(BattleEffect_Transparent8Forward);
++FRAGMENT(BattleEffect_Transparent8Reverse);
++FRAGMENT(BattleEffect_MaxForward);
++FRAGMENT(BattleEffect_MaxReverse);
++FRAGMENT(BattleEffect_Max4Forward);
++FRAGMENT(BattleEffect_Max4Reverse);
++FRAGMENT(BattleEffect_AdditiveForward);
++FRAGMENT(BattleEffect_AdditiveReverse);
++FRAGMENT(BattleEffect_ColorForward);
++FRAGMENT(BattleEffect_ColorReverse);
++FRAGMENT(BattleEffect_Mask);
++const u32 gBlitterTemplate[256] = {
++    RETURNS, RETURNS, RETURNS, RETURNS, RETURNS, RETURNS, RETURNS, RETURNS,
++    RETURNS, RETURNS, RETURNS, RETURNS, RETURNS, RETURNS, RETURNS, RETURNS};
++
++// --- menu/credits_background_decode.s ----------------------------------------------
++
++void Credits_DecodeBackground(const void *source, void *destination) {
++  (void)source;
++  (void)destination;
++}
+diff --git a/port/src/native_system.c b/port/src/native_system.c
+new file mode 100644
+index 0000000..8bd6a9b
+--- /dev/null
++++ b/port/src/native_system.c
+@@ -0,0 +1,354 @@
++/// @file
++/// C for the System's hand-written ARM routines (src/system/*.s): the IWRAM
++/// arithmetic library, the trigonometry, the heap release, the BIOS calls the
++/// game makes, the interrupt tables and the resident-code symbols.
++///
++/// Each routine computes what the ARM computes, quirks included (the
++/// remainder's sign follows both operands, a divide by zero returns all ones),
++/// so the game behaves as on the cartridge.
++
++#include "native/native.h"
++
++// --- iwram_routines.s ------------------------------------------------------
++
++/// The 3x3 transform and translation every vector routine works through.
++s32 gCurrentMatrix[12] = {1 << 16, 0, 0, 0, 1 << 16, 0, 0, 0, 1 << 16, 0, 0, 0};
++
++static s32 MulFX(s32 left, s32 right) {
++  return (s32)(((s64)left * right) >> 16);
++}
++
++s32 IwramMulFX(s32 left, s32 right) { return MulFX(left, right); }
++s32 IwramMulFXReturnIp(s32 left, s32 right) { return MulFX(left, right); }
++
++/// The divide core: quotient bits from 31 down, as the restoring loop.
++static u32 DivideCore(u32 numerator, u32 denominator, u32 *remainder) {
++  u32 quotient = 0;
++  s32 shift;
++
++  for (shift = 31; shift >= 0; shift--) {
++    if ((numerator >> shift) >= denominator) {
++      quotient |= 1u << shift;
++      numerator -= denominator << shift;
++    }
++  }
++  if (remainder)
++    *remainder = numerator;
++  return quotient;
++}
++
++s32 IwramSignedDivide(s32 dividend, s32 divisor) {
++  u32 n = dividend < 0 ? -(u32)dividend : (u32)dividend;
++  u32 d = divisor < 0 ? -(u32)divisor : (u32)divisor;
++  u32 q = DivideCore(n, d, NULL);
++
++  return ((dividend ^ divisor) < 0) ? -(s32)q : (s32)q;
++}
++
++s32 IwramSignedRemainder(s32 dividend, s32 divisor) {
++  u32 n = dividend < 0 ? -(u32)dividend : (u32)dividend;
++  u32 d = divisor < 0 ? -(u32)divisor : (u32)divisor;
++  u32 r;
++
++  DivideCore(n, d, &r);
++  // The ARM negates by the sign of dividend ^ divisor.
++  return ((dividend ^ divisor) < 0) ? -(s32)r : (s32)r;
++}
++
++u32 IwramUnsignedDivide(u32 dividend, u32 divisor) {
++  return DivideCore(dividend, divisor, NULL);
++}
++
++u32 IwramUnsignedRemainder(u32 dividend, u32 divisor) {
++  u32 r;
++
++  DivideCore(dividend, divisor, &r);
++  return r;
++}
++
++/// value * 1.0 / divisor in 16.16, through a 2.30 reciprocal as the ARM does.
++s32 IwramDivFX(s32 divisor, s32 value) {
++  s32 reciprocal = IwramSignedDivide(0x40000000, divisor);
++  s64 product = (s64)value * reciprocal;
++
++  return (s32)(u32)((u64)product >> 14);
++}
++
++/// Fills size bytes, rounded down to words; returns the end address.
++s32 IwramFillWords(void *destination, s32 size, u32 value) {
++  u32 *p = destination;
++  u32 words = (u32)size >> 2;
++
++  while (words--)
++    *p++ = value;
++  return (s32)(uintptr_t)p;
++}
++
++s32 IwramClearWords(void *destination, s32 size) {
++  return IwramFillWords(destination, size, 0);
++}
++
++/// The integer square root, two result bits a step from the top.
++s32 IwramSqrt(s32 value) {
++  u32 n = (u32)value;
++  u32 root = 0;
++  u32 bit = 0x8000;
++
++  if (value < 0)
++    return 0;
++  do {
++    root += bit;
++    if (root * root > n)
++      root -= bit;
++    root += bit >> 1;
++    if (root * root > n)
++      root -= bit >> 1;
++    bit >>= 2;
++  } while (bit != 0);
++  return (s32)root;
++}
++
++/// Expands rows of 14 (international) bit flags into bytes of `value`, one
++/// row of 16 bytes per halfword: a glyph's bits into pixels.
++s32 IwramExpandBitRuns(const void *bits, void *destination, s32 value) {
++  const u16 *row = bits;
++  u8 *out = destination;
++  s32 rows = EDITION_INTERNATIONAL ? 14 : 12;
++  s32 i, k;
++
++  for (i = 0; i < rows; i++, out += 16) {
++    u32 flags = row[i] & ~3u;
++
++    for (k = 0; k < 14; k++)
++      if (flags & (0x8000u >> k))
++        out[k] = (u8)value;
++  }
++  return 0;
++}
++
++/// Transforms a 16.16 vector by gCurrentMatrix (row vector times matrix,
++/// plus the translation).
++s32 IwramTransformVector(const void *vector, s32 *result) {
++  const s32 *v = vector;
++  const s32 *m = gCurrentMatrix;
++  s32 x = v[0], y = v[1], z = v[2];
++  s32 out[3];
++  s32 j;
++
++  for (j = 0; j < 3; j++) {
++    s64 sum = (s64)x * m[j] + (s64)y * m[3 + j] + (s64)z * m[6 + j];
++
++    out[j] = (s32)(sum >> 16) + m[9 + j];
++  }
++  result[0] = out[0];
++  result[1] = out[1];
++  result[2] = out[2];
++  return 0;
++}
++
++/// gCurrentMatrix = matrix x gCurrentMatrix, translation included.
++void IwramMultiplyMatrix(const s32 *matrix) {
++  s32 *m = gCurrentMatrix;
++  s32 out[12];
++  s32 i, j;
++
++  for (i = 0; i < 4; i++) {
++    for (j = 0; j < 3; j++) {
++      s64 sum = (s64)matrix[i * 3] * m[j] + (s64)matrix[i * 3 + 1] * m[3 + j] +
++                (s64)matrix[i * 3 + 2] * m[6 + j];
++
++      out[i * 3 + j] = (s32)(sum >> 16);
++    }
++  }
++  for (j = 0; j < 3; j++)
++    out[9 + j] += m[9 + j];
++  memcpy(m, out, sizeof(out));
++}
++
++/// A sprite's codec 3 picture: literal bytes, bytes above 223 skip pixels,
++/// back-references into the literals. Returns null, or the stored picture
++/// when its packed size is 0.
++void *IwramDecompress(const void *source, void *destination) {
++  const u8 *src = source;
++  u8 *dst = destination;
++  u32 size = src[0] | (src[1] << 8);
++  const u8 *literals, *flags;
++
++  src += 2;
++  if (size == 0)
++    return (void *)src;
++  literals = src;
++  flags = src + size - 2;
++  for (;;) {
++    u32 bits = *flags++ | 0x100;
++
++    for (;;) {
++      u32 bit = bits & 1;
++
++      bits >>= 1;
++      if (bits == 0)
++        break; // the stop bit: reload
++      if (bit) {
++        u8 b = *src++;
++
++        if (b > 223)
++          dst += b - 223;
++        else
++          *dst++ = b;
++      } else {
++        u32 code = (flags[0] << 8) | flags[1];
++        const u8 *from;
++        s32 count;
++
++        flags += 2;
++        if (code == 0)
++          return NULL;
++        from = literals - (code & 0xfff);
++        count = code >> 12;
++        if (count == 0)
++          count = *flags++ + 16;
++        count += 1;
++        do {
++          u8 b = *from++;
++
++          if (b > 223)
++            dst += b - 223;
++          else
++            *dst++ = b;
++        } while (count-- > 0);
++      }
++    }
++  }
++}
++
++/// Copies size bytes, rounded down to words.
++s32 IwramCopyWords(void *destination, const void *source, s32 size) {
++  memmove(destination, source, (u32)size & ~3u);
++  return 0;
++}
++
++// --- inner_product.s ---------------------------------------------------------
++
++s32 RelocatedInnerProduct(s32 a, s32 b, s32 c, s32 d, s32 e, s32 f) {
++  s64 sum = (s64)a * b + (s64)c * d + (s64)e * f;
++
++  return (s32)(sum >> 16);
++}
++
++// --- trig.s ------------------------------------------------------------------
++
++extern const u16 Trig_SineTable[];
++
++/// The sine at a quadrant boundary: 0 or +-1.0.
++static s32 SinOnAxis(u32 angle) {
++  s32 value = ((angle >> 14) & 1) << 16;
++
++  return (angle & 0x8000) ? -value : value;
++}
++
++s32 Trig_SinOnAxis(s32 angle) { return SinOnAxis((u32)angle); }
++
++s32 Trig_Sin(s32 angle) {
++  u32 a = (u32)angle + 32;
++  u32 index = (a << 18) >> 24;
++  s32 value;
++
++  if (index == 0)
++    return SinOnAxis(a);
++  if (a & 0x4000)
++    index = 256 - index;
++  value = Trig_SineTable[index];
++  return (a & 0x8000) ? -value : value;
++}
++
++s32 Trig_Cos(s32 angle) { return Trig_Sin(angle + 0x4000); }
++
++// --- heap_release.s ----------------------------------------------------------
++
++extern u32 gHeapSlots[];
++
++/// Frees a heap slot's block: the block becomes its heap's head again.
++void HeapSlot_Release(s32 slot) {
++  u32 block = gHeapSlots[slot];
++
++  if ((block >> 22) == 0)
++    return;
++  gHeapSlots[slot] = 0;
++  gHeapSlots[((block >> 22) & 4) >> 2] = block;
++}
++
++/// Frees a block: its heap (EWRAM or IWRAM, by address) resumes from it.
++void Heap_Release(void *buffer) {
++  u32 block = (u32)(uintptr_t)buffer;
++
++  gHeapSlots[((block >> 22) & 4) >> 2] = block;
++}
++
++// --- bios.s ------------------------------------------------------------------
++
++/// The BIOS CpuSet: copies or fills (bit 24) halfwords or words (bit 26).
++void Bios_CpuSet(const void *source, void *destination, u32 control) {
++  u32 count = control & 0x1fffff;
++  int fill = (control >> 24) & 1;
++
++  if (control & (1 << 26)) {
++    const u32 *s = (const u32 *)((uintptr_t)source & ~3u);
++    u32 *d = (u32 *)((uintptr_t)destination & ~3u);
++    u32 value = *s;
++
++    while (count--)
++      *d++ = fill ? value : *s++;
++  } else {
++    const u16 *s = (const u16 *)((uintptr_t)source & ~1u);
++    u16 *d = (u16 *)((uintptr_t)destination & ~1u);
++    u16 value = *s;
++
++    while (count--)
++      *d++ = fill ? value : *s++;
++  }
++}
++
++void Bios_SoundBiasOff(void) {}
++void Bios_SoundBiasOn(void) {}
++
++// --- irq.s, irq_table.s, entry.s -----------------------------------------------
++
++typedef void (*InterruptHandler)(void);
++void Irq_Ignore(void);
++void Input_HandleKeyInterrupt(void);
++
++InterruptHandler gIrqHandlers[14];
++const u32 gDefaultIrqHandlers[14] = {
++    (u32)Irq_Ignore, (u32)Irq_Ignore, (u32)Irq_Ignore, (u32)Irq_Ignore,
++    (u32)Irq_Ignore, (u32)Irq_Ignore, (u32)Irq_Ignore, (u32)Irq_Ignore,
++    (u32)Irq_Ignore, (u32)Irq_Ignore, (u32)Irq_Ignore, (u32)Irq_Ignore,
++    (u32)Input_HandleKeyInterrupt, (u32)Irq_Ignore};
++
++/// The resident code's ROM image: nothing to copy natively, but the game
++/// copies its 5,120 bytes to IwramIrqMain (0x03000000) at power-on.
++const u8 IwramResident_Rom[5120];
++
++/// The word Battle_Playback hands to _call_via_r0: nothing natively.
++const u32 IwramIrqModeWord = 0;
++
++/// The cartridge entry point the soft reset jumps to.
++void Rom_Start(void) { Native_SoftReset(); }
++
++/// The sound reverb code slots the VBlank handler copies: unused natively.
++const u8 IwramSoundReverbCodes[8 * 256];
++u8 IwramSoundReverbCode[256];
++
++/// Calls `routine` with the first three arguments (r0 to r2).
++s32 _call_via_r3(s32 a, s32 b, s32 c, s32 (*routine)(s32, s32, s32)) {
++  return routine(a, b, c);
++}
++
++/// Dma_StopDma3's call of a word that is not a routine: nothing natively.
++void _call_via_r0(u32 routine) { (void)routine; }
++
++// --- iwram_entry.s, actor_update_far.s: far stubs ----------------------------
++
++s32 Trig_Atan(s32 z, s32 x);
++s32 Trig_AtanFarArm(s32 z, s32 x) { return Trig_Atan(z, x); }
++s32 Iwram_SqrtFarArm(s32 value) { return IwramSqrt(value); }
++s32 Iwram_DivFXFarArm(s32 divisor, s32 value) { return IwramDivFX(divisor, value); }
+diff --git a/port/src/platform_headless.c b/port/src/platform_headless.c
+new file mode 100644
+index 0000000..10adf18
+--- /dev/null
++++ b/port/src/platform_headless.c
+@@ -0,0 +1,351 @@
++/// @file
++/// The headless platform: no window and no pacing. Input comes from a smoke
++/// script in the libmgba driver's format (scripts/smoke in the arena repo:
++/// wait, press, tap, mash, include, shot, peek, poke), and screenshots are
++/// PNG files, so the same scripts drive the native build.
++///
++///   tbs-native [--script FILE] [--shots DIR] [--frames N] [--scale N]
++///
++/// Without a script it runs --frames frames (default 600) and writes a shot
++/// of the last. A shot path in a script keeps only its file name, written
++/// under --shots (default build/native-shots).
++
++#include "native/native.h"
++
++#include <errno.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <sys/stat.h>
++
++// --- PNG (stored deflate: no zlib needed) ---------------------------------
++
++static u32 sCrcTable[256];
++
++static u32 Crc(u32 crc, const u8 *p, size_t n) {
++  if (!sCrcTable[1]) {
++    u32 i, k;
++
++    for (i = 0; i < 256; i++) {
++      u32 c = i;
++
++      for (k = 0; k < 8; k++)
++        c = c & 1 ? 0xedb88320u ^ (c >> 1) : c >> 1;
++      sCrcTable[i] = c;
++    }
++  }
++  crc = ~crc;
++  while (n--)
++    crc = sCrcTable[(crc ^ *p++) & 255] ^ (crc >> 8);
++  return ~crc;
++}
++
++static void Put32(u8 *p, u32 v) {
++  p[0] = v >> 24;
++  p[1] = v >> 16;
++  p[2] = v >> 8;
++  p[3] = v;
++}
++
++static void Chunk(FILE *f, const char *type, const u8 *data, u32 size) {
++  u8 head[8];
++  u32 crc;
++
++  Put32(head, size);
++  memcpy(head + 4, type, 4);
++  fwrite(head, 1, 8, f);
++  fwrite(data, 1, size, f);
++  crc = Crc(Crc(0, (const u8 *)type, 4), data, size);
++  Put32(head, crc);
++  fwrite(head, 1, 4, f);
++}
++
++static int Png_Write(const char *path, const u32 *pixels, int width,
++                     int height, int scale) {
++  int w = width * scale, h = height * scale;
++  size_t row = 1 + (size_t)w * 3, raw = row * h;
++  size_t blocks = (raw + 65534) / 65535;
++  u8 *image = malloc(raw), *z = malloc(raw + blocks * 5 + 6), *q;
++  u8 ihdr[13];
++  u32 a = 1, b = 0;
++  size_t i, left;
++  int x, y;
++  FILE *f = fopen(path, "wb");
++
++  if (!f || !image || !z) {
++    Native_Log("cannot write %s: %s", path, strerror(errno));
++    free(image);
++    free(z);
++    if (f)
++      fclose(f);
++    return -1;
++  }
++  for (y = 0; y < h; y++) {
++    u8 *r = image + y * row;
++
++    *r++ = 0;
++    for (x = 0; x < w; x++) {
++      u32 c = pixels[(y / scale) * width + x / scale];
++
++      *r++ = c >> 16;
++      *r++ = c >> 8;
++      *r++ = c;
++    }
++  }
++  q = z;
++  *q++ = 0x78;
++  *q++ = 0x01;
++  for (i = 0, left = raw; left; ) {
++    u32 n = left > 65535 ? 65535 : left;
++
++    *q++ = left == n;
++    *q++ = n;
++    *q++ = n >> 8;
++    *q++ = ~n;
++    *q++ = ~n >> 8;
++    memcpy(q, image + i, n);
++    q += n;
++    i += n;
++    left -= n;
++  }
++  for (i = 0; i < raw; i++) {
++    a = (a + image[i]) % 65521;
++    b = (b + a) % 65521;
++  }
++  Put32(q, b << 16 | a);
++  q += 4;
++  fwrite("\x89PNG\r\n\x1a\n", 1, 8, f);
++  Put32(ihdr, w);
++  Put32(ihdr + 4, h);
++  ihdr[8] = 8;  // bit depth
++  ihdr[9] = 2;  // RGB
++  ihdr[10] = 0;
++  ihdr[11] = 0;
++  ihdr[12] = 0;
++  Chunk(f, "IHDR", ihdr, 13);
++  Chunk(f, "IDAT", z, q - z);
++  Chunk(f, "IEND", NULL, 0);
++  fclose(f);
++  free(image);
++  free(z);
++  return 0;
++}
++
++// --- the script -----------------------------------------------------------------
++
++enum { CMD_HOLD, CMD_SHOT, CMD_PEEK, CMD_POKE };
++
++struct Command {
++  int kind;
++  u16 keys;
++  u32 frames;
++  u32 address, size, value;
++  char *path;
++};
++
++static struct Command *sCommands;
++static int sCount, sCapacity, sNext;
++static u32 sHoldLeft;
++static u16 sKeys;
++static int sDone;
++static const char *sShotDir = "build/native-shots";
++static int sScale = 3;
++static u32 sFrameLimit = 600;
++static int sScripted;
++static const u32 *sLastFrame;
++
++static struct Command *Command_Add(int kind) {
++  if (sCount == sCapacity) {
++    sCapacity = sCapacity ? sCapacity * 2 : 64;
++    sCommands = realloc(sCommands, sCapacity * sizeof(*sCommands));
++  }
++  memset(&sCommands[sCount], 0, sizeof(*sCommands));
++  sCommands[sCount].kind = kind;
++  return &sCommands[sCount++];
++}
++
++static void Hold(u16 keys, u32 frames) {
++  struct Command *c = Command_Add(CMD_HOLD);
++
++  c->keys = keys;
++  c->frames = frames;
++}
++
++static u16 Keys_Parse(const char *s) {
++  u16 keys = 0;
++
++  for (; *s; s++) {
++    switch (*s) {
++    case 'A': keys |= 1; break;
++    case 'B': keys |= 2; break;
++    case 'S': keys |= 4; break;
++    case 'T': keys |= 8; break;
++    case 'R': keys |= 16; break;
++    case 'L': keys |= 32; break;
++    case 'U': keys |= 64; break;
++    case 'D': keys |= 128; break;
++    case 'r': keys |= 256; break;
++    case 'l': keys |= 512; break;
++    default: Native_Fatal("unknown key '%c'", *s);
++    }
++  }
++  return keys;
++}
++
++static void Script_Load(const char *path) {
++  FILE *f = fopen(path, "r");
++  char line[512], dir[512];
++  const char *slash = strrchr(path, '/');
++
++  if (!f)
++    Native_Fatal("cannot open script %s", path);
++  snprintf(dir, sizeof(dir), "%.*s", slash ? (int)(slash - path) : 1,
++           slash ? path : ".");
++  while (fgets(line, sizeof(line), f)) {
++    char word[64], arg1[400], arg2[64], arg3[64];
++    int n;
++    char *hash = strchr(line, '#');
++
++    if (hash)
++      *hash = 0;
++    n = sscanf(line, "%63s %399s %63s %63s", word, arg1, arg2, arg3);
++    if (n <= 0)
++      continue;
++    if (!strcmp(word, "wait") && n >= 2) {
++      Hold(0, strtoul(arg1, NULL, 0));
++    } else if (!strcmp(word, "press") && n >= 3) {
++      Hold(Keys_Parse(arg1), strtoul(arg2, NULL, 0));
++    } else if (!strcmp(word, "tap") && n >= 2) {
++      Hold(Keys_Parse(arg1), 4);
++      Hold(0, 20);
++    } else if (!strcmp(word, "mash") && n >= 3) {
++      u32 i, times = strtoul(arg2, NULL, 0);
++      u16 keys = Keys_Parse(arg1);
++
++      for (i = 0; i < times; i++) {
++        Hold(keys, 4);
++        Hold(0, 20);
++      }
++    } else if (!strcmp(word, "include") && n >= 2) {
++      char sub[1024];
++
++      if (arg1[0] == '/')
++        snprintf(sub, sizeof(sub), "%s", arg1);
++      else
++        snprintf(sub, sizeof(sub), "%s/%s", dir, arg1);
++      Script_Load(sub);
++    } else if (!strcmp(word, "shot") && n >= 2) {
++      const char *base = strrchr(arg1, '/');
++
++      Command_Add(CMD_SHOT)->path = strdup(base ? base + 1 : arg1);
++    } else if (!strcmp(word, "peek") && n >= 3) {
++      struct Command *c = Command_Add(CMD_PEEK);
++
++      c->address = strtoul(arg1, NULL, 16);
++      c->size = strtoul(arg2, NULL, 0);
++    } else if (!strcmp(word, "poke") && n >= 4) {
++      struct Command *c = Command_Add(CMD_POKE);
++
++      c->address = strtoul(arg1, NULL, 16);
++      c->size = strtoul(arg2, NULL, 0);
++      c->value = strtoul(arg3, NULL, 0);
++    } else {
++      Native_Log("script: skipping unsupported line: %s", word);
++    }
++  }
++  fclose(f);
++}
++
++static void Shot(const char *name) {
++  char path[1024];
++
++  snprintf(path, sizeof(path), "%s/%s", sShotDir, name);
++  if (sLastFrame && Png_Write(path, sLastFrame, GBA_WIDTH, GBA_HEIGHT, sScale) == 0)
++    Native_Log("shot %s", path);
++}
++
++/// Runs the script up to the next frame that holds keys or waits.
++static void Script_Step(void) {
++  if (sHoldLeft && --sHoldLeft)
++    return;
++  sKeys = 0;
++  while (sNext < sCount) {
++    struct Command *c = &sCommands[sNext++];
++    volatile u8 *at = (volatile u8 *)(uintptr_t)c->address;
++
++    switch (c->kind) {
++    case CMD_HOLD:
++      if (c->frames == 0)
++        continue;
++      sKeys = c->keys;
++      sHoldLeft = c->frames;
++      return;
++    case CMD_SHOT:
++      Shot(c->path);
++      break;
++    case CMD_PEEK:
++      if (c->size == 4)
++        Native_Log("peek %08x = %u (0x%08x)", c->address, *(volatile u32 *)at,
++                   *(volatile u32 *)at);
++      else if (c->size == 2)
++        Native_Log("peek %08x = %u", c->address, *(volatile u16 *)at);
++      else
++        Native_Log("peek %08x = %u", c->address, *at);
++      break;
++    case CMD_POKE:
++      if (c->size == 4)
++        *(volatile u32 *)at = c->value;
++      else if (c->size == 2)
++        *(volatile u16 *)at = c->value;
++      else
++        *at = c->value;
++      break;
++    }
++  }
++  sDone = 1;
++}
++
++// --- the platform -----------------------------------------------------------------
++
++int Platform_Init(int argc, char **argv) {
++  int i;
++
++  for (i = 1; i < argc; i++) {
++    if (!strcmp(argv[i], "--script") && i + 1 < argc) {
++      Script_Load(argv[++i]);
++      sScripted = 1;
++    } else if (!strcmp(argv[i], "--shots") && i + 1 < argc) {
++      sShotDir = argv[++i];
++    } else if (!strcmp(argv[i], "--frames") && i + 1 < argc) {
++      sFrameLimit = strtoul(argv[++i], NULL, 0);
++    } else if (!strcmp(argv[i], "--scale") && i + 1 < argc) {
++      sScale = atoi(argv[++i]);
++    } else {
++      fprintf(stderr,
++              "usage: %s [--script FILE] [--shots DIR] [--frames N] [--scale N]\n",
++              argv[0]);
++      return 1;
++    }
++  }
++  mkdir(sShotDir, 0777);
++  return 0;
++}
++
++void Platform_Present(const u32 *frame) {
++  sLastFrame = frame;
++  if (sScripted)
++    Script_Step();
++}
++
++u16 Platform_ReadKeys(void) { return sKeys; }
++
++int Platform_ShouldQuit(void) {
++  if (sScripted)
++    return sDone;
++  if (gNativeFrame >= sFrameLimit) {
++    Shot("last.png");
++    return 1;
++  }
++  return 0;
++}
++
++void Platform_Shutdown(void) {}
+diff --git a/port/src/platform_sdl.c b/port/src/platform_sdl.c
+new file mode 100644
+index 0000000..bd8cca7
+--- /dev/null
++++ b/port/src/platform_sdl.c
+@@ -0,0 +1,159 @@
++/// @file
++/// The SDL3 platform: a window scaled by whole steps (keeping the GBA's
++/// 3:2 picture), keyboard and gamepad input, and 60 frames a second.
++///
++///   tbs-native [--scale N] [--fullscreen]
++///
++/// Keys: arrows (D-pad), X (A), Z (B), Enter (Start), Backspace or right
++/// Shift (Select), A and S (L and R); hold Tab to run without the frame
++/// limit; Escape quits. A gamepad works as laid out on a GBA: south A, east
++/// B, the shoulders L and R, Back for Select.
++
++#include "native/native.h"
++
++#include <SDL3/SDL.h>
++#include <stdlib.h>
++
++static SDL_Window *sWindow;
++static SDL_Renderer *sRenderer;
++static SDL_Texture *sTexture;
++static SDL_Gamepad *sGamepad;
++static int sQuit;
++static Uint64 sNextFrame;
++
++#define FRAME_NS (SDL_NS_PER_SECOND * 280896ull / 16777216ull) // 59.73 Hz
++
++int Platform_Init(int argc, char **argv) {
++  int scale = 4, fullscreen = 0, i;
++
++  for (i = 1; i < argc; i++) {
++    if (!strcmp(argv[i], "--scale") && i + 1 < argc)
++      scale = atoi(argv[++i]);
++    else if (!strcmp(argv[i], "--fullscreen"))
++      fullscreen = 1;
++  }
++  if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
++    Native_Log("SDL_Init: %s", SDL_GetError());
++    return 1;
++  }
++  if (!SDL_CreateWindowAndRenderer("Broken Seal Arena", GBA_WIDTH * scale,
++                                   GBA_HEIGHT * scale,
++                                   SDL_WINDOW_RESIZABLE |
++                                       (fullscreen ? SDL_WINDOW_FULLSCREEN : 0),
++                                   &sWindow, &sRenderer)) {
++    Native_Log("SDL_CreateWindowAndRenderer: %s", SDL_GetError());
++    return 1;
++  }
++  SDL_SetRenderLogicalPresentation(sRenderer, GBA_WIDTH, GBA_HEIGHT,
++                                   SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
++  sTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_XRGB8888,
++                               SDL_TEXTUREACCESS_STREAMING, GBA_WIDTH,
++                               GBA_HEIGHT);
++  if (!sTexture) {
++    Native_Log("SDL_CreateTexture: %s", SDL_GetError());
++    return 1;
++  }
++  SDL_SetTextureScaleMode(sTexture, SDL_SCALEMODE_NEAREST);
++  sNextFrame = SDL_GetTicksNS();
++  return 0;
++}
++
++static void Events_Poll(void) {
++  SDL_Event event;
++
++  while (SDL_PollEvent(&event)) {
++    switch (event.type) {
++    case SDL_EVENT_QUIT:
++      sQuit = 1;
++      break;
++    case SDL_EVENT_KEY_DOWN:
++      if (event.key.key == SDLK_ESCAPE)
++        sQuit = 1;
++      break;
++    case SDL_EVENT_GAMEPAD_ADDED:
++      if (!sGamepad)
++        sGamepad = SDL_OpenGamepad(event.gdevice.which);
++      break;
++    case SDL_EVENT_GAMEPAD_REMOVED:
++      if (sGamepad && SDL_GetGamepadID(sGamepad) == event.gdevice.which) {
++        SDL_CloseGamepad(sGamepad);
++        sGamepad = NULL;
++      }
++      break;
++    }
++  }
++}
++
++void Platform_Present(const u32 *frame) {
++  const bool *keys;
++
++  SDL_UpdateTexture(sTexture, NULL, frame, GBA_WIDTH * 4);
++  SDL_SetRenderDrawColor(sRenderer, 0, 0, 0, 255);
++  SDL_RenderClear(sRenderer);
++  SDL_RenderTexture(sRenderer, sTexture, NULL, NULL);
++  SDL_RenderPresent(sRenderer);
++  Events_Poll();
++  keys = SDL_GetKeyboardState(NULL);
++  // Pace to the GBA's frame rate unless Tab is held.
++  sNextFrame += FRAME_NS;
++  if (!keys[SDL_SCANCODE_TAB]) {
++    Uint64 now = SDL_GetTicksNS();
++
++    if (sNextFrame > now)
++      SDL_DelayNS(sNextFrame - now);
++    else if (now - sNextFrame > FRAME_NS * 4)
++      sNextFrame = now; // fell behind: do not race to catch up
++  } else {
++    sNextFrame = SDL_GetTicksNS();
++  }
++}
++
++u16 Platform_ReadKeys(void) {
++  const bool *k = SDL_GetKeyboardState(NULL);
++  u16 keys = 0;
++
++  if (k[SDL_SCANCODE_X]) keys |= 1;
++  if (k[SDL_SCANCODE_Z]) keys |= 2;
++  if (k[SDL_SCANCODE_BACKSPACE] || k[SDL_SCANCODE_RSHIFT]) keys |= 4;
++  if (k[SDL_SCANCODE_RETURN]) keys |= 8;
++  if (k[SDL_SCANCODE_RIGHT]) keys |= 16;
++  if (k[SDL_SCANCODE_LEFT]) keys |= 32;
++  if (k[SDL_SCANCODE_UP]) keys |= 64;
++  if (k[SDL_SCANCODE_DOWN]) keys |= 128;
++  if (k[SDL_SCANCODE_S]) keys |= 256;
++  if (k[SDL_SCANCODE_A]) keys |= 512;
++  if (sGamepad) {
++    Sint16 x = SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTX);
++    Sint16 y = SDL_GetGamepadAxis(sGamepad, SDL_GAMEPAD_AXIS_LEFTY);
++
++    if (SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_SOUTH)) keys |= 1;
++    if (SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_EAST)) keys |= 2;
++    if (SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_BACK)) keys |= 4;
++    if (SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_START)) keys |= 8;
++    if (SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || x > 16000) keys |= 16;
++    if (SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) || x < -16000) keys |= 32;
++    if (SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_UP) || y < -16000) keys |= 64;
++    if (SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN) || y > 16000) keys |= 128;
++    if (SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) keys |= 256;
++    if (SDL_GetGamepadButton(sGamepad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER)) keys |= 512;
++  }
++  return keys;
++}
++
++int Platform_ShouldQuit(void) { return sQuit; }
++
++void Platform_Shutdown(void) {
++  if (sGamepad)
++    SDL_CloseGamepad(sGamepad);
++  if (sTexture)
++    SDL_DestroyTexture(sTexture);
++  if (sRenderer)
++    SDL_DestroyRenderer(sRenderer);
++  if (sWindow)
++    SDL_DestroyWindow(sWindow);
++  sGamepad = NULL;
++  sTexture = NULL;
++  sRenderer = NULL;
++  sWindow = NULL;
++  SDL_Quit();
++}
+diff --git a/port/src/ppu.c b/port/src/ppu.c
+new file mode 100644
+index 0000000..fa18076
+--- /dev/null
++++ b/port/src/ppu.c
+@@ -0,0 +1,414 @@
++/// @file
++/// The software display: draws one line at a time from the GBA's display
++/// registers, VRAM, palette and OAM as the hardware would, so the HBlank
++/// effects the game drives by DMA and interrupts land on their lines.
++///
++/// Covered: modes 0 to 5; text and affine backgrounds (4 and 8 bpp, all
++/// sizes, wrap); sprites, flipped and affine (double size), 1D and 2D tile
++/// mapping, semi-transparent and window sprites; WIN0, WIN1 and the sprite
++/// window; alpha blending, brighten and darken; forced blank. Not covered
++/// yet: mosaic, and the sprite-priority quirk between overlapping sprites.
++
++#include "native/native.h"
++
++#define REG16(offset) (*(volatile u16 *)(uintptr_t)(IO_BASE + (offset)))
++#define REG32(offset) (*(volatile u32 *)(uintptr_t)(IO_BASE + (offset)))
++#define VRAM ((const u8 *)(uintptr_t)VRAM_BASE)
++#define PALETTE ((const u16 *)(uintptr_t)PALETTE_BASE)
++#define OAM ((const u16 *)(uintptr_t)OAM_BASE)
++
++/// A layer pixel: the RGB555 colour, or TRANSPARENT.
++#define TRANSPARENT 0x8000
++
++enum { LAYER_BG0, LAYER_BG1, LAYER_BG2, LAYER_BG3, LAYER_OBJ, LAYER_BD };
++
++static u16 sBg[4][GBA_WIDTH];
++static u16 sObj[GBA_WIDTH];
++static u8 sObjPriority[GBA_WIDTH];
++static u8 sObjSemi[GBA_WIDTH];
++static u8 sObjWindow[GBA_WIDTH];
++
++/// The affine backgrounds' internal reference points, which step by PB and
++/// PD each line and reload when the game writes the registers.
++static s32 sRefX[2], sRefY[2];
++static u32 sLastX[2], sLastY[2];
++
++static s32 Signed28(u32 value) { return (s32)(value << 4) >> 4; }
++
++static u32 Rgb(u16 c) {
++  u32 r = c & 31, g = (c >> 5) & 31, b = (c >> 10) & 31;
++
++  return ((r << 3 | r >> 2) << 16) | ((g << 3 | g >> 2) << 8) | (b << 3 | b >> 2);
++}
++
++// --- backgrounds -----------------------------------------------------------------
++
++static void Bg_Text(int bg, int y) {
++  u16 control = REG16(0x08 + bg * 2);
++  u32 hofs = REG16(0x10 + bg * 4) & 0x1ff;
++  u32 vofs = REG16(0x12 + bg * 4) & 0x1ff;
++  const u8 *tiles = VRAM + ((control >> 2) & 3) * 0x4000;
++  const u16 *map = (const u16 *)(VRAM + ((control >> 8) & 31) * 0x800);
++  int wide = control & 0x4000, tall = control & 0x8000;
++  int colours256 = control & 0x80;
++  u32 py = (y + vofs) & (tall ? 511 : 255);
++  int x;
++
++  for (x = 0; x < GBA_WIDTH; x++) {
++    u32 px = (x + hofs) & (wide ? 511 : 255);
++    u32 block = 0, entry, tx, ty, index;
++
++    if (px >= 256)
++      block += 1;
++    if (py >= 256)
++      block += wide ? 2 : 1;
++    entry = map[block * 1024 + ((py & 255) >> 3) * 32 + ((px & 255) >> 3)];
++    tx = px & 7;
++    ty = py & 7;
++    if (entry & 0x400)
++      tx = 7 - tx;
++    if (entry & 0x800)
++      ty = 7 - ty;
++    if (colours256) {
++      u32 at = (entry & 0x3ff) * 64 + ty * 8 + tx;
++
++      index = at < 0x10000 - ((control >> 2) & 3) * 0x4000 ? tiles[at] : 0;
++      sBg[bg][x] = index ? PALETTE[index] & 0x7fff : TRANSPARENT;
++    } else {
++      u32 at = (entry & 0x3ff) * 32 + ty * 4 + (tx >> 1);
++
++      index = (tiles[at] >> ((tx & 1) * 4)) & 15;
++      sBg[bg][x] = index ? PALETTE[(entry >> 12) * 16 + index] & 0x7fff
++                         : TRANSPARENT;
++    }
++  }
++}
++
++static void Bg_Affine(int bg, int y) {
++  int k = bg - 2;
++  u16 control = REG16(0x08 + bg * 2);
++  s32 pa = (s16)REG16(0x20 + k * 16), pc = (s16)REG16(0x24 + k * 16);
++  const u8 *tiles = VRAM + ((control >> 2) & 3) * 0x4000;
++  const u8 *map = VRAM + ((control >> 8) & 31) * 0x800;
++  s32 size = 128 << ((control >> 14) & 3);
++  int wrap = control & 0x2000;
++  s32 cx = sRefX[k], cy = sRefY[k];
++  int x;
++
++  (void)y;
++  for (x = 0; x < GBA_WIDTH; x++, cx += pa, cy += pc) {
++    s32 px = cx >> 8, py = cy >> 8;
++    u32 index;
++
++    if (wrap) {
++      px &= size - 1;
++      py &= size - 1;
++    } else if (px < 0 || py < 0 || px >= size || py >= size) {
++      sBg[bg][x] = TRANSPARENT;
++      continue;
++    }
++    index = tiles[map[(py >> 3) * (size >> 3) + (px >> 3)] * 64 + (py & 7) * 8 +
++                  (px & 7)];
++    sBg[bg][x] = index ? PALETTE[index] & 0x7fff : TRANSPARENT;
++  }
++}
++
++/// Modes 3 to 5: BG2 is a bitmap (through the affine reference point).
++static void Bg_Bitmap(int mode, int y) {
++  s32 pa = (s16)REG16(0x20), pc = (s16)REG16(0x24);
++  s32 cx = sRefX[0], cy = sRefY[0];
++  int width = mode == 5 ? 160 : 240, height = mode == 5 ? 128 : 160;
++  const u8 *page = VRAM + ((mode != 3 && (REG16(0) & 0x10)) ? 0xa000 : 0);
++  int x;
++
++  (void)y;
++  for (x = 0; x < GBA_WIDTH; x++, cx += pa, cy += pc) {
++    s32 px = cx >> 8, py = cy >> 8;
++
++    if (px < 0 || py < 0 || px >= width || py >= height) {
++      sBg[2][x] = TRANSPARENT;
++    } else if (mode == 4) {
++      u8 index = page[py * 240 + px];
++
++      sBg[2][x] = index ? PALETTE[index] & 0x7fff : TRANSPARENT;
++    } else {
++      sBg[2][x] = ((const u16 *)page)[py * width + px] & 0x7fff;
++    }
++  }
++}
++
++// --- sprites -------------------------------------------------------------------------
++
++static const u8 kObjWidth[3][4] = {{8, 16, 32, 64}, {16, 32, 32, 64}, {8, 8, 16, 32}};
++static const u8 kObjHeight[3][4] = {{8, 16, 32, 64}, {8, 8, 16, 32}, {16, 32, 32, 64}};
++
++static void Obj_Line(int y) {
++  u16 dispcnt = REG16(0);
++  int oneD = dispcnt & 0x40;
++  u32 tileBase = (dispcnt & 7) >= 3 ? 512 : 0;
++  const u8 *objTiles = VRAM + 0x10000;
++  int i, x;
++
++  for (x = 0; x < GBA_WIDTH; x++) {
++    sObj[x] = TRANSPARENT;
++    sObjPriority[x] = 4;
++    sObjSemi[x] = 0;
++    sObjWindow[x] = 0;
++  }
++  if (!(dispcnt & 0x1000))
++    return;
++  for (i = 0; i < 128; i++) {
++    u16 a0 = OAM[i * 4], a1 = OAM[i * 4 + 1], a2 = OAM[i * 4 + 2];
++    int affine = a0 & 0x100, shape = a0 >> 14, size = a1 >> 14;
++    int mode = (a0 >> 10) & 3, colours256 = a0 & 0x2000;
++    int width, height, boxW, boxH, sy, sx, row;
++    u32 tile = a2 & 0x3ff, priority = (a2 >> 10) & 3;
++    s32 pa = 256, pb = 0, pc = 0, pd = 256;
++
++    if (!affine && (a0 & 0x200))
++      continue; // hidden
++    if (shape == 3 || mode == 3)
++      continue;
++    width = kObjWidth[shape][size];
++    height = kObjHeight[shape][size];
++    boxW = width;
++    boxH = height;
++    if (affine && (a0 & 0x200)) {
++      boxW *= 2;
++      boxH *= 2;
++    }
++    sy = a0 & 255;
++    if (sy >= 160)
++      sy -= 256;
++    row = y - sy;
++    if (row < 0 || row >= boxH)
++      continue;
++    sx = a1 & 511;
++    if (sx >= 240)
++      sx -= 512;
++    if (tile < tileBase)
++      continue;
++    if (affine) {
++      int group = (a1 >> 9) & 31;
++
++      pa = (s16)OAM[group * 16 + 3];
++      pb = (s16)OAM[group * 16 + 7];
++      pc = (s16)OAM[group * 16 + 11];
++      pd = (s16)OAM[group * 16 + 15];
++    }
++    for (x = 0; x < boxW; x++) {
++      int screen = sx + x;
++      s32 tx, ty;
++      u32 index, tileNumber, at;
++
++      if (screen < 0 || screen >= GBA_WIDTH)
++        continue;
++      if (affine) {
++        s32 dx = x - boxW / 2, dy = row - boxH / 2;
++
++        tx = ((pa * dx + pb * dy) >> 8) + width / 2;
++        ty = ((pc * dx + pd * dy) >> 8) + height / 2;
++        if (tx < 0 || ty < 0 || tx >= width || ty >= height)
++          continue;
++      } else {
++        tx = (a1 & 0x1000) ? width - 1 - x : x;
++        ty = (a1 & 0x2000) ? height - 1 - row : row;
++      }
++      if (colours256) {
++        tileNumber = tile + (oneD ? (ty >> 3) * (width >> 3) * 2 : (ty >> 3) * 32) +
++                     (tx >> 3) * 2;
++        at = (tileNumber & 0x3ff) * 32 + (ty & 7) * 8 + (tx & 7);
++        index = objTiles[at & 0x7fff];
++        if (!index)
++          continue;
++        index += 256;
++      } else {
++        tileNumber = tile + (oneD ? (ty >> 3) * (width >> 3) : (ty >> 3) * 32) +
++                     (tx >> 3);
++        at = (tileNumber & 0x3ff) * 32 + (ty & 7) * 4 + ((tx & 7) >> 1);
++        index = (objTiles[at & 0x7fff] >> ((tx & 1) * 4)) & 15;
++        if (!index)
++          continue;
++        index += 256 + (a2 >> 12) * 16;
++      }
++      if (mode == 2) {
++        sObjWindow[screen] = 1;
++        continue;
++      }
++      if (sObj[screen] != TRANSPARENT && sObjPriority[screen] <= priority)
++        continue;
++      sObj[screen] = PALETTE[index] & 0x7fff;
++      sObjPriority[screen] = priority;
++      sObjSemi[screen] = mode == 1;
++    }
++  }
++}
++
++// --- windows and composition ---------------------------------------------------
++
++static int InRange(u32 value, u32 start, u32 end) {
++  if (start <= end)
++    return value >= start && value < end;
++  return value >= start || value < end;
++}
++
++static u16 Blend(u16 top, u16 bottom, u32 eva, u32 evb) {
++  u32 r = ((top & 31) * eva + (bottom & 31) * evb) >> 4;
++  u32 g = (((top >> 5) & 31) * eva + ((bottom >> 5) & 31) * evb) >> 4;
++  u32 b = (((top >> 10) & 31) * eva + ((bottom >> 10) & 31) * evb) >> 4;
++
++  return (r > 31 ? 31 : r) | (g > 31 ? 31 : g) << 5 | (b > 31 ? 31 : b) << 10;
++}
++
++static u16 Brighten(u16 c, u32 evy) {
++  u32 r = c & 31, g = (c >> 5) & 31, b = (c >> 10) & 31;
++
++  r += ((31 - r) * evy) >> 4;
++  g += ((31 - g) * evy) >> 4;
++  b += ((31 - b) * evy) >> 4;
++  return r | g << 5 | b << 10;
++}
++
++static u16 Darken(u16 c, u32 evy) {
++  u32 r = c & 31, g = (c >> 5) & 31, b = (c >> 10) & 31;
++
++  r -= (r * evy) >> 4;
++  g -= (g * evy) >> 4;
++  b -= (b * evy) >> 4;
++  return r | g << 5 | b << 10;
++}
++
++void Ppu_RenderLine(int y, u32 *line) {
++  u16 dispcnt = REG16(0);
++  int mode = dispcnt & 7;
++  u16 bldcnt = REG16(0x50), alpha = REG16(0x52);
++  u32 eva = alpha & 31, evb = (alpha >> 8) & 31, evy = REG16(0x54) & 31;
++  int windows = dispcnt & 0xe000;
++  int enabled[4] = {0, 0, 0, 0};
++  int bg, k, x;
++  u16 backdrop = PALETTE[0] & 0x7fff;
++
++  if (eva > 16)
++    eva = 16;
++  if (evb > 16)
++    evb = 16;
++  if (evy > 16)
++    evy = 16;
++  // The affine reference points: reload at the frame's top or when written.
++  for (k = 0; k < 2; k++) {
++    u32 rx = REG32(0x28 + k * 16), ry = REG32(0x2c + k * 16);
++
++    if (y == 0 || rx != sLastX[k]) {
++      sRefX[k] = Signed28(rx);
++      sLastX[k] = rx;
++    }
++    if (y == 0 || ry != sLastY[k]) {
++      sRefY[k] = Signed28(ry);
++      sLastY[k] = ry;
++    }
++  }
++  if (dispcnt & 0x80) {
++    for (x = 0; x < GBA_WIDTH; x++)
++      line[x] = 0xffffff;
++    goto step;
++  }
++  for (bg = 0; bg < 4; bg++) {
++    int on = (dispcnt >> (8 + bg)) & 1;
++
++    if (!on)
++      continue;
++    if (mode == 0 || (mode == 1 && bg < 2)) {
++      Bg_Text(bg, y);
++    } else if ((mode == 1 && bg == 2) || (mode == 2 && bg >= 2)) {
++      Bg_Affine(bg, y);
++    } else if (mode >= 3 && bg == 2) {
++      Bg_Bitmap(mode, y);
++    } else {
++      continue;
++    }
++    enabled[bg] = 1;
++  }
++  Obj_Line(y);
++
++  for (x = 0; x < GBA_WIDTH; x++) {
++    u32 mask = 0x3f; // BG0-3, OBJ, effects
++    u16 top = backdrop, second = backdrop;
++    int topLayer = LAYER_BD, secondLayer = LAYER_BD;
++    int topPriority = 5, secondPriority = 5;
++    int p;
++    u16 colour;
++
++    if (windows) {
++      u16 winin = REG16(0x48), winout = REG16(0x4a);
++
++      if ((dispcnt & 0x2000) &&
++          InRange(x, REG16(0x40) >> 8, REG16(0x40) & 255) &&
++          InRange(y, REG16(0x44) >> 8, REG16(0x44) & 255))
++        mask = winin & 0x3f;
++      else if ((dispcnt & 0x4000) &&
++               InRange(x, REG16(0x42) >> 8, REG16(0x42) & 255) &&
++               InRange(y, REG16(0x46) >> 8, REG16(0x46) & 255))
++        mask = (winin >> 8) & 0x3f;
++      else if ((dispcnt & 0x8000) && sObjWindow[x])
++        mask = (winout >> 8) & 0x3f;
++      else
++        mask = winout & 0x3f;
++    }
++    // The two front layers: lower priority number first; a sprite beats a
++    // background of its own priority, a lower background number beats a
++    // higher.
++    for (p = 0; p < 4; p++) {
++      if ((mask & 0x10) && sObj[x] != TRANSPARENT && sObjPriority[x] == p) {
++        if (topLayer == LAYER_BD) {
++          top = sObj[x];
++          topLayer = LAYER_OBJ;
++          topPriority = p;
++        } else if (secondLayer == LAYER_BD) {
++          second = sObj[x];
++          secondLayer = LAYER_OBJ;
++          secondPriority = p;
++        }
++      }
++      for (bg = 0; bg < 4; bg++) {
++        if (!enabled[bg] || !(mask & (1 << bg)) ||
++            (REG16(0x08 + bg * 2) & 3) != p || sBg[bg][x] == TRANSPARENT)
++          continue;
++        if (topLayer == LAYER_BD) {
++          top = sBg[bg][x];
++          topLayer = bg;
++          topPriority = p;
++        } else if (secondLayer == LAYER_BD) {
++          second = sBg[bg][x];
++          secondLayer = bg;
++          secondPriority = p;
++        }
++      }
++    }
++    (void)topPriority;
++    (void)secondPriority;
++    colour = top;
++    if (topLayer == LAYER_OBJ && sObjSemi[x] &&
++        (bldcnt & (0x100 << secondLayer))) {
++      colour = Blend(top, second, eva, evb);
++    } else if ((mask & 0x20) && (bldcnt & (1 << topLayer))) {
++      switch ((bldcnt >> 6) & 3) {
++      case 1:
++        if (bldcnt & (0x100 << secondLayer))
++          colour = Blend(top, second, eva, evb);
++        break;
++      case 2:
++        colour = Brighten(top, evy);
++        break;
++      case 3:
++        colour = Darken(top, evy);
++        break;
++      }
++    }
++    line[x] = Rgb(colour);
++  }
++step:
++  for (k = 0; k < 2; k++) {
++    sRefX[k] += (s16)REG16(0x22 + k * 16);
++    sRefY[k] += (s16)REG16(0x26 + k * 16);
++  }
++}
+diff --git a/port/tools/arm2host_s.py b/port/tools/arm2host_s.py
+new file mode 100644
+index 0000000..adfa82a
+--- /dev/null
++++ b/port/tools/arm2host_s.py
+@@ -0,0 +1,112 @@
++#!/usr/bin/env python3
++"""Turn one of the game's data-only ARM assembly files into one the host's
++GNU assembler takes (x86 or any other little-endian ELF target).
++
++Includes are inlined (converted the same way); `@` comments go; ARM-only
++directives (.arm, .thumb, .syntax, .thumb_func) are dropped; .word becomes
++.4byte (on x86 .word is two bytes). Code (an ARM or Thumb instruction) is
++refused: those files have C replacements under port/src.
++
++usage: arm2host_s.py INPUT OUTPUT [-I DIR]... [--defsym NAME=VALUE]...
++"""
++import os, re, sys
++
++DROP = {'.arm', '.thumb', '.syntax', '.thumb_func', '.code', '.force_thumb',
++        '.cpu', '.fpu', '.eabi_attribute', '.pool', '.ltorg'}
++RENAME = {'.word': '.4byte', '.hword': '.2byte', '.short': '.2byte',
++          '.int': '.4byte', '.long': '.4byte'}
++DIRECTIVE = re.compile(r'^(\s*)(\.[A-Za-z0-9_]+)(.*)$')
++LABEL = re.compile(r'^\s*[A-Za-z_.$][A-Za-z0-9_.$]*:\s*')
++
++def strip_comment(line):
++    out, quote, i = [], False, 0
++    while i < len(line):
++        c = line[i]
++        if c == '\\' and quote:
++            out.append(line[i:i + 2]); i += 2; continue
++        if c == '"':
++            quote = not quote
++        elif not quote and c == '@':
++            break
++        elif not quote and c == '/' and line[i:i + 2] == '//':
++            break
++        out.append(c); i += 1
++    return ''.join(out).rstrip()
++
++class Converter:
++    def __init__(self, includes):
++        self.includes = includes
++        self.macros = set()
++
++    def find(self, name, here):
++        for d in [os.path.dirname(here), '.'] + self.includes:
++            p = os.path.join(d, name)
++            if os.path.exists(p):
++                return p
++        raise SystemExit(f'{here}: cannot find include {name}')
++
++    def convert(self, path, out, in_macro=False):
++        with open(path, encoding='utf-8', errors='replace') as f:
++            text = f.read()
++        # C-style block comments
++        text = re.sub(r'/\*.*?\*/', lambda m: '\n' * m.group(0).count('\n'), text, flags=re.S)
++        for n, raw in enumerate(text.split('\n'), 1):
++            line = strip_comment(raw)
++            if not line.strip():
++                continue
++            body = LABEL.sub('', line) if not line.lstrip().startswith('.') else line
++            label = line[:len(line) - len(body)]
++            m = DIRECTIVE.match(body)
++            if not m:
++                if body.strip():
++                    word = body.split()[0]
++                    if word in self.macros:
++                        out.append(line); continue
++                    raise ValueError(f'{path}:{n}: not data: {raw.strip()}')
++                out.append(line); continue
++            indent, d, rest = m.groups()
++            if d == '.macro':
++                self.macros.add(rest.split()[0].rstrip(','))
++            if d == '.include':
++                inc = rest.strip().strip('"')
++                if label.strip():
++                    out.append(label)
++                self.convert(self.find(inc, path), out)
++                continue
++            if d in DROP:
++                if label.strip():
++                    out.append(label)
++                continue
++            if d == '.section':
++                rest = rest.replace('%nobits', '@nobits').replace('%progbits', '@progbits')
++            if d == '.type':
++                rest = rest.replace('%function', '@function').replace('%object', '@object')
++            if d == '.align':
++                d = '.p2align'
++            d = RENAME.get(d, d)
++            out.append(f'{label}{indent}{d}{rest}')
++
++def main():
++    args = sys.argv[1:]
++    inp, outp = args[0], args[1]
++    includes, defsyms = [], []
++    i = 2
++    while i < len(args):
++        if args[i] == '-I':
++            includes.append(args[i + 1]); i += 2
++        elif args[i] == '--defsym':
++            defsyms.append(args[i + 1]); i += 2
++        else:
++            raise SystemExit(f'unknown argument {args[i]}')
++    out = [f'\t.set {d.replace("=", ", ")}' for d in defsyms]
++    try:
++        Converter(includes).convert(inp, out)
++    except ValueError as e:
++        raise SystemExit(str(e))
++    tmp = outp + '.tmp'
++    with open(tmp, 'w') as f:
++        f.write('\n'.join(out) + '\n')
++    os.replace(tmp, outp)
++
++if __name__ == '__main__':
++    main()
+diff --git a/port/tools/far_aliases.py b/port/tools/far_aliases.py
+new file mode 100644
+index 0000000..29b6cd9
+--- /dev/null
++++ b/port/tools/far_aliases.py
+@@ -0,0 +1,40 @@
++#!/usr/bin/env python3
++"""The far calls, as plain aliases, for the native build.
++
++On the GBA a bank's code is reached through a table of 8-byte veneers at a
++fixed address (src/gamepak/far_call/*.s: `export NameFar, Name`), and an
++overlay calls the main image through its import table (imports.inc: `export
++Name, TargetFar`). The native build links everything into one image, so
++NameFar is simply another name for Name (a linker script of PROVIDEs), and an import whose name differs
++from its target is an alias of the target.
++
++usage: far_aliases.py OUTPUT.ld FAR_CALL_DIR IMPORTS.inc
++"""
++import glob, os, re, sys
++
++def exports(path):
++    for raw in open(path):
++        m = re.match(r'\s*export\s+(\w+)\s*,\s*(\w+)', raw.split('@')[0])
++        if m:
++            yield m.group(1), m.group(2)
++
++def main():
++    output, far_dir, imports = sys.argv[1:4]
++    aliases = {}
++    for path in sorted(glob.glob(os.path.join(far_dir, '*.s'))):
++        for name, target in exports(path):
++            aliases[name] = target
++    for name, target in exports(imports):
++        real = aliases.get(target, target)
++        if name != real and name not in aliases and not name.startswith('__'):
++            aliases[name] = real
++    # Resolve chains (an alias of an alias) to the routine itself.
++    def resolve(n, seen=()):
++        t = aliases.get(n, n)
++        return t if t == n or t in seen else resolve(t, seen + (n,))
++    out = ['/* Written by port/tools/far_aliases.py: do not edit. */']
++    for name in sorted(aliases):
++        out.append(f'PROVIDE({name} = {resolve(name)});')
++    open(output, 'w').write('\n'.join(out) + '\n')
++
++main()
+diff --git a/port/tools/far_tables.py b/port/tools/far_tables.py
+new file mode 100644
+index 0000000..f12fa01
+--- /dev/null
++++ b/port/tools/far_tables.py
+@@ -0,0 +1,45 @@
++#!/usr/bin/env python3
++"""Writes the far-call bank tables (games/tbs/src/gamepak/far_call/*.s) as
++host data: each 8-byte entry becomes {0, target}, so code that reads an
++entry's target (the world map's trigonometry) finds the routine, and the
++resource directory's rows find their tables. The named stubs themselves are
++linker aliases (far_aliases.py).
++
++usage: far_tables.py OUT.s DEFINE FILE.s...
++"""
++import re
++import sys
++
++out, define, files = sys.argv[1], sys.argv[2], sys.argv[3:]
++lines = []
++for path in files:
++    stack = []  # whether each enclosing .if block is active
++    for raw in open(path):
++        line = raw.split('@')[0].strip()
++        if not line:
++            continue
++        m = re.match(r'\.(ifdef|ifndef)\s+(\S+)', line)
++        if m:
++            defined = m.group(2) == define
++            stack.append(defined if m.group(1) == 'ifdef' else not defined)
++            continue
++        if line == '.else':
++            stack[-1] = not stack[-1]
++            continue
++        if line == '.endif':
++            stack.pop()
++            continue
++        if not all(stack):
++            continue
++        m = re.match(r'([A-Za-z_]\w*):$', line)
++        if m and m.group(1).startswith('FarCall_'):
++            lines += ['\t.p2align 2', '\t.globl %s' % m.group(1),
++                      '%s:' % m.group(1)]
++            continue
++        m = re.match(r'export\s+\S+\s*,\s*(\S+)$', line) or \
++            re.match(r'overlay_veneer\s+(\S+)$', line)
++        if m:
++            lines.append('\t.4byte 0, %s' % m.group(1))
++with open(out, 'w') as f:
++    f.write('# Generated by port/tools/far_tables.py.\n\t.section .rodata\n')
++    f.write('\n'.join(lines) + '\n')
+diff --git a/port/tools/native_symbols.py b/port/tools/native_symbols.py
+new file mode 100644
+index 0000000..ab7e9a5
+--- /dev/null
++++ b/port/tools/native_symbols.py
+@@ -0,0 +1,45 @@
++#!/usr/bin/env python3
++"""Writes the absolute symbols the native build takes from elsewhere:
++- the code sizes of the routines the game copies to RAM (*CodeSize,
++  BitDecoder_Size), from the GBA build's ELF, so its heap allocations stay
++  the cartridge's sizes;
++- IwramIrqMain at the start of IWRAM, where the game copies its resident
++  code (offsets from it to the IWRAM routines are link-time differences);
++- the data tables of assembly files whose code is replaced, copied from
++  their source (FILE.s:LABEL, up to the next label or code).
++
++usage: native_symbols.py OUT.s GBA.elf NM [FILE.s:LABEL...]
++"""
++import re
++import subprocess
++import sys
++
++out, elf, nm = sys.argv[1:4]
++tables = sys.argv[4:]
++lines = ['# Generated by port/tools/native_symbols.py.']
++for row in subprocess.check_output([nm, elf], text=True).splitlines():
++    parts = row.split()
++    if len(parts) == 3 and parts[1] in 'Aa' and \
++            re.search(r'(CodeSize|^BitDecoder_Size)$', parts[2]):
++        lines += ['\t.globl %s' % parts[2], '\t.set %s, 0x%s' % (parts[2], parts[0])]
++lines += ['\t.globl IwramIrqMain', '\t.set IwramIrqMain, 0x03000000']
++lines.append('\t.section .rodata')
++for spec in tables:
++    path, label = spec.rsplit(':', 1)
++    copying = False
++    for raw in open(path):
++        line = raw.split('@')[0].rstrip()
++        if re.match(r'\s*%s:' % re.escape(label), line):
++            copying = True
++            lines += ['\t.p2align 2', '\t.globl %s' % label, '%s:' % label]
++            continue
++        if not copying or not line.strip():
++            continue
++        m = re.match(r'\s*\.(hword|short|word|4byte|2byte|byte)\s+(.*)$', line)
++        if not m:
++            break
++        kind = {'hword': '2byte', 'short': '2byte', 'word': '4byte'}.get(m.group(1), m.group(1))
++        lines.append('\t.%s %s' % (kind, m.group(2)))
++    if not copying:
++        sys.exit('%s: no label %s' % (path, label))
++open(out, 'w').write('\n'.join(lines) + '\n')
+diff --git a/port/tools/overlay_object.py b/port/tools/overlay_object.py
+new file mode 100644
+index 0000000..59a546e
+--- /dev/null
++++ b/port/tools/overlay_object.py
+@@ -0,0 +1,62 @@
++#!/usr/bin/env python3
++"""Link one scene overlay into a relocatable object for the native build.
++
++On the GBA every overlay is linked at 0x2008000 and unpacked there when its
++scene starts, so all 96 define the same six entry points (Scene_Initialize
++and the rest) and many share helper names. Natively they all live in one
++image, so each overlay is linked on its own (ld -r), then:
++
++  * every global it defines becomes local, except the six entry points,
++    which are renamed NAME_Scene_Initialize and so on;
++  * its code goes into section native_overlay_text (the task list asks
++    whether a routine is overlay code);
++  * its data and read-only data go into native_overlay_data_NAME, which the
++    loader restores each time the overlay is loaded (scenes write into their
++    own tables), and its BSS into native_overlay_bss_NAME, which it clears.
++
++usage: overlay_object.py NAME OUTPUT.o INPUT.o...
++"""
++import os, subprocess, sys
++
++ENTRY = ['Scene_Initialize', 'Scene_GetEntrances', 'Scene_GetExits',
++         'Scene_GetActorPlacements', 'Scene_GetTriggers', 'Scene_GetExitRegions']
++LD = os.environ.get('LD_HOST', 'ld')
++OBJCOPY = os.environ.get('OBJCOPY_HOST', 'objcopy')
++NM = os.environ.get('NM_HOST', 'nm')
++EMULATION = os.environ.get('LD_EMULATION', 'elf_i386')
++
++def run(*args):
++    subprocess.run(args, check=True)
++
++def main():
++    name, output, inputs = sys.argv[1], sys.argv[2], sys.argv[3:]
++    tmp = output + '.ld.o'
++    run(LD, '-m', EMULATION, '-r', '-d', '-o', tmp, *inputs)
++    symbols = subprocess.run([NM, '-g', '--defined-only', tmp], check=True,
++                             capture_output=True, text=True).stdout.split('\n')
++    defined = [line.split()[-1] for line in symbols if len(line.split()) == 3]
++    args = [OBJCOPY]
++    for sym in defined:
++        if sym in ENTRY:
++            args += ['--redefine-sym', f'{sym}={name}_{sym}']
++        else:
++            args += ['--localize-symbol', sym]
++    data = f'native_overlay_data_{name}'
++    bss = f'native_overlay_bss_{name}'
++    sections = subprocess.run(['objdump', '-h', tmp], check=True,
++                              capture_output=True, text=True).stdout.split('\n')
++    for line in sections:
++        parts = line.split()
++        if len(parts) < 7 or not parts[0].isdigit():
++            continue
++        sec = parts[1]
++        if sec.startswith('.text'):
++            args += ['--rename-section', f'{sec}=native_overlay_text,alloc,load,readonly,code,contents']
++        elif sec.startswith('.rodata') or sec.startswith('.data') or sec == '.overlays':
++            args += ['--rename-section', f'{sec}={data},alloc,load,data,contents']
++        elif sec.startswith('.bss') or sec == 'COMMON':
++            args += ['--rename-section', f'{sec}={bss},alloc']
++    run(*args, tmp, output)
++    os.remove(tmp)
++
++main()
+diff --git a/port/tools/overlay_table.py b/port/tools/overlay_table.py
+new file mode 100644
+index 0000000..4b414e8
+--- /dev/null
++++ b/port/tools/overlay_table.py
+@@ -0,0 +1,36 @@
++#!/usr/bin/env python3
++"""Write the native build's overlay table: for each scene overlay, its
++resource number (OverlayId_NAME, from gamepak/resource_directory.s), its six
++entry points and the bounds of its data and BSS sections
++(port/tools/overlay_object.py names them).
++
++usage: overlay_table.py OUTPUT.c NAME...
++"""
++import sys
++
++ENTRY = ['Scene_Initialize', 'Scene_GetEntrances', 'Scene_GetExits',
++         'Scene_GetActorPlacements', 'Scene_GetTriggers', 'Scene_GetExitRegions']
++
++def main():
++    output, names = sys.argv[1], sys.argv[2:]
++    out = ['// Written by port/tools/overlay_table.py: do not edit.',
++           '#include "native/overlay.h"', '']
++    for n in names:
++        out.append(f'extern char OverlayId_{n}[];')
++        for e in ENTRY:
++            out.append(f'extern void {n}_{e}(void);')
++        for kind in ('data', 'bss'):
++            out.append(f'extern char __start_native_overlay_{kind}_{n}[] __attribute__((weak));')
++            out.append(f'extern char __stop_native_overlay_{kind}_{n}[] __attribute__((weak));')
++    out.append('')
++    out.append('const struct NativeOverlay gNativeOverlays[] = {')
++    for n in names:
++        entries = ', '.join(f'{n}_{e}' for e in ENTRY)
++        out.append(f'  {{"{n}", (unsigned)OverlayId_{n}, {{{entries}}},')
++        out.append(f'   __start_native_overlay_data_{n}, __stop_native_overlay_data_{n},')
++        out.append(f'   __start_native_overlay_bss_{n}, __stop_native_overlay_bss_{n}}},')
++    out.append('};')
++    out.append(f'const int gNativeOverlayCount = {len(names)};')
++    open(output, 'w').write('\n'.join(out) + '\n')
++
++main()
+diff --git a/port/tools/ram_symbols.py b/port/tools/ram_symbols.py
+new file mode 100644
+index 0000000..1a5e944
+--- /dev/null
++++ b/port/tools/ram_symbols.py
+@@ -0,0 +1,47 @@
++#!/usr/bin/env python3
++"""Give the game's RAM globals their GBA addresses in the native build.
++
++ewram.s, iwram.s and iwram_high.s reserve the game's globals with .space at
++fixed places. The native build maps EWRAM and IWRAM at their GBA addresses
++(port/src/native_memory.c), so it defines each name as an absolute symbol at
++the same address: code that reaches across a boundary by arithmetic, or a
++buffer by its fixed address, finds the same bytes.
++
++usage: ram_symbols.py OUTPUT.s EDITION_DEFINE FILE=BASE...
++"""
++import re, sys
++
++def walk(path, base, defines):
++    addr, out, stack = base, [], [True]
++    for raw in open(path):
++        line = raw.split('@')[0].strip()
++        if not line:
++            continue
++        m = re.match(r'\.(ifdef|ifndef)\s+(\w+)', line)
++        if m:
++            on = (m.group(2) in defines) == (m.group(1) == 'ifdef')
++            stack.append(stack[-1] and on); continue
++        if line == '.else':
++            stack[-1] = (not stack[-1]) and stack[-2]; continue
++        if line == '.endif':
++            stack.pop(); continue
++        if not stack[-1]:
++            continue
++        m = re.match(r'\.space\s+(\w+)', line)
++        if m:
++            addr += int(m.group(1), 0); continue
++        m = re.match(r'(\w+):$', line)
++        if m:
++            out.append((m.group(1), addr)); continue
++    return out
++
++def main():
++    output, define = sys.argv[1], sys.argv[2]
++    lines = ['@ Written by port/tools/ram_symbols.py: do not edit.'.replace('@', '#')]
++    for arg in sys.argv[3:]:
++        path, base = arg.split('=')
++        for name, addr in walk(path, int(base, 0), {define}):
++            lines += [f'\t.globl {name}', f'\t.set {name}, 0x{addr:08x}']
++    open(output, 'w').write('\n'.join(lines) + '\n')
++
++main()
+diff --git a/port/tools/sheet.py b/port/tools/sheet.py
+new file mode 100644
+index 0000000..f537fd4
+--- /dev/null
++++ b/port/tools/sheet.py
+@@ -0,0 +1,20 @@
++#!/usr/bin/env python3
++"""Puts a run's PNG shots on one labelled page: sheet.py DIR [OUT.png]."""
++import os
++import sys
++from PIL import Image, ImageDraw
++
++d = sys.argv[1]
++out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(d, 'sheet.png')
++names = sorted(n for n in os.listdir(d) if n.endswith('.png') and n != os.path.basename(out))
++shots = [Image.open(os.path.join(d, n)).convert('RGB').resize((240, 160)) for n in names]
++cols = min(4, len(shots)) or 1
++rows = (len(shots) + cols - 1) // cols
++sheet = Image.new('RGB', (cols * 244, rows * 176), (40, 40, 40))
++draw = ImageDraw.Draw(sheet)
++for i, (n, s) in enumerate(zip(names, shots)):
++    x, y = (i % cols) * 244 + 2, (i // cols) * 176 + 2
++    sheet.paste(s, (x, y))
++    draw.text((x, y + 161), n, fill=(230, 230, 230))
++sheet.save(out)
++print(out)
+-- 
+2.43.0
+

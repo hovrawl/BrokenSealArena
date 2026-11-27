@@ -854,6 +854,42 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
 - Left out because the code does not state it: that bosses are the high-Luck units (not checked in
   the enemy table); that a class adds element power (only the Djinn it needs do).
 
+## 46. A desktop build of the game (patch 0046, spike)
+
+- The first step of the native port (desktop, then web, then mobile): the game's C compiled for
+  a PC, everything in the work tree's `port/` (its `README.md` is the reference). 32-bit
+  (`-m32`, non-PIE): the GBA's EWRAM, IWRAM, I/O, palette, VRAM and OAM are mapped at their own
+  addresses, and the RAM globals become absolute symbols at their cartridge addresses, so the
+  game's pointer-as-`u32` code works unchanged.
+- The ARM assembly: data files are converted for the host assembler; the hand-written routines
+  (divide, square root, matrices, trigonometry, the LZ decoders, the OAM builder, canvas
+  blends, icon and text decoding, sprite pictures, the world map's ground, battle backgrounds)
+  have C versions. A routine the game copies to RAM to run becomes a jump back to the host
+  routine (the DMA from code writes `mov eax, routine; jmp eax`), so RAM and the stack are
+  executable. Far calls become linker aliases; the 96 overlays are all linked in, each made
+  self-contained (`ld -r`, globals local, entry points renamed), and loading one restores its
+  data and writes its entry table.
+- The frame: the VBlank wait's BIOS halt runs the display through 228 lines, each drawn by a
+  software PPU (modes 0 to 5, text and affine backgrounds, sprites, windows, blending; no
+  mosaic) with its HBlank DMA and interrupts, then VBlank and the game's handler.
+- Front ends: headless (runs `scripts/smoke/*.txt` unchanged and writes PNG shots; a 7,000-frame
+  battle run takes about 10 seconds) and SDL3 (window with whole-step scaling, keyboard and gamepad, 60 Hz pacing).
+  The save is a 64 KB file (`tbs-native.sav`). No ROM is read.
+- Upstream hooks, all under `NATIVE`: `system/asm.h` (the inline assembly), `system/task.h`
+  (`TASK_IN_OVERLAY`), `Overlay_Load`. The native build defines `UBFIX`; one new UBFIX guard,
+  in `Event_SpawnActorPlacements`: the Battle Arena's first placement shares a sprite with
+  "the previous actor", which does not exist (the cartridge reads the BIOS there).
+- Verified: the GBA ROM is byte-identical with the patch (SHA-1 `e003f9c9...`); the series
+  applies to a clean upstream with `git am`; natively, New Game boots into the lobby, and
+  `fight.txt` (new: `battle.txt`, then A until the win) fights the Gauntlet's first team to
+  "Victory! You won 200 coins." Shots matched the game's look (lobby, battle background,
+  party and enemy sprites, status and message windows, command menu).
+- Not verified: the SDL3 front end was only compiled against the SDL3 3.2 headers (the cloud
+  machine has no 32-bit SDL3 to link or a display to show).
+- Gaps: no sound (the m4a driver and mixer are ARM); battle effects draw nothing (the canvas
+  blitter splices ARM fragments; they are `ret` stubs); null stores the cartridge drops into
+  the BIOS crash natively (seen: the field Psynergy menu's missing markers); 32-bit only.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

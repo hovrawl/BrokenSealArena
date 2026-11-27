@@ -1,0 +1,15 @@
+# Fight the Monster Gauntlet's first team to the end by mashing A (everyone
+# attacks), and look at the win. Checked on the native build (port/README.md
+# in the patch series): the win lands at about frame 6,760. Stop mashing after
+# the win, or A opens the field menu.
+include battle.txt
+mash A 60
+shot /tmp/shots/fight_0.png
+mash A 40
+shot /tmp/shots/fight_1.png
+mash A 32
+shot /tmp/shots/fight_2.png
+mash A 4
+shot /tmp/shots/fight_3.png
+wait 120
+shot /tmp/shots/fight_4.png
