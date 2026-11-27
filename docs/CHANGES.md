@@ -1417,6 +1417,37 @@ it and a copy of its edge at the far right.
   screen are pixel-identical to before; the 240 and 288 touch scripts
   (field, shops, manager, battle) give the same shots as before.
 
+## 71. Field menu: taller list rows in the touch layout
+
+- The field menu's Psynergy and item lists (`menu_psynergy.c`,
+  `menu_item.c`) take their rows from layout values in `menu/menu.h`:
+  `LIST_PAGE_SIZE` is now a page's rows (`MENU_LIST_PAGE_ROWS`), with
+  `LIST_PAGE_MAX` (5); `MENU_LIST_ROW_HEIGHT`, `MENU_LIST_TEXT_Y(row)`,
+  `MENU_LIST_CURSOR_Y(row)`, `MENU_LIST_HIGHLIGHT(...)`; the icons
+  (`Menu_SetPageIcons`, which spaces this page size's icons by the row height
+  and every other caller's, the Status lists', by 16) and the taps
+  (`MENU_TOUCH_LIST`) follow.
+- GBA and classic layout: the old five rows of 16 (GBA ROM byte-identical;
+  `--ui classic` shots identical). Touch layout with 24-pixel rows: three rows
+  of 24 a page, the name, icon, PP and hand a tile lower (centred), paging as
+  before; `--ui-size 16` keeps 16.
+- The highlight stays on the text's tile row, as on the GBA: a three-tile bar
+  lit blank tiles that these lists never clear (tried; a bar was left behind
+  on the first row).
+- Not changed: the item commands (Use, Equip, Details / Give, Remove, Drop).
+  Taller rows would need their window to grow into the list window below;
+  their taps already reach about 16 pixels a row (the grid's outer edges are
+  widened to `TOUCH_TARGET_MIN`).
+- Seen, not from this change: at 288 the field menu leaves fragments of
+  window text in the black margins either side of the safe area (in the
+  shots before 71 too).
+- Verified (headless, fresh saves): `touch_fieldmenu_240/288`,
+  `touch_fielditems_240/288`: Mia's Psynergy list (Ply, Cure Poison, Frost),
+  a tap on the second row selects it and a second tap uses it (the target
+  picker); Garet's item list (two pages), the second row selected and chosen
+  (the item commands); the shots after each choice show the same choices as
+  before. The other touch scripts give the same shots as before.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

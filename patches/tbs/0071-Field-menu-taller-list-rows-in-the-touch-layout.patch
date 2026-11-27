@@ -1,0 +1,230 @@
+From d994850dfaa2505be97a8c3569a72f0527d3d967 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sat, 28 Nov 2026 10:19:57 +1100
+Subject: [PATCH] Field menu: taller list rows in the touch layout
+
+The field menu's Psynergy and item lists take their rows from layout
+values (menu/menu.h): LIST_PAGE_SIZE is a page's rows. On the GBA and in
+the classic layout they are the old five rows of 16 and the ROM is
+unchanged; with the touch layout's 24-pixel rows a page shows three,
+the name, icon, PP and hand centred, and the icons and taps follow.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/arena/menu_touch.h | 11 +++++-----
+ games/tbs/include/menu/menu.h        | 33 +++++++++++++++++++++++++++-
+ games/tbs/src/menu/menu_item.c       | 14 +++++-------
+ games/tbs/src/menu/menu_psynergy.c   | 21 +++++++++---------
+ games/tbs/src/menu/menu_shared.c     |  7 ++++++
+ 5 files changed, 62 insertions(+), 24 deletions(-)
+
+diff --git a/games/tbs/include/arena/menu_touch.h b/games/tbs/include/arena/menu_touch.h
+index 96b45b88e1..950459efd8 100644
+--- a/games/tbs/include/arena/menu_touch.h
++++ b/games/tbs/include/arena/menu_touch.h
+@@ -16,10 +16,11 @@
+ #define MENU_TOUCH_FIGURE_WIDTH 24
+ #define MENU_TOUCH_FIGURE_HEIGHT 36
+ 
+-/// The Psynergy and item lists (listWindow at 13, 3): a row every 16 pixels,
+-/// level with the hand, across the window's interior.
++/// The Psynergy and item lists (listWindow at 13, 3): a row every
++/// MENU_LIST_ROW_HEIGHT (menu.h), across the window's interior; 16-pixel rows
++/// taken level with the hand, taller ones from the row's top.
+ #define MENU_TOUCH_LIST_LEFT (14 * 8)
+-#define MENU_TOUCH_LIST_TOP 36
++#define MENU_TOUCH_LIST_TOP (MENU_LIST_TALL ? 32 : 36)
+ #define MENU_TOUCH_LIST_WIDTH (15 * 8)
+ #define MENU_TOUCH_LIST_ROWS(list)                                             \
+   ((list).entryCount - (list).page * LIST_PAGE_SIZE > LIST_PAGE_SIZE           \
+@@ -28,8 +29,8 @@
+ /// A tap on a row of a PagedList's page (moves list.row, or presses A).
+ #define MENU_TOUCH_LIST(list)                                                  \
+   MenuTouch_PickCell(MENU_TOUCH_LIST_LEFT, MENU_TOUCH_LIST_TOP,                \
+-                     MENU_TOUCH_LIST_WIDTH, 16, 1, MENU_TOUCH_LIST_ROWS(list), \
+-                     &(list).row)
++                     MENU_TOUCH_LIST_WIDTH, MENU_LIST_ROW_HEIGHT, 1,           \
++                     MENU_TOUCH_LIST_ROWS(list), &(list).row)
+ 
+ /// The item commands (Use, Equip, Details over Give, Remove, Drop): rows 8
+ /// pixels apart (the text at 32 and 40), columns taken as 46 pixels from 96.
+diff --git a/games/tbs/include/menu/menu.h b/games/tbs/include/menu/menu.h
+index 09146071d6..0ab95e7069 100644
+--- a/games/tbs/include/menu/menu.h
++++ b/games/tbs/include/menu/menu.h
+@@ -7,6 +7,7 @@
+ #include "fixed_math.h"
+ #include "types.h"
+ #include "edition.h"
++#include "arena/ui_kit.h"
+ #include "gamepak/far_call.h"
+ #include "system/heap.h"
+ 
+@@ -246,7 +247,37 @@ void WindowPalette_SetNoHpTextColor(void);
+ void WindowPalette_SetLowHpTextColor(void);
+ 
+ /// The rows a page of the Psynergy and item lists holds.
+-#define LIST_PAGE_SIZE 5
++/// Arena romhack: LIST_PAGE_MAX; LIST_PAGE_SIZE is a page's rows, fewer with
++/// the touch layout's taller rows (MENU_LIST_ below).
++#define LIST_PAGE_MAX 5
++#define LIST_PAGE_SIZE MENU_LIST_PAGE_ROWS
++
++/// Arena romhack: the field menu's Psynergy and item lists' rows. On the GBA
++/// and in the classic layout five rows of 16 pixels, the name's text at the
++/// row's top tile row; with the touch layout's rows of 24 pixels or more
++/// (UI_ROW_HEIGHT, --ui-size) three rows of 24, the text, icon and hand a
++/// tile lower, centred. Constants on the GBA, so its code is unchanged.
++#define MENU_LIST_TALL (UI_TOUCH_LAYOUT && UI_ROW_HEIGHT >= 24)
++#define MENU_LIST_PAGE_ROWS (MENU_LIST_TALL ? 3 : LIST_PAGE_MAX)
++#define MENU_LIST_ROW_HEIGHT (MENU_LIST_TALL ? 24 : 16)
++#define MENU_LIST_ROW_TILES (MENU_LIST_ROW_HEIGHT / 8)
++/// How far below a 16-pixel row's place a tall row's text, icon and hand sit.
++#define MENU_LIST_TEXT_DY (MENU_LIST_TALL ? 8 : 0)
++/// Row `row`'s text y in the list window, and the hand's y on screen.
++#define MENU_LIST_TEXT_Y(row)                                                  \
++  ((row) * MENU_LIST_ROW_HEIGHT + 8 + MENU_LIST_TEXT_DY)
++#define MENU_LIST_CURSOR_Y(row)                                                \
++  ((row) * MENU_LIST_ROW_HEIGHT + 36 + MENU_LIST_TEXT_DY)
++/// Row `row`'s highlight, in tiles from the list window's interior
++/// (Window_SetHighlightRect): the text's tile row, as on the GBA (a taller bar
++/// would light blank tiles, which these lists never clear).
++#define MENU_LIST_HIGHLIGHT_Y(row)                                             \
++  ((row) * MENU_LIST_ROW_TILES + 1 + MENU_LIST_TEXT_DY / 8)
++#define MENU_LIST_HIGHLIGHT_TILES 1
++/// Row `row`'s bar from tile column x, width tiles across, in `palette`.
++#define MENU_LIST_HIGHLIGHT(window, x, width, row, palette)                    \
++  Window_SetHighlightRect((void *)(window), x, MENU_LIST_HIGHLIGHT_Y(row),     \
++                          width, MENU_LIST_HIGHLIGHT_TILES, palette)
+ 
+ /// The y of the menus' row of party portraits, and of the chosen member's,
+ /// raised above the rest.
+diff --git a/games/tbs/src/menu/menu_item.c b/games/tbs/src/menu/menu_item.c
+index adc2bcbb69..4a9f40109e 100644
+--- a/games/tbs/src/menu/menu_item.c
++++ b/games/tbs/src/menu/menu_item.c
+@@ -2722,11 +2722,9 @@ s32 ItemMenu_ShowSelectedRow(struct Window *window, void *memberState,
+ 
+   for (row = 0; row < LIST_PAGE_SIZE; row++) {
+     if (row == pageState->row) {
+-      Window_SetHighlightRect((void *)menu->itemWindow, 1, row * 2 + 1, 14, 1,
+-                              HIGHLIGHT_PALETTE);
++      MENU_LIST_HIGHLIGHT(menu->itemWindow, 1, 14, row, HIGHLIGHT_PALETTE);
+     } else {
+-      Window_SetHighlightRect((void *)menu->itemWindow, 1, row * 2 + 1, 14, 1,
+-                              WINDOW_PALETTE);
++      MENU_LIST_HIGHLIGHT(menu->itemWindow, 1, 14, row, WINDOW_PALETTE);
+     }
+   }
+ 
+@@ -2758,7 +2756,7 @@ s32 ItemMenu_DrawListPage(struct Window *window, s32 unused,
+   }
+ 
+   Menu_SetPageIcons(LIST_PAGE_SIZE, firstEntry, window, ITEM_LIST_PAGE_ICONS_X,
+-                    34);
++                    34 + MENU_LIST_TEXT_DY);
+   PagedList_DrawPageNumbers(window, pageState->entryCount, LIST_PAGE_SIZE,
+                             pageState->page, PAGE_NUMBERS_RIGHT);
+ 
+@@ -2768,7 +2766,7 @@ s32 ItemMenu_DrawListPage(struct Window *window, s32 unused,
+     do {
+       Text_DrawMessageAsTilesFar(
+           (entry[0] & INVENTORY_ITEM_ID_MASK) + MsgItemName, menu->itemWindow,
+-          ITEM_LIST_NAME_X, row * 16 + 8);
++          ITEM_LIST_NAME_X, MENU_LIST_TEXT_Y(row));
+       row++;
+       entry++;
+     } while (visibleCount > row);
+@@ -2813,14 +2811,14 @@ s32 ItemMenu_RunList(s32 sideIndex) {
+     ItemMenu_DrawIcons(menu->items, 0);
+     menu->selectedItemIcon->motion = ICON_HIDDEN;
+     ItemMenu_BuildPagedList(&state, sideIndex);
+-    MenuCursor_Position(98, state.selectedIndex * 16 + 36);
++    MenuCursor_Position(98, MENU_LIST_CURSOR_Y(state.selectedIndex));
+     changed = 1;
+     redraw = 1;
+ 
+     // One party member's list, until an item is chosen or the party member
+     // changes.
+     while (GameFlag_GetFar(FLAG_MENU_START_PRESSED) == 0) {
+-      MenuCursor_Position(98, state.row * 16 + 36);
++      MenuCursor_Position(98, MENU_LIST_CURSOR_Y(state.row));
+ 
+       if (changed != 0) {
+         changed = 0;
+diff --git a/games/tbs/src/menu/menu_psynergy.c b/games/tbs/src/menu/menu_psynergy.c
+index 21a44329c3..d324b24be5 100644
+--- a/games/tbs/src/menu/menu_psynergy.c
++++ b/games/tbs/src/menu/menu_psynergy.c
+@@ -958,13 +958,12 @@ s32 PsynergyMenu_ShowSelectedRow(struct Window *window, s32 *memberState,
+ 
+   for (rowIndex = 0; rowIndex < LIST_PAGE_SIZE; rowIndex++) {
+     if (rowIndex == state->row) {
+-      Window_SetHighlightRect((void *)menu->psynergyWindow,
+-                              PSYNERGY_DETAIL_ROW_X, rowIndex * 2 + 1,
+-                              PSYNERGY_DETAIL_ROW_WIDTH, 1, HIGHLIGHT_PALETTE);
++      MENU_LIST_HIGHLIGHT(menu->psynergyWindow, PSYNERGY_DETAIL_ROW_X,
++                          PSYNERGY_DETAIL_ROW_WIDTH, rowIndex,
++                          HIGHLIGHT_PALETTE);
+     } else {
+-      Window_SetHighlightRect((void *)menu->psynergyWindow,
+-                              PSYNERGY_DETAIL_ROW_X, rowIndex * 2 + 1,
+-                              PSYNERGY_DETAIL_ROW_WIDTH, 1, WINDOW_PALETTE);
++      MENU_LIST_HIGHLIGHT(menu->psynergyWindow, PSYNERGY_DETAIL_ROW_X,
++                          PSYNERGY_DETAIL_ROW_WIDTH, rowIndex, WINDOW_PALETTE);
+     }
+   }
+ 
+@@ -1006,7 +1005,7 @@ s32 PsynergyMenu_DrawPage(struct Window *window, s32 unused,
+   }
+ 
+   Menu_SetPageIcons(LIST_PAGE_SIZE, firstEntry, window, PSYNERGY_PAGE_ICONS_X,
+-                    34);
++                    34 + MENU_LIST_TEXT_DY);
+   PagedList_DrawPageNumbers(window, pageState->entryCount, LIST_PAGE_SIZE,
+                             pageState->page, PAGE_NUMBERS_RIGHT);
+   Text_DrawMessageAsTilesFar(MsgPsynergyPp, window, PSYNERGY_PP_LABEL_X, 0);
+@@ -1029,8 +1028,9 @@ s32 PsynergyMenu_DrawPage(struct Window *window, s32 unused,
+ 
+       Text_DrawMessageAsTilesFar(
+           (PSYNERGY_ABILITY_MASK & menu->psynergies[cursor]) + MsgAbilityName,
+-          window, PSYNERGY_NAME_X, row * 16 + 8);
+-      Text_DrawNumberAtOffsetFar(ability->ppCost, 2, window, 104, row * 16 + 8);
++          window, PSYNERGY_NAME_X, MENU_LIST_TEXT_Y(row));
++      Text_DrawNumberAtOffsetFar(ability->ppCost, 2, window, 104,
++                                 MENU_LIST_TEXT_Y(row));
+       Text_SetColorFar(TEXT_COLOR_NORMAL);
+ 
+       row++;
+@@ -1086,7 +1086,8 @@ s32 PsynergyMenu_RunList(s32 sideIndex) {
+     menu->sideIcon[sideIndex]->motion = ICON_SHOWN;
+ 
+     while (GameFlag_GetFar(FLAG_MENU_START_PRESSED) == 0) {
+-      MenuCursor_Position(PSYNERGY_LIST_CURSOR_X, state.row * 16 + 36);
++      MenuCursor_Position(PSYNERGY_LIST_CURSOR_X,
++                          MENU_LIST_CURSOR_Y(state.row));
+ 
+       if (changed != 0) {
+         changed = 0;
+diff --git a/games/tbs/src/menu/menu_shared.c b/games/tbs/src/menu/menu_shared.c
+index 073d1d9632..05052181cd 100644
+--- a/games/tbs/src/menu/menu_shared.c
++++ b/games/tbs/src/menu/menu_shared.c
+@@ -1125,7 +1125,14 @@ void Menu_SetPageIcons(s32 pageSize, s32 first, struct Window *window, s32 x,
+        i <= menu->itemCount - 1;
+        i++) {
+     icon->x = x;
++#ifdef NATIVE
++    // Arena romhack: the Psynergy and item lists' rows (menu.h MENU_LIST_).
++    icon->y = y + (i - first) * (pageSize == LIST_PAGE_SIZE
++                                     ? MENU_LIST_ROW_HEIGHT
++                                     : 16);
++#else
+     icon->y = y + (i - first) * 16;
++#endif
+     Icon_Show(icon);
+     icon->motion = ICON_SHOWN;
+   }
+-- 
+2.56.1
+

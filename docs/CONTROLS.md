@@ -88,7 +88,6 @@ Example: `build\native\tbs-native.exe --width 16:9 --ui touch --scale 5`.
 - In battle the Djinn list's Back button is hidden under its stat preview;
   right-click (or Z) still goes back.
 - The item commands (Use, Equip, Details / Give, Remove, Drop) keep the GBA's
-  8-pixel rows, small for a finger, and the field menu's Psynergy and item
-  lists keep 16-pixel rows (the battle lists have 24).
+  8-pixel rows, small for a finger (their taps reach about 16 pixels).
 - A tap dead centre does not close the field menu: the leader stands there,
   and a person is not background. Tap the floor beside him instead.
