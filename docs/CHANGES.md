@@ -1136,6 +1136,22 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
   Djinni, Back; figures sit on their price tags at both widths),
   `classic_counter.txt` with `--ui classic`.
 
+## 59. The shops' touch layout: full width and a Back button
+
+- The owner chose to keep the keeper's lines at the top and add a Back
+  button. In the touch layout `Shop_Run` turns the safe area off: coins, the
+  bag, sell and repair prices and the quantity window keep to the right edge
+  (`UI_SCREEN_TILES - width`), the stock row and description lines stretch.
+- `UiBackButton_Open` (kit): a 7 by 3 window with B Back at the top right,
+  and a native touch zone (`Touch_SetBackZone`) that holds B for one frame
+  when tapped (`Keys_Update`), so every screen inside the shop takes it
+  without its own touch code. Upstream hooks: `shop_run.c`, the window
+  rectangles in `shop_buy.c`, `shop_sell.c`, `shop_item_picker.c`,
+  `shop_repair.c`, and `shop_internal.h` including `ui_kit.h`.
+- Verified (headless): `touch_shopback_240/288.txt` (Buy, tap a weapon, Back,
+  Sell, Back, Back out of the shop), `touch_shop_288.txt` with
+  `--ui classic` (the centred layout as before).
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

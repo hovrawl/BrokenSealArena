@@ -184,7 +184,11 @@ change costs nothing, before it costs a build.
   - Topic lists look like the game's menus, never bare text: a name window,
     icon and name entries, and a line about the chosen entry along the bottom
     (the mechanics library).
-- Used by: class viewer (header), mechanics library (header, icon grid,
+  - `UiBackButton_Open()` / `UiBackButton_Close(button)`: for screens that
+    run the game's own loops (the shops), a B Back window at the top right
+    whose tap holds B for a frame everywhere (`Touch_SetBackZone`).
+- Used by: shops (Back button, full width), counters (header),
+  class viewer (header), mechanics library (header, icon grid,
   hint line), member picker (header). `--ui-size` stops at 24 until every list scrolls.
 
 ## 4. Standard layouts we have already used

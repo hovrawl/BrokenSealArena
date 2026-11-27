@@ -1,0 +1,32 @@
+# The weapon shop's touch layout at width 240: full-width windows and a Back
+# button at the top right. Buy, tap a weapon, Back (to the shop's menu),
+# Sell, Back, Back (leaves the shop).
+include to_manager.txt
+touch 122 148
+wait 10
+touch 122 148
+wait 120
+touch 62 148
+wait 30
+touch 62 148
+wait 320
+shot /tmp/shots/b0.png
+tap A
+wait 90
+shot /tmp/shots/b1.png
+touch 104 112
+wait 20
+shot /tmp/shots/b2.png
+touch 212 12
+wait 90
+shot /tmp/shots/b3.png
+tap R
+tap A
+wait 90
+shot /tmp/shots/b4.png
+touch 212 12
+wait 90
+shot /tmp/shots/b5.png
+touch 212 12
+wait 120
+shot /tmp/shots/b6.png

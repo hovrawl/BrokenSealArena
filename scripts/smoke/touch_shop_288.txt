@@ -1,3 +1,5 @@
+# Since patch 59 the touch layout runs shops full width: run this one with
+# --ui classic (the centred GBA layout); touch_shopback_288.txt covers touch.
 # Touch in the weapon shop at width 288 (run with --width 288): into the shop
 # by taps (as touch_manager_288.txt), tap Buy, tap the third weapon to select
 # it and again to choose it, then the third party member the same way.

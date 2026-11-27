@@ -1,0 +1,300 @@
+From 3bf79db50b9f470791d4fdfe309562b73598f8f5 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 27 Nov 2026 08:44:48 +0000
+Subject: [PATCH] Shops: the touch layout, full width with a Back button
+
+In the touch layout a shop (Shop_Run) runs across the full width: the
+windows that sat at the GBA screen's right edge (coins, the bag, sell and
+repair prices, quantity) keep to the right edge, and the stock row and
+description lines stretch. The keeper's lines stay at the top. A Back
+button sits at the top right for the whole visit: UiBackButton_Open
+registers a touch zone (Touch_SetBackZone) that holds B for a frame when
+tapped, so every shop screen's own key code takes it. Classic is unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8ykfbWFo924wEqysLhg
+---
+ games/tbs/include/arena/ui_kit.h      |  2 ++
+ games/tbs/src/shop/arena_ui_kit.c     | 26 ++++++++++++++++++++++++++
+ games/tbs/src/shop/shop_buy.c         | 10 +++++-----
+ games/tbs/src/shop/shop_internal.h    |  2 ++
+ games/tbs/src/shop/shop_item_picker.c |  6 +++---
+ games/tbs/src/shop/shop_repair.c      |  4 ++--
+ games/tbs/src/shop/shop_run.c         |  9 +++++++++
+ games/tbs/src/shop/shop_sell.c        |  6 +++---
+ port/include/native/touch.h           |  6 ++++++
+ port/src/native_platform.c            |  2 ++
+ port/src/native_touch.c               | 14 ++++++++++++++
+ 11 files changed, 74 insertions(+), 13 deletions(-)
+
+diff --git a/games/tbs/include/arena/ui_kit.h b/games/tbs/include/arena/ui_kit.h
+index c8dd790366..9dd3f5a361 100644
+--- a/games/tbs/include/arena/ui_kit.h
++++ b/games/tbs/include/arena/ui_kit.h
+@@ -72,6 +72,8 @@ void UiHeader_Touch(struct Window *header, s32 buttons);
+ #else
+ #define UiHeader_Touch(header, buttons)
+ #endif
++struct Window *UiBackButton_Open(void);
++void UiBackButton_Close(struct Window *button);
+ void UiList_Init(struct UiList *list, struct Window *window, s32 count,
+                  s32 labelBase, s32 rowHeight, s32 top, s32 textX, s32 cursor);
+ void UiList_SetGrid(struct UiList *list, s32 columns, s32 columnWidth);
+diff --git a/games/tbs/src/shop/arena_ui_kit.c b/games/tbs/src/shop/arena_ui_kit.c
+index dfa078fc0b..fe166d5b4e 100644
+--- a/games/tbs/src/shop/arena_ui_kit.c
++++ b/games/tbs/src/shop/arena_ui_kit.c
+@@ -62,6 +62,32 @@ void UiHeader_Touch(struct Window *header, s32 buttons) {
+ }
+ #endif
+ 
++/// A Back button for screens that run the game's own loops (the shops): a
++/// small window at the top right with B Back, which a tap turns into B for
++/// whatever screen is reading keys (Touch_SetBackZone). Only in a touch
++/// layout; returns 0 otherwise. Close it with UiBackButton_Close.
++struct Window *UiBackButton_Open(void) {
++  struct Window *button;
++
++  if (!UI_TOUCH_LAYOUT)
++    return 0;
++  button = Window_CreateFar(UI_SCREEN_TILES - 7, 0, 7, 3, WINDOW_FLAG_INSTANT);
++  Text_DrawMessageAsTilesFar(MsgArenaUiBack, button, 4, 0);
++#ifdef NATIVE
++  Touch_SetBackZone((UI_SCREEN_TILES - 7) * 8, 0, 7 * 8, 24);
++#endif
++  return button;
++}
++
++void UiBackButton_Close(struct Window *button) {
++  if (button == 0)
++    return;
++#ifdef NATIVE
++  Touch_SetBackZone(0, 0, 0, 0);
++#endif
++  Window_CloseFar(button, 2);
++}
++
+ /// Sets a list up in `window`: `count` rows, messages labelBase + row, rows of
+ /// `rowHeight` pixels from `top` inside the window, the text `textX` in (the
+ /// hand sits 22 pixels before it), as many rows as fit showing.
+diff --git a/games/tbs/src/shop/shop_buy.c b/games/tbs/src/shop/shop_buy.c
+index 9eec775276..8b0be86920 100644
+--- a/games/tbs/src/shop/shop_buy.c
++++ b/games/tbs/src/shop/shop_buy.c
+@@ -34,7 +34,7 @@ s32 Shop_SelectBuy(void) {
+ 
+   shop->itemWindow = 0;
+   shop->moneyWindow =
+-      Window_CreateFar(30 - SHOP_MONEY_WINDOW_WIDTH, 7, SHOP_MONEY_WINDOW_WIDTH,
++      Window_CreateFar(UI_SCREEN_TILES - SHOP_MONEY_WINDOW_WIDTH, 7, SHOP_MONEY_WINDOW_WIDTH,
+                        4, WINDOW_FLAG_INSTANT);
+   Shop_DrawMoney();
+   priceWindow =
+@@ -42,10 +42,10 @@ s32 Shop_SelectBuy(void) {
+ 
+ next_page:
+   selectionIndex = selected;
+-  stockWindow = Window_CreateFar(0, 12, 30, 4, WINDOW_FLAG_INSTANT);
++  stockWindow = Window_CreateFar(0, 12, UI_SCREEN_TILES, 4, WINDOW_FLAG_INSTANT);
+   shop->cursor.anchor->motion = WINDOW_SPRITE_MOTION_HOP_DOWN_LEFT;
+   shop->cursorFrames = SHOP_CURSOR_ENTER_FRAMES;
+-  messageWindow = Window_CreateFar(0, 17, 30, 3, WINDOW_FLAG_INSTANT);
++  messageWindow = Window_CreateFar(0, 17, UI_SCREEN_TILES, 3, WINDOW_FLAG_INSTANT);
+   redraw = 1;
+ 
+   while (1) {
+@@ -135,7 +135,7 @@ next_page:
+   shop->cursor.anchor->motion = WINDOW_SPRITE_MOTION_WOBBLE;
+   shop->cursorFrames = SHOP_CURSOR_ENTER_FRAMES;
+   Menu_CreatePartyFiguresFar(partyWindow, 2, 0, 8, 0);
+-  itemWindow = Window_CreateFar(16, 11, 14, 9, WINDOW_FLAG_INSTANT);
++  itemWindow = Window_CreateFar(UI_SCREEN_TILES - 14, 11, 14, 9, WINDOW_FLAG_INSTANT);
+   redraw = 1;
+ 
+   while (1) {
+@@ -613,7 +613,7 @@ s32 Shop_SelectQuantity(s32 minimum, s32 maximum, s32 price) {
+   maximum -= minimum;
+   selectedQuantity = -1;
+   quantityIndex = 0;
+-  window = Window_CreateFar(7, 4, 23, 3, WINDOW_FLAG_INSTANT);
++  window = Window_CreateFar(UI_SCREEN_TILES - 23, 4, 23, 3, WINDOW_FLAG_INSTANT);
+   if (window != 0) {
+     resourceSlot = VramCache_FindFreeEntry();
+     if (resourceSlot != VRAM_CACHE_ENTRY_COUNT) {
+diff --git a/games/tbs/src/shop/shop_internal.h b/games/tbs/src/shop/shop_internal.h
+index 108a2ba6fc..68e0e26c31 100644
+--- a/games/tbs/src/shop/shop_internal.h
++++ b/games/tbs/src/shop/shop_internal.h
+@@ -202,6 +202,8 @@ enum {
+ #define SHOP_QUANTITY_CURSOR_X 128
+ #endif
+ 
++#include "arena/ui_kit.h"
++
+ #ifdef NATIVE
+ #include "arena/arena_touch.h"
+ 
+diff --git a/games/tbs/src/shop/shop_item_picker.c b/games/tbs/src/shop/shop_item_picker.c
+index afacaa4743..a22ba17475 100644
+--- a/games/tbs/src/shop/shop_item_picker.c
++++ b/games/tbs/src/shop/shop_item_picker.c
+@@ -19,7 +19,7 @@ s32 ItemPicker_Run(s32 *selectedUnit, s32 *selectedSlot) {
+ 
+   Shop_InitializeState();
+   shop = gMenuState;
+-  shop->itemWindow = Window_CreateFar(16, 12, 14, 8, WINDOW_FLAG_INSTANT);
++  shop->itemWindow = Window_CreateFar(UI_SCREEN_TILES - 14, 12, 14, 8, WINDOW_FLAG_INSTANT);
+   partyWindow = Window_CreateFar(0, 14, 13, 3, WINDOW_FLAG_INSTANT);
+   cursorAnchor = WindowSprite_CreateFar(
+       shop->cursorIcon, WINDOW_SPRITE_SIZE_16X16, partyWindow, 0, 0);
+@@ -152,9 +152,9 @@ s32 ItemPicker_SelectItem(s32 unitId) {
+   selectionResult = 0;
+   redraw = 1;
+   priceWindow =
+-      Window_CreateFar(ITEM_PICKER_WINDOW_X, 8, ITEM_PICKER_WINDOW_WIDTH, 4,
++      Window_CreateFar(UI_SCREEN_TILES - ITEM_PICKER_WINDOW_WIDTH, 8, ITEM_PICKER_WINDOW_WIDTH, 4,
+                        WINDOW_FLAG_INSTANT);
+-  descriptionWindow = Window_CreateFar(0, 5, 30, 3, WINDOW_FLAG_INSTANT);
++  descriptionWindow = Window_CreateFar(0, 5, UI_SCREEN_TILES, 3, WINDOW_FLAG_INSTANT);
+   shop->cursor.anchor->motion = WINDOW_SPRITE_MOTION_HOP_DOWN_LEFT;
+   shop->cursorFrames = SHOP_CURSOR_ENTER_FRAMES;
+   slot = 0;
+diff --git a/games/tbs/src/shop/shop_repair.c b/games/tbs/src/shop/shop_repair.c
+index 9918e9cee8..92fefef63d 100644
+--- a/games/tbs/src/shop/shop_repair.c
++++ b/games/tbs/src/shop/shop_repair.c
+@@ -42,12 +42,12 @@ s32 Shop_SelectRepair(s32 unitId) {
+   shop = gMenuState;
+   unit = Unit_GetFar(unitId);
+   inventoryCount = 1;
+-  priceWindow = Window_CreateFar(SHOP_SELL_PRICE_X, 8, SHOP_SELL_PRICE_WIDTH, 4,
++  priceWindow = Window_CreateFar(UI_SCREEN_TILES - SHOP_SELL_PRICE_WIDTH, 8, SHOP_SELL_PRICE_WIDTH, 4,
+                                  WINDOW_FLAG_INSTANT);
+   slot = 0;
+ 
+   for (;;) {
+-    descriptionWindow = Window_CreateFar(0, 5, 30, 3, WINDOW_FLAG_INSTANT);
++    descriptionWindow = Window_CreateFar(0, 5, UI_SCREEN_TILES, 3, WINDOW_FLAG_INSTANT);
+     shop->cursor.anchor->motion = WINDOW_SPRITE_MOTION_HOP_DOWN_LEFT;
+     shop->cursorFrames = SHOP_CURSOR_ENTER_FRAMES;
+     redraw = 1;
+diff --git a/games/tbs/src/shop/shop_run.c b/games/tbs/src/shop/shop_run.c
+index 1c3ea4540f..682de025e9 100644
+--- a/games/tbs/src/shop/shop_run.c
++++ b/games/tbs/src/shop/shop_run.c
+@@ -97,6 +97,7 @@ s32 Shop_Run(s32 stockRow, s32 keeperId) {
+   struct ShopState *shop;
+   struct WindowSprite *anchor;
+   struct Window *window;
++  struct Window *back;
+   s32 action = 0;
+ 
+   if (stockRow >= ShopStock_GetRowCount() || stockRow < 0)
+@@ -115,6 +116,11 @@ s32 Shop_Run(s32 stockRow, s32 keeperId) {
+     shop->warriorShop = 1;
+   if (stockRow == SHOP_STOCK_ROW_XIAN_ITEMS)
+     shop->warriorShop = 1;
++  // Arena romhack: the touch layout runs the shop across the full width,
++  // with a Back button at the top right (docs/UI.md).
++  if (UI_TOUCH_LAYOUT)
++    UiScreen_BeginFullWidth();
++  back = UiBackButton_Open();
+   shop->keeperGraphics =
+       (Actor_GetByIdFar(keeperId))->sprite->entries[0]->animationId;
+   // The shopkeeper's portrait window, or an empty one off the left edge when
+@@ -169,7 +175,10 @@ s32 Shop_Run(s32 stockRow, s32 keeperId) {
+   }
+   // "Feel free to drop in anytime."
+   Shop_ShowKeeperMessage(MsgShopFarewell);
++  UiBackButton_Close(back);
+   Window_CloseFar(window, 2);
++  if (UI_TOUCH_LAYOUT)
++    UiScreen_EndFullWidth();
+   Shop_ReleaseState();
+   return 0;
+ }
+diff --git a/games/tbs/src/shop/shop_sell.c b/games/tbs/src/shop/shop_sell.c
+index fd568a0700..b716462b1a 100644
+--- a/games/tbs/src/shop/shop_sell.c
++++ b/games/tbs/src/shop/shop_sell.c
+@@ -15,7 +15,7 @@ s32 Shop_ChooseMember(void) {
+   shop->moneyWindow =
+       Window_CreateFar(0, 9, SHOP_MONEY_WINDOW_WIDTH, 4, WINDOW_FLAG_INSTANT);
+   Shop_DrawMoney();
+-  shop->itemWindow = Window_CreateFar(16, 12, 14, 8, WINDOW_FLAG_INSTANT);
++  shop->itemWindow = Window_CreateFar(UI_SCREEN_TILES - 14, 12, 14, 8, WINDOW_FLAG_INSTANT);
+   listWindow = Window_CreateFar(0, 14, 13, 3, WINDOW_FLAG_INSTANT);
+   shop->cursor.anchor->motion = WINDOW_SPRITE_MOTION_WOBBLE;
+   shop->cursorFrames = SHOP_CURSOR_ENTER_FRAMES;
+@@ -101,12 +101,12 @@ s32 Shop_SelectSell(s32 unitId) {
+   shop = gMenuState;
+   unit = Unit_GetFar(unitId);
+   inventoryCount = 1;
+-  priceWindow = Window_CreateFar(SHOP_SELL_PRICE_X, 8, SHOP_SELL_PRICE_WIDTH, 4,
++  priceWindow = Window_CreateFar(UI_SCREEN_TILES - SHOP_SELL_PRICE_WIDTH, 8, SHOP_SELL_PRICE_WIDTH, 4,
+                                  WINDOW_FLAG_INSTANT);
+   slot = 0;
+ 
+   for (;;) {
+-    descriptionWindow = Window_CreateFar(0, 5, 30, 3, WINDOW_FLAG_INSTANT);
++    descriptionWindow = Window_CreateFar(0, 5, UI_SCREEN_TILES, 3, WINDOW_FLAG_INSTANT);
+     shop->cursor.anchor->motion = WINDOW_SPRITE_MOTION_HOP_DOWN_LEFT;
+     shop->cursorFrames = SHOP_CURSOR_ENTER_FRAMES;
+     redraw = 1;
+diff --git a/port/include/native/touch.h b/port/include/native/touch.h
+index 33e30f53e6..cdcdb5ca07 100644
+--- a/port/include/native/touch.h
++++ b/port/include/native/touch.h
+@@ -27,5 +27,11 @@ int Touch_TappedUiCell(int left, int top, int cellWidth, int cellHeight,
+                        int columns, int count);
+ /// 1 while the pointer is down; its place in screen pixels.
+ int Touch_Held(int *x, int *y);
++/// A Back button that stays on screen while the game runs its own loops (the
++/// shops): a tap inside the rectangle (safe area coordinates) holds B for one
++/// frame, so whatever screen is reading keys takes it as B. width 0 clears it.
++void Touch_SetBackZone(int x, int y, int width, int height);
++/// Called by the frame's key update: 1 when the Back zone was tapped.
++int Touch_BackTapped(void);
+ 
+ #endif
+diff --git a/port/src/native_platform.c b/port/src/native_platform.c
+index a066a266e0..191c6e2c5a 100644
+--- a/port/src/native_platform.c
++++ b/port/src/native_platform.c
+@@ -283,6 +283,8 @@ static void Keys_Update(void) {
+   u16 pressed = Platform_ReadKeys() & 0x3ff;
+ 
+   Touch_Update();
++  if (Touch_BackTapped())
++    pressed |= 0x0002; // B
+   u16 keycnt = IO_REG16(REG_KEYCNT_OFFSET);
+ 
+   IO_REG16(REG_KEYINPUT_OFFSET) = ~pressed & 0x3ff;
+diff --git a/port/src/native_touch.c b/port/src/native_touch.c
+index 9e709604fe..69efc706a6 100644
+--- a/port/src/native_touch.c
++++ b/port/src/native_touch.c
+@@ -43,6 +43,20 @@ int Touch_TappedUiRect(int x, int y, int width, int height) {
+   return Touch_TappedRect(x + gNativeUiOffset, y, width, height);
+ }
+ 
++static int sBackX, sBackY, sBackWidth, sBackHeight;
++
++void Touch_SetBackZone(int x, int y, int width, int height) {
++  sBackX = x + gNativeUiOffset;
++  sBackY = y;
++  sBackWidth = width;
++  sBackHeight = height;
++}
++
++int Touch_BackTapped(void) {
++  return sBackWidth > 0 &&
++         Touch_TappedRect(sBackX, sBackY, sBackWidth, sBackHeight);
++}
++
+ int Touch_Held(int *x, int *y) {
+   *x = sX;
+   *y = sY;
+-- 
+2.43.0
+
