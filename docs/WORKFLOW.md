@@ -13,11 +13,13 @@ BrokenSealArena (this repo)
 The ROM is **built from source** in a *work directory* (a clone of upstream at the
 pinned commit with the patches applied on a branch `arena`). The repo stores only
 the patches and the pin. A fresh machine runs `scripts/build.sh` and gets the same
-tree (see `docs/BUILDING.md`). The developer's work directory is `~/alchemy` in
-WSL, named in the git-ignored file `.alchemy-dir` in the repo root; the choice is
-read by every script, in this order: `$ALCHEMY_DIR`, `.alchemy-dir`,
-`work/alchemy` (`scripts/alchemy-dir.sh`, `alchemy_dir.py`, `wsl.ps1`). On Windows,
-keep it inside the WSL home, never under `/mnt/c`.
+tree (see `docs/BUILDING.md`). The developer's work directory is `work/alchemy`
+in the repo (git-ignored), named in the git-ignored file `.alchemy-dir` in the repo
+root; the choice is read by every script, in this order: `$ALCHEMY_DIR`,
+`.alchemy-dir`, `work/alchemy` (`scripts/alchemy-dir.sh`, `alchemy_dir.py`,
+`msys2.ps1`). On Windows the scripts run in MSYS2 (`scripts/msys2.ps1`; WSL is no
+longer used). Edit the work directory with tools that keep LF line ends, and use
+MSYS2's git there (Git for Windows here converts to CRLF).
 
 ## Why patches over source, not xdelta/BPS
 
@@ -69,8 +71,8 @@ overlap upstream's changes, and on failure says which it is:
   shows as a commit. Upstream alone builds.
 - **Upstream itself does not build** (exit 5): not our fault; wait or pin earlier.
 
-The report is also in `~/try-upstream-report.txt` (WSL), the build log in
-`~/try-upstream-build.log`. A good trial is adopted with the commands below.
+The report is also in `~/try-upstream-report.txt` (the MSYS2 home,
+`C:\msys64\home\<you>`), the build log in `~/try-upstream-build.log`. A good trial is adopted with the commands below.
 `scripts\check-submodule.ps1` runs first and fails if `alchemy/` is not exactly the
 pinned commit.
 
@@ -80,7 +82,7 @@ scripts\update-upstream.ps1 -Apply     # rebase the work directory's arena branc
 scripts\update-upstream.ps1 -Finish    # after resolving a conflict
 ```
 
-`-Apply` rebases in WSL, then points the submodule at the new upstream commit and
+`-Apply` rebases in the work directory (through MSYS2), then points the submodule at the new upstream commit and
 re-exports the patches. Build, run the smoke scripts, review, commit the pin,
 `patches/`, and `CHANGES.md`. Conflicts are most likely in
 `battle/battle_formation.c`, `scene/battle_arena.c` (the actor placement tables),
@@ -102,8 +104,7 @@ overlay's `.elf`) so that only addresses differ.
 
 ```bash
 git clone --recurse-submodules <this repo>
-bash scripts/setup.sh tbs          # in WSL: upstream + patches, builds the compilers
-cd ~/alchemy && make -j$(nproc) tbs-en
+bash scripts/build.sh              # or .\build.ps1: upstream + patches, the compilers, the ROM
 ```
 
 `rom/` is optional for The Broken Seal (it builds from source; the dump only
@@ -115,7 +116,7 @@ Age.
 Upstream is still decompiling it (`recon/tla`, parts built from the owner's
 dump). When it is complete enough to build:
 
-1. Create branch `arena-tla` in `~/alchemy` from the pinned upstream.
+1. Create branch `arena-tla` in `work/alchemy` from the pinned upstream.
 2. Port the patches in `docs/CHANGES.md` order, using each entry's port notes;
    enemy/formation/ability tables, scenes, message ids, bank sizes and overlay
    imports differ. Export to `patches/tla/`.

@@ -6,7 +6,7 @@ tools: Bash, PowerShell, Read, Write, Edit, Glob, Grep
 
 You test the Broken Seal Arena romhack headlessly. Read `docs/TESTING.md` first.
 
-1. Make sure the ROM is current (`~/alchemy/out/tbs-en/tbs-en.gba` newer than the
+1. Make sure the ROM is current (`work/alchemy/out/tbs-en/tbs-en.gba` newer than the
    last source edit); if not, say so and ask for a build rather than building.
 2. Run the relevant script: `powershell -NoProfile -ExecutionPolicy Bypass -File
    scripts\smoke.ps1 NAME.txt -Fresh`. For a new flow, write a script in

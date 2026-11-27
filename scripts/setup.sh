@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Rebuilds the romhack's working copy from scratch inside WSL:
+# Rebuilds the romhack's working copy from scratch (Linux, macOS, or an MSYS2
+# shell on Windows):
 #   upstream alchemy at the commit this repo pins (the `alchemy` submodule)
 #   + the patch series in patches/<game>/ applied on a branch.
-# Usage (from WSL):
+# Usage:
 #   bash /mnt/c/Dev/NahFarn/BrokenSealArena/scripts/setup.sh [GAME [DEST]]
 # GAME is tbs (default) or tla; DEST defaults to the work directory (alchemy-dir.sh). Set SKIP_BOOTSTRAP=1
 # to skip building the compilers (about 10 minutes), for checking patches only.
@@ -37,4 +38,4 @@ fi
 if [ -z "${SKIP_BOOTSTRAP:-}" ]; then
   make -j"$(nproc)" bootstrap
 fi
-echo "Done: $GAME patches on $BRANCH at $DEST. Build with: make -j\$(nproc) $GAME-en"
+echo "Done: $GAME patches on $BRANCH at $DEST. Build with: scripts/build.sh --work-dir $DEST (it also makes the generated sprite sheets)"

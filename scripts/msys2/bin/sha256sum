@@ -1,0 +1,5 @@
+#!/bin/sh
+# MSYS2's sha256sum marks every file binary (" *name"); upstream's pins hash
+# the Linux listing ("  name"). Print that form; checking (-c) is unchanged.
+set -o pipefail 2>/dev/null
+/usr/bin/sha256sum "$@" | sed 's/^\([0-9a-f]\{64\}\) \*/\1  /'

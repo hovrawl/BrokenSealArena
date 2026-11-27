@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Trial run of a newer upstream, in the WSL working copy (see alchemy-dir.sh). Called by
+# Trial run of a newer upstream, in the working copy (see alchemy-dir.sh). Called by
 # scripts/try-upstream.ps1; it can be run by hand:
 #   try-upstream.sh run OLD NEW [BRANCH]   rebase BRANCH (default arena) from the
 #                                          pin OLD onto NEW on a scratch branch
@@ -64,13 +64,18 @@ rm -f /tmp/rebase.$$
 say
 say "Rebase clean: $(git rev-list --count "$NEW..arena-trial") patches replayed."
 
-# Build. Judge by the log and the ROM, not by an exit code echoed through wsl.
+# Build. Judge by the log and the ROM, not only by an exit code.
+# Under MSYS2 (Windows) the tools and compilers need msys2/env.sh's settings.
+MAKE_VARS=()
+case "$(uname -s)" in
+  MINGW*|MSYS*|UCRT*|CLANG*) . "$(dirname "${BASH_SOURCE[0]}")/msys2/env.sh"; MAKE_VARS=("${BSA_MAKE_VARS[@]}") ;;
+esac
 build() {
   local log=$1
   # The generated file lists name the sources of whichever tree was built last;
   # a source that is not in this tree stops make ("No rule to make target").
   rm -f out/tbs-en/tbs-en.gba out/tbs-en/deps.mk out/tbs-en/objects.mk
-  make -j"$(nproc)" tbs-en > "$log" 2>&1
+  { [ ${#MAKE_VARS[@]} -eq 0 ] || bsa_msys2_tools . "$(nproc)"; make -j"$(nproc)" tbs-en ${MAKE_VARS[@]+"${MAKE_VARS[@]}"}; } > "$log" 2>&1
   [ -s out/tbs-en/tbs-en.gba ] && ! grep -q '\*\*\*' "$log"
 }
 LOG=~/try-upstream-build.log

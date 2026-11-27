@@ -1,6 +1,6 @@
 # Fail if the alchemy submodule is not exactly the pinned upstream commit.
 # The submodule is the pristine base the patches apply to; all edits happen in
-# the WSL working copy (branch arena). Run before export or update.
+# the working copy (branch arena, worklchemy by default). Run before export or update.
 # Usage: .\scripts\check-submodule.ps1
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot

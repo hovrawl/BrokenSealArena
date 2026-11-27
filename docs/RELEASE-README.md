@@ -19,7 +19,7 @@ scripts (`scripts/`) that fetch that decompilation, apply the patches and build.
 
 ## How to build
 
-Read `docs/BUILDING.md`. In short, on Linux, macOS or Windows with WSL:
+Read `docs/BUILDING.md`. In short, on Linux or macOS (on Windows: install MSYS2 as BUILDING.md says, then run `.\build.ps1` in PowerShell):
 
 ```bash
 sudo apt install build-essential git curl patch binutils-arm-none-eabi pkg-config \
@@ -29,7 +29,7 @@ bash scripts/build.sh          # on Windows: .\build.ps1
 
 The first build downloads and compiles old compilers (about 500 MB, and it takes
 a long time); later builds are quick. The result is `build/tbs-en.gba`. Linux
-(Ubuntu under WSL) is the tested path; macOS is untested.
+and Windows (MSYS2) are the tested paths; macOS is untested.
 
 ## Credits
 

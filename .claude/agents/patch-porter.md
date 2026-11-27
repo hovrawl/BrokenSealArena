@@ -11,14 +11,14 @@ what to check when porting.
 **Newer upstream (same game):**
 1. `scripts\update-upstream.ps1` (no flags): read the new commits and the files
    both sides touch.
-2. `scripts\update-upstream.ps1 -Apply`: rebases `~/alchemy` branch `arena`. On a
-   conflict, resolve it in WSL keeping upstream's version of lines we did not
+2. `scripts\update-upstream.ps1 -Apply`: rebases `work/alchemy` branch `arena`. On a
+   conflict, resolve it in the work directory (an MSYS2 shell on Windows) keeping upstream's version of lines we did not
    mean to change, then `git rebase --continue` and run the script with `-Finish`.
 3. Build, run every smoke script, compare screenshots with the last good run.
 4. Update `docs/CHANGES.md` where upstream's changes altered a patch's files, and
    stop before committing the repo for the user to review.
 
-**Porting to The Lost Age:** work on branch `arena-tla` in `~/alchemy`, patches in
+**Porting to The Lost Age:** work on branch `arena-tla` in `work/alchemy`, patches in
 `patches/tla/`. Do not copy the TBS patches blindly: enemy, formation and ability
 tables, scene names, message ids, bank sizes and overlay import lists differ.
 Use each CHANGES entry's "port notes", port one patch at a time, build and

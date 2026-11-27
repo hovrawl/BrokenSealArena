@@ -3,7 +3,7 @@
 #   .\scripts\update-upstream.ps1           # look: what is new upstream, what could clash
 #   .\scripts\update-upstream.ps1 -Apply    # rebase the working copy's patches onto it
 # Look first. -Apply rebases the `arena` branch in the work directory onto upstream's main,
-# stops at the first conflict (resolve in WSL, `git rebase --continue`, then run
+# stops at the first conflict (resolve in an MSYS2 shell, `git rebase --continue`, then run
 # this again with -Finish), and never edits the `alchemy` submodule's files.
 param(
   [switch]$Apply,
@@ -12,7 +12,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-. "$PSScriptRoot\wsl.ps1"
+. "$PSScriptRoot\msys2.ps1"
 & "$PSScriptRoot\check-submodule.ps1"
 $branch = if ($Game -eq 'tbs') { 'arena' } else { "arena-$Game" }
 $pinned = ((git -C $root ls-files -s alchemy) -split '\s+')[1]
@@ -28,7 +28,7 @@ if (-not $Apply -and -not $Finish) {
   Write-Host "`nNew upstream commits:"
   git -C "$root\alchemy" log --oneline "$pinned..$head" | Select-Object -First 30
   # Files both sides touch are where a rebase will ask for help.
-  $ours = git -C "$root\alchemy" diff --name-only $pinned (wsl @WslArgs -- bash -lc "cd '$AlchemyDir' && git rev-parse $branch").Trim() 2>$null
+  $ours = git -C "$root\alchemy" diff --name-only $pinned (Invoke-Sh "cd '$AlchemyDir' && git rev-parse $branch" | Select-Object -Last 1).Trim() 2>$null
   $theirs = git -C "$root\alchemy" diff --name-only $pinned $head
   $both = $ours | Where-Object { $theirs -contains $_ }
   Write-Host "`nFiles changed by both upstream and our patches: $(@($both).Count)"
@@ -38,9 +38,9 @@ if (-not $Apply -and -not $Finish) {
 }
 
 if ($Apply) {
-  wsl @WslArgs -- bash -lc "cd '$AlchemyDir' && git status --short | grep -q . && { echo 'Uncommitted changes in $AlchemyDir'; exit 1; }; git fetch origin && git rebase origin/main $branch"
+  Invoke-Sh "cd '$AlchemyDir' && git status --short | grep -q . && { echo 'Uncommitted changes in $AlchemyDir'; exit 1; }; git fetch origin && git rebase origin/main $branch"
   if ($LASTEXITCODE -ne 0) {
-    Write-Host "`nThe rebase stopped. Resolve it in WSL (cd $AlchemyDir), run 'git rebase --continue', then run this script with -Finish."
+    Write-Host "`nThe rebase stopped. Resolve it in an MSYS2 shell (cd $AlchemyDir), run 'git rebase --continue', then run this script with -Finish."
     return
   }
 }
