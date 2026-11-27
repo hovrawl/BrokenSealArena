@@ -1456,3 +1456,7 @@ it and a copy of its edge at the far right.
 - Stock arena resets the party to Isaac, Garet, Ivan and Mia on a save load.
 - Characters beyond the four (needs CHILD sprites), other editions, and the Lost
   Age port.
+
+## 72. Native: a tap skips the intro and goes on from the title
+
+- While the title scene runs (`gNativeTitleScene`, set by `Screen_UseGbaWidth`), `Keys_Update` turns any tap into A and Start. Verified headless with taps only: with a save, logos, intro and title to the file screen; with no save, through to the arena greeter. Not done yet: the file screen's file list (Continue, then the file) and the Pause menu's save slots do not take taps.
