@@ -85,3 +85,5 @@ Example: `build\native\tbs-native.exe --width 16:9 --ui touch --scale 5`.
   right-click (or Z) still goes back.
 - The item commands (Use, Equip, Details / Give, Remove, Drop) keep the GBA's
   8-pixel rows, small for a finger.
+- A tap dead centre does not close the field menu: the leader stands there,
+  and a person is not background. Tap the floor beside him instead.

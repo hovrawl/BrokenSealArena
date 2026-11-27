@@ -1,0 +1,52 @@
+From 0b2f369813540a2a26fed89cd68d10cb384e1e2c Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sat, 28 Nov 2026 09:32:41 +1100
+Subject: [PATCH] Native: an icon row's tap goes to the icon under it
+
+Icons sit 24 pixels apart but each took a 40-pixel square, so a tap on
+the left of an icon went to its neighbour (the selected one, drawn
+larger). Each target now reaches halfway to its neighbours, and 4 pixels
+past the picture at the row's ends.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/window/arena_icon_menu.c | 16 +++++++++++++---
+ 1 file changed, 13 insertions(+), 3 deletions(-)
+
+diff --git a/games/tbs/src/window/arena_icon_menu.c b/games/tbs/src/window/arena_icon_menu.c
+index f029567b0c..c14fca3630 100644
+--- a/games/tbs/src/window/arena_icon_menu.c
++++ b/games/tbs/src/window/arena_icon_menu.c
+@@ -43,16 +43,26 @@ s32 ArenaMenu_IconChoose(s32 prompt, const u8 *icons, s32 labelBase,
+ 
+ #ifdef NATIVE
+ /// Desktop and touch: the icon tapped this frame, or -1. An icon's tap target
+-/// is its 32x32 picture with 4 pixels round it (40x40, past TOUCH_TARGET_MIN).
++/// is 40 pixels high, from 4 above its 32x32 picture; across, it reaches
++/// halfway to each neighbour (the icons are 24 pixels apart, closer than their
++/// pictures are wide, and the selected one is drawn larger still), and 4
++/// pixels past the picture at the row's two ends. So the targets never
++/// overlap: a tap on a neighbour's half never chooses the selected icon.
+ s32 IconMenu_TouchedIcon(void) {
+   struct IconMenuState *state = gIconMenuState;
+   s32 i;
+ 
+   for (i = 0; i < state->count; i++) {
+     const struct IconMenuEntry *entry = &state->entries[i];
++    s32 left = entry->x - 4, right = entry->x + 36;
+ 
+-    if (entry->x != 0 &&
+-        Touch_TappedUiRect(entry->x - 4, entry->y - 4, 40, 40))
++    if (entry->x == 0)
++      continue;
++    if (i > 0 && state->entries[i - 1].x != 0)
++      left = (state->entries[i - 1].x + entry->x) / 2 + 16;
++    if (i + 1 < state->count && state->entries[i + 1].x != 0)
++      right = (entry->x + state->entries[i + 1].x) / 2 + 16;
++    if (Touch_TappedUiRect(left, entry->y - 4, right - left, 40))
+       return i;
+   }
+   return -1;
+-- 
+2.56.1
+

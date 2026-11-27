@@ -1284,6 +1284,28 @@ tap brings up the standard menu" (kept).
   nothing; a tap on empty floor near the middle opens the field menu. The 20
   touch scripts and the two back-tap scripts give the same shots as after 64.
 
+## 66. Native: an icon row's tap goes to the icon under it
+
+Nathan: with the manager's row on Characters, a tap on the left part of the
+Djinn icon chose Characters.
+
+- `IconMenu_TouchedIcon` (from 51) gave each icon a 40-pixel square from 4
+  pixels round its picture and took the first that held the tap; the icons are
+  24 pixels apart, so neighbours' targets overlapped by 16 pixels and the
+  earlier icon won (the selected one is drawn larger too, which hid it). Now a
+  target reaches halfway to each neighbour (24 wide, `TOUCH_TARGET_MIN`) and
+  4 pixels past the picture at the row's ends; 40 high as before.
+- The battle command row was already right: it takes cells one spacing wide
+  (`BattleTouch_PickCell`).
+- Known, left (CONTROLS "Not yet"): a tap dead centre does not close the field
+  menu, since the leader's figure is there and sprites are not background (64).
+- GBA ROM byte-identical.
+- Verified (headless, `--ui touch --width 240`): `touch_iconedge_240.txt`
+  taps Djinn at x 78 (the halfway point is 76; Characters' old target reached
+  84) with Characters selected: before, Characters opened; now Djinn is
+  selected, and a second tap opens it. The 22 touch scripts give the same shots
+  as before.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.
