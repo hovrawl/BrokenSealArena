@@ -1,4 +1,4 @@
-From 60982a9da8e52fda759a534c8040bd142ac01541 Mon Sep 17 00:00:00 2001
+From a2b36d840d1921e5b8972b30ec5c06d7d5a443b1 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Fri, 30 Oct 2026 16:40:05 +1100
 Subject: [PATCH] Arena: a second tournament, the Boss Rush, with a tournament
@@ -22,17 +22,17 @@ consecutive pair MsgArenaTournamentGauntlet and MsgArenaTournamentBossRush.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- games/tbs/include/module/arena.h           | 34 +++++++++++--
- games/tbs/src/battle/battle/arena_ladder.c | 57 ++++++++++++++++------
- games/tbs/src/scene/arena_menu.c           | 31 ++++++++----
- games/tbs/src/scene/arena_series.c         | 43 +++++++++++-----
- games/tbs/text/en.po                       | 30 ++++++++++++
+ games/tbs/include/arena/arena.h     | 34 ++++++++++++++---
+ games/tbs/src/battle/arena_ladder.c | 57 +++++++++++++++++++++--------
+ games/tbs/src/scene/arena_menu.c    | 31 +++++++++++-----
+ games/tbs/src/scene/arena_series.c  | 43 ++++++++++++++++------
+ games/tbs/text/en.po                | 30 +++++++++++++++
  5 files changed, 153 insertions(+), 42 deletions(-)
 
-diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
+diff --git a/games/tbs/include/arena/arena.h b/games/tbs/include/arena/arena.h
 index 1e299428d5..b03b978bdc 100644
---- a/games/tbs/include/module/arena.h
-+++ b/games/tbs/include/module/arena.h
+--- a/games/tbs/include/arena/arena.h
++++ b/games/tbs/include/arena/arena.h
 @@ -6,15 +6,39 @@
  
  #include "types.h"
@@ -78,10 +78,10 @@ index 1e299428d5..b03b978bdc 100644
  void ArenaMenu_ShowWin(s32 actorId, s32 reward);
  /// Talking to the party manager: stats, Djinn, Psynergy and the item shops.
  s32 BattleArena_PartyManager(s32 actorId);
-diff --git a/games/tbs/src/battle/battle/arena_ladder.c b/games/tbs/src/battle/battle/arena_ladder.c
-index 2bde1d61ce..415055678f 100644
---- a/games/tbs/src/battle/battle/arena_ladder.c
-+++ b/games/tbs/src/battle/battle/arena_ladder.c
+diff --git a/games/tbs/src/battle/arena_ladder.c b/games/tbs/src/battle/arena_ladder.c
+index 8148433506..286d0de4f5 100644
+--- a/games/tbs/src/battle/arena_ladder.c
++++ b/games/tbs/src/battle/arena_ladder.c
 @@ -1,26 +1,30 @@
  /// @file
 -/// Arena romhack: the team ladder. In a monster series, the enemies come from
@@ -92,9 +92,9 @@ index 2bde1d61ce..415055678f 100644
 +/// FLAG_ARENA_TOURNAMENT (module/arena.h).
  // Part of battle.c.
  
- #include "../battle_internal.h"
+ #include "battle_internal.h"
  #include "arena_config.h"
- #include "module/arena.h"
+ #include "arena/arena.h"
  
 -/// Arena romhack: one rung of the team ladder. In a monster series, win number
 -/// n (0-based) fights rung n; its enemies are levelled to targetLevel.
@@ -155,7 +155,7 @@ index 2bde1d61ce..415055678f 100644
 +/// for each win. outMargin is the levels each enemy gains to reach the rung's
 +/// level from the average of its members.
  static const struct Formation *ArenaLadder_Select(s32 *outMargin) {
-   s32 streak = gMainRoutineWork.linkTallies[3];
+   s32 streak = gMainRoutineState.linkTallies[3];
 +  s32 tournament = GameFlag_GetByteFar(FLAG_ARENA_TOURNAMENT);
 +  s32 rounds;
    s32 rung = streak;
@@ -179,10 +179,10 @@ index 2bde1d61ce..415055678f 100644
      struct EnemyDefinition *enemy;
  
 diff --git a/games/tbs/src/scene/arena_menu.c b/games/tbs/src/scene/arena_menu.c
-index 99372baaa9..1306131451 100644
+index 971da48968..b21fca3945 100644
 --- a/games/tbs/src/scene/arena_menu.c
 +++ b/games/tbs/src/scene/arena_menu.c
-@@ -64,7 +64,9 @@
+@@ -14,7 +14,9 @@
  // The list screens draw as tiles and blank their window with
  // Window_ClearInteriorTiles before each redraw.
  const u8 gArenaMenu_AttendantIcons[] = {COMMAND_ICON_FIGHT, COMMAND_ICON_CABLE};
@@ -193,7 +193,7 @@ index 99372baaa9..1306131451 100644
  const u8 gArenaMenu_ManagerIcons[] = {COMMAND_ICON_STATUS, COMMAND_ICON_DJINN,
                                        COMMAND_ICON_PSYNERGY, COMMAND_ICON_ITEM};
  const u8 gArenaMenu_ShopIcons[] = {COMMAND_ICON_ATTACK, COMMAND_ICON_DEFEND,
-@@ -76,8 +78,10 @@ const u8 gArenaMenu_ShopIcons[] = {COMMAND_ICON_ATTACK, COMMAND_ICON_DEFEND,
+@@ -26,8 +28,10 @@ const u8 gArenaMenu_ShopIcons[] = {COMMAND_ICON_ATTACK, COMMAND_ICON_DEFEND,
  
  /// The attendant's menu: Solo or Multiplayer and, for Solo, the tournament.
  /// Returns 1 for a solo series, 2 for a linked battle and 0 to leave. The
@@ -206,7 +206,7 @@ index 99372baaa9..1306131451 100644
  s32 ArenaMenu_AttendantMode(void) {
    s32 choice;
  
-@@ -89,26 +93,31 @@ s32 ArenaMenu_AttendantMode(void) {
+@@ -39,26 +43,31 @@ s32 ArenaMenu_AttendantMode(void) {
      if (choice == 1)
        return 2;
      choice = ArenaMenu_IconChoose(MsgArenaTournamentPrompt,
@@ -230,7 +230,7 @@ index 99372baaa9..1306131451 100644
    MessageArgument_ClearAll();
    MessageArgument_Push(reward, MESSAGE_ARGUMENT_NUMBER);
    Event_SetMessageId(MsgArenaVictory);
-   FieldMessage_ShowAtActor(actorId, 0);
+   Event_OpenMessage(actorId, 0);
 -  Party_RestoreHpPp(1);
 +  if (ARENA_HEALS(FieldGameFlag_GetByte(FLAG_ARENA_TOURNAMENT)))
 +    Party_RestoreHpPp(1);
@@ -244,7 +244,7 @@ index 99372baaa9..1306131451 100644
  s32 BattleArena_PartyManager(s32 actorId) {
    s32 choice;
    s32 member;
-@@ -136,7 +145,9 @@ s32 BattleArena_PartyManager(s32 actorId) {
+@@ -86,7 +95,9 @@ s32 BattleArena_PartyManager(s32 actorId) {
        continue;
      ArenaShop_Run(choice == 0 ? 2 : (choice == 1 ? 1 : 0), member);
    }
@@ -256,7 +256,7 @@ index 99372baaa9..1306131451 100644
    return 0;
  }
 diff --git a/games/tbs/src/scene/arena_series.c b/games/tbs/src/scene/arena_series.c
-index 210f6f6170..69e34ddbb2 100644
+index 97e92bb017..13d3ca4f41 100644
 --- a/games/tbs/src/scene/arena_series.c
 +++ b/games/tbs/src/scene/arena_series.c
 @@ -1,16 +1,34 @@
@@ -274,7 +274,7 @@ index 210f6f6170..69e34ddbb2 100644
 +/// clearing are not losses.
  // Part of battle_arena.c: it uses that file's statics.
  
- #include "static_assert.h"
+ // Part of battle_arena.c (included before BattleArena_ChooseBattleMode), which has the includes.
  
 -// MsgArenaGiveUpPrompt and MsgArenaNextRound say "of 12": a field message reads
 -// every number blank from the first number pushed, so the count is in the text.
@@ -304,25 +304,25 @@ index 210f6f6170..69e34ddbb2 100644
  /// win count are cleared, the attendant reports the run and the best streak is
 @@ -45,7 +63,7 @@ static void ArenaSeries_GiveUp(void) {
    MessageArgument_Push(
-       gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK] + 1,
+       gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_STREAK] + 1,
        MESSAGE_ARGUMENT_NUMBER);
 -  Event_SetMessageId(MsgArenaGiveUpPrompt);
 +  Event_SetMessageId(ARENA_MSG(ARENA_MSG_GIVE_UP, ArenaSeries_Tournament()));
-   FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+   Event_OpenMessage(ACTOR_ATTENDANT, 0);
    if (Event_AskYesNoWithActorAnimation(0, 0) == YES) {
      ArenaSeries_End();
 @@ -60,16 +78,17 @@ static void ArenaSeries_GiveUp(void) {
  /// say the tournament is cleared and end it as a win.
  static void ArenaSeries_AfterWin(void) {
-   s32 won = gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK];
+   s32 won = gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_STREAK];
 +  s32 tournament = ArenaSeries_Tournament();
  
-   Actor_SetAngleToward(ACTOR_ATTENDANT, gMainRoutineWork.leaderActorId, 0);
+   Actor_FaceActor(ACTOR_ATTENDANT, gMainRoutineState.leaderActorId, 0);
 -  if (won >= ARENA_LADDER_COUNT) {
 -    Event_SetMessageId(MsgArenaGauntletCleared);
 +  if (won >= ARENA_ROUNDS(tournament)) {
 +    Event_SetMessageId(ARENA_MSG(ARENA_MSG_CLEARED, tournament));
-     FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+     Event_OpenMessage(ACTOR_ATTENDANT, 0);
      ArenaSeries_End();
      return;
    }
@@ -330,10 +330,10 @@ index 210f6f6170..69e34ddbb2 100644
    MessageArgument_Push(won, MESSAGE_ARGUMENT_NUMBER);
 -  Event_SetMessageId(MsgArenaNextRound);
 +  Event_SetMessageId(ARENA_MSG(ARENA_MSG_NEXT_ROUND, tournament));
-   FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+   Event_OpenMessage(ACTOR_ATTENDANT, 0);
  }
 diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
-index 30da40eee4..8ae0d3a2ee 100644
+index 550a216a9f..ccf9009f80 100644
 --- a/games/tbs/text/en.po
 +++ b/games/tbs/text/en.po
 @@ -65202,3 +65202,33 @@ msgstr ""
@@ -371,5 +371,5 @@ index 30da40eee4..8ae0d3a2ee 100644
 +msgid "10774"
 +msgstr "Boss Rush"
 -- 
-2.53.0
+2.43.0
 

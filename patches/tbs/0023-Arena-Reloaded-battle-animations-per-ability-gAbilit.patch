@@ -1,4 +1,4 @@
-From c916da23d4616a07832eeb6d6032b7b00c19812d Mon Sep 17 00:00:00 2001
+From 478a6af692e50ee4aa6be065287366d43c05b17a Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Sun, 1 Nov 2026 09:16:32 +1100
 Subject: [PATCH] Arena: Reloaded battle animations per ability
@@ -12,10 +12,10 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
  1 file changed, 33 insertions(+), 33 deletions(-)
 
 diff --git a/games/tbs/src/battle/ability_staging.c b/games/tbs/src/battle/ability_staging.c
-index c9dc44bafd..c7950b1b57 100644
+index 8ea897fb91..af884e52ab 100644
 --- a/games/tbs/src/battle/ability_staging.c
 +++ b/games/tbs/src/battle/ability_staging.c
-@@ -554,7 +554,7 @@ const u32 gAbilityBattleEffects[] = {
+@@ -555,7 +555,7 @@ const u32 gAbilityBattleEffects[] = {
      0, // ?
      0, // ?
      0, // ?
@@ -24,7 +24,7 @@ index c9dc44bafd..c7950b1b57 100644
      BATTLE_EFFECT_FROST, // Frost
      BATTLE_EFFECT_FROST | (1 << EFFECT_VARIANT_SHIFT), // Tundra
      BATTLE_EFFECT_FROST | (2 << EFFECT_VARIANT_SHIFT), // Glacier
-@@ -612,9 +612,9 @@ const u32 gAbilityBattleEffects[] = {
+@@ -613,9 +613,9 @@ const u32 gAbilityBattleEffects[] = {
      BATTLE_EFFECT_WHIRLWIND, // Whirlwind
      BATTLE_EFFECT_WHIRLWIND | (1 << EFFECT_VARIANT_SHIFT), // Tornado
      BATTLE_EFFECT_WHIRLWIND | (2 << EFFECT_VARIANT_SHIFT), // Tempest
@@ -37,7 +37,7 @@ index c9dc44bafd..c7950b1b57 100644
      0, // ?
      0, // ?
      0, // ?
-@@ -646,7 +646,7 @@ const u32 gAbilityBattleEffects[] = {
+@@ -647,7 +647,7 @@ const u32 gAbilityBattleEffects[] = {
      BATTLE_EFFECT_WEAKEN, // Weaken
      BATTLE_EFFECT_WEAKEN | (1 << EFFECT_VARIANT_SHIFT), // Enfeeble
      BATTLE_EFFECT_TAINT, // Taint
@@ -46,7 +46,7 @@ index c9dc44bafd..c7950b1b57 100644
      BATTLE_EFFECT_DELUDE, // Delude
      BATTLE_EFFECT_DELUDE | (1 << EFFECT_VARIANT_SHIFT), // Confuse
      0, // Charm
-@@ -656,14 +656,14 @@ const u32 gAbilityBattleEffects[] = {
+@@ -657,14 +657,14 @@ const u32 gAbilityBattleEffects[] = {
      BATTLE_EFFECT_HAUNT, // Haunt
      BATTLE_EFFECT_CURSE, // Curse
      BATTLE_EFFECT_CONDEMN, // Condemn
@@ -66,7 +66,7 @@ index c9dc44bafd..c7950b1b57 100644
      0, // ?
      0, // ?
      0, // ?
-@@ -739,7 +739,7 @@ const u32 gAbilityBattleEffects[] = {
+@@ -740,7 +740,7 @@ const u32 gAbilityBattleEffects[] = {
      0, // ?
      0, // ?
      0, // ?
@@ -75,7 +75,7 @@ index c9dc44bafd..c7950b1b57 100644
      0, // ?
      108 | EFFECT_BY_ID_RANGE, // Terra Strike
      109 | EFFECT_BY_ID_RANGE, // Poison Cloud
-@@ -751,8 +751,8 @@ const u32 gAbilityBattleEffects[] = {
+@@ -752,8 +752,8 @@ const u32 gAbilityBattleEffects[] = {
      BATTLE_EFFECT_BLIZZARD, // Blizzard
      116 | EFFECT_BY_ID_RANGE, // Frost Bite
      BATTLE_EFFECT_DROWN, // Drown
@@ -86,7 +86,7 @@ index c9dc44bafd..c7950b1b57 100644
      120 | EFFECT_BY_ID_RANGE, // Broil
      121 | EFFECT_BY_ID_RANGE, // Meltdown
      122 | EFFECT_BY_ID_RANGE, // Heat Mirage
-@@ -782,11 +782,11 @@ const u32 gAbilityBattleEffects[] = {
+@@ -783,11 +783,11 @@ const u32 gAbilityBattleEffects[] = {
      0, // ?
      0, // ?
      BATTLE_EFFECT_PLY, // Herb
@@ -103,7 +103,7 @@ index c9dc44bafd..c7950b1b57 100644
      BATTLE_EFFECT_CURE_POISON, // Antidote
      BATTLE_EFFECT_CURE_POISON | (1 << EFFECT_VARIANT_SHIFT), // Elixir
      BATTLE_EFFECT_REVIVE, // Water of Life
-@@ -797,12 +797,12 @@ const u32 gAbilityBattleEffects[] = {
+@@ -798,12 +798,12 @@ const u32 gAbilityBattleEffects[] = {
      0, // Hard Nut
      0, // Mint
      0, // Lucky Pepper
@@ -120,7 +120,7 @@ index c9dc44bafd..c7950b1b57 100644
      0, // ?
      0, // ?
      0, // ?
-@@ -857,7 +857,7 @@ const u32 gAbilityBattleEffects[] = {
+@@ -858,7 +858,7 @@ const u32 gAbilityBattleEffects[] = {
      BATTLE_EFFECT_SPRITZ, // Spritz
      BATTLE_EFFECT_HAIL, // Hail
      BATTLE_EFFECT_TONIC, // Tonic
@@ -129,7 +129,7 @@ index c9dc44bafd..c7950b1b57 100644
      0, // =
      0, // =
      0, // =
-@@ -944,13 +944,13 @@ const u32 gAbilityBattleEffects[] = {
+@@ -945,13 +945,13 @@ const u32 gAbilityBattleEffects[] = {
      0, // ?
      0, // ?
      0, // ?
@@ -149,7 +149,7 @@ index c9dc44bafd..c7950b1b57 100644
      BATTLE_EFFECT_FIRE_BLESSING | EFFECT_VIEW_REVERSED, // Fire Blessing
      BATTLE_EFFECT_FIRE_BLESSING | EFFECT_VIEW_REVERSED, // Fire Blessing
      BATTLE_EFFECT_FIRE_BLESSING | EFFECT_VIEW_REVERSED, // Fire Blessing
-@@ -978,9 +978,9 @@ const u32 gAbilityBattleEffects[] = {
+@@ -979,9 +979,9 @@ const u32 gAbilityBattleEffects[] = {
      BATTLE_EFFECT_WING_STROKE, // Wing Stroke
      BATTLE_EFFECT_EVIL_BLESSING | EFFECT_VIEW_REVERSED, // Evil Blessing
      BATTLE_EFFECT_DEADLY_GAS | EFFECT_VIEW_REVERSED, // Deadly Gas
@@ -162,7 +162,7 @@ index c9dc44bafd..c7950b1b57 100644
      BATTLE_EFFECT_RUMBLE, // Rumble
      BATTLE_EFFECT_BONE_CHILLER, // Bone Chiller
      BATTLE_EFFECT_RAPID_SMASH, // Slice
-@@ -991,7 +991,7 @@ const u32 gAbilityBattleEffects[] = {
+@@ -992,7 +992,7 @@ const u32 gAbilityBattleEffects[] = {
      BATTLE_EFFECT_STICKY_GOO, // Sticky Goo
      BATTLE_EFFECT_CANNIBAL_FANG, // Cannibal Fang
      BATTLE_EFFECT_BEAR_CLAW, // Bear Claw
@@ -172,5 +172,5 @@ index c9dc44bafd..c7950b1b57 100644
      BATTLE_EFFECT_UNDEAD_SWORD, // Undead Sword
      BATTLE_EFFECT_RANSACK, // Ransack
 -- 
-2.53.0
+2.43.0
 

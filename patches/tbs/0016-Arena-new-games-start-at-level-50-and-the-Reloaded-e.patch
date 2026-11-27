@@ -1,4 +1,4 @@
-From 18b939db1e8bf89031f2fbe239f4dfcb558d1e4e Mon Sep 17 00:00:00 2001
+From 2edcbfb162339d310f70868b99f072f3c8a51838 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Sun, 1 Nov 2026 08:27:28 +1100
 Subject: [PATCH] Arena: new games start at level 50, and the Reloaded engine
@@ -13,11 +13,28 @@ game's own growth curves, for all four characters.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
+ games/tbs/include/arena/arena.h  |  6 ++++++
  games/tbs/include/arena_config.h | 12 ++++++------
- games/tbs/include/module/arena.h |  6 ++++++
  games/tbs/src/scene/arena_boot.c | 12 ++++++------
  3 files changed, 18 insertions(+), 12 deletions(-)
 
+diff --git a/games/tbs/include/arena/arena.h b/games/tbs/include/arena/arena.h
+index b03b978bdc..5b72481f1c 100644
+--- a/games/tbs/include/arena/arena.h
++++ b/games/tbs/include/arena/arena.h
+@@ -6,6 +6,12 @@
+ 
+ #include "types.h"
+ 
++/// The level of the party a New Game starts with (scene/arena_boot.c). 50 opens
++/// every class's Psynergy, which is learnt by class and level (the last at 54 in
++/// the stock table, 42 in the Reloaded rebalance); a party then needs only the
++/// right Djinn for the class.
++#define ARENA_START_LEVEL 50
++
+ // Tournaments. The player chooses one at the attendant; it is kept in a
+ // persistent byte flag, so a save remembers it. Flags 0x7f8 to 0x7ff are the byte
+ // at index 0xff of the game flags: no name in flags.h refers to them and no code
 diff --git a/games/tbs/include/arena_config.h b/games/tbs/include/arena_config.h
 index 91c209eaaa..fd018d95bb 100644
 --- a/games/tbs/include/arena_config.h
@@ -46,25 +63,8 @@ index 91c209eaaa..fd018d95bb 100644
  #endif
  
  #ifndef ARENA_LINK4
-diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
-index b03b978bdc..5b72481f1c 100644
---- a/games/tbs/include/module/arena.h
-+++ b/games/tbs/include/module/arena.h
-@@ -6,6 +6,12 @@
- 
- #include "types.h"
- 
-+/// The level of the party a New Game starts with (scene/arena_boot.c). 50 opens
-+/// every class's Psynergy, which is learnt by class and level (the last at 54 in
-+/// the stock table, 42 in the Reloaded rebalance); a party then needs only the
-+/// right Djinn for the class.
-+#define ARENA_START_LEVEL 50
-+
- // Tournaments. The player chooses one at the attendant; it is kept in a
- // persistent byte flag, so a save remembers it. Flags 0x7f8 to 0x7ff are the byte
- // at index 0xff of the game flags: no name in flags.h refers to them and no code
 diff --git a/games/tbs/src/scene/arena_boot.c b/games/tbs/src/scene/arena_boot.c
-index 8a6d268610..1bfa406210 100644
+index 8a0f631d72..1b71cadb3a 100644
 --- a/games/tbs/src/scene/arena_boot.c
 +++ b/games/tbs/src/scene/arena_boot.c
 @@ -1,6 +1,6 @@
@@ -73,18 +73,18 @@ index 8a6d268610..1bfa406210 100644
 -/// a ready-made level 30 party and 1500 coins to train with.
 +/// a ready-made level 50 party and 1500 coins to train with.
  
- #include "scene_ids.h"
- #include "module/scene/file_screen.h"
-@@ -58,7 +58,7 @@ void ArenaBoot_NewGame(void) {
+ // Part of file_screen.c (included at its end), which has the includes.
+ 
+@@ -10,7 +10,7 @@ void ArenaBoot_NewGame(void) {
    s32 slot;
  
    // "New Game" skips the prologue and enters the Battle Arena with a
 -  // ready-made level 30 party and 1500 coins to train with.
 +  // ready-made level 50 party and 1500 coins to train with.
-   gMainRoutineWork.coins = 1500;
+   gMainRoutineState.holdings.coins = 1500;
    Party_AddMember(GARET);
    Party_AddMember(MIA);
-@@ -78,10 +78,10 @@ void ArenaBoot_NewGame(void) {
+@@ -30,10 +30,10 @@ void ArenaBoot_NewGame(void) {
        }
      }
    }
@@ -100,5 +100,5 @@ index 8a6d268610..1bfa406210 100644
    Unit_Calculate(GARET);
    Unit_Calculate(MIA);
 -- 
-2.53.0
+2.43.0
 

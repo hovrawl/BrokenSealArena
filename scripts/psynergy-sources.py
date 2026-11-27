@@ -65,7 +65,7 @@ for i in range(1, len(iblocks), 2):
 
 # the arena shop
 shop = {}
-shopsrc = read("src/shop/shop/arena_shop.c")
+shopsrc = read("src/shop/arena_shop.c")
 sect = shopsrc[shopsrc.index("sArenaShopPsynergy[] = {"):]
 sect = sect[:sect.index("};")]
 for a, p in re.findall(r"\{(\d+), (\d+)\}", sect):

@@ -63,7 +63,7 @@ Upstream moves: `scripts\update-upstream.ps1` (look), then `-Apply`.
 - One patch = one feature layer, in dependency order, each building on its own;
   squash false starts (history in `CHANGES.md` records what was tried and
   dropped). Our code goes in our own files (`arena_*.c`, `arena_config.h`,
-  `module/arena.h`); upstream files get only short hooks, so a new upstream
+  `include/arena/`); upstream files get only short hooks, so a new upstream
   rebases cleanly. Run `scripts\try-upstream.ps1` before adopting one.
 - Follow alchemy's rules for the code you touch: C89 with GNU extensions,
   `Module_PascalCase` functions, `gName` globals, `LOUD_CASE` constants,

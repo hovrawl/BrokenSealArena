@@ -1,4 +1,4 @@
-From 01a75a449f318984bdfdd33008e840e12c2e1f88 Mon Sep 17 00:00:00 2001
+From 7a0118ba772fd80b3a4e5d15c88d54aa2da0aada Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Fri, 30 Oct 2026 15:41:53 +1100
 Subject: [PATCH] Arena: a series you can leave, give up, clear or lose
@@ -20,18 +20,18 @@ Three messages are added. Switch: ARENA_TRAINING.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- games/tbs/include/module/arena.h           |  4 ++
- games/tbs/src/battle/battle/arena_ladder.c |  2 +-
- games/tbs/src/scene/arena_series.c         | 75 ++++++++++++++++++++++
- games/tbs/src/scene/battle_arena.c         | 37 +++++++++--
- games/tbs/text/en.po                       | 21 ++++++
+ games/tbs/include/arena/arena.h     |  4 ++
+ games/tbs/src/battle/arena_ladder.c |  2 +-
+ games/tbs/src/scene/arena_series.c  | 75 +++++++++++++++++++++++++++++
+ games/tbs/src/scene/battle_arena.c  | 37 +++++++++++---
+ games/tbs/text/en.po                | 21 ++++++++
  5 files changed, 131 insertions(+), 8 deletions(-)
  create mode 100644 games/tbs/src/scene/arena_series.c
 
-diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
+diff --git a/games/tbs/include/arena/arena.h b/games/tbs/include/arena/arena.h
 index 0d760f3fbc..1e299428d5 100644
---- a/games/tbs/include/module/arena.h
-+++ b/games/tbs/include/module/arena.h
+--- a/games/tbs/include/arena/arena.h
++++ b/games/tbs/include/arena/arena.h
 @@ -6,6 +6,10 @@
  
  #include "types.h"
@@ -43,15 +43,15 @@ index 0d760f3fbc..1e299428d5 100644
  // Battle Arena overlay (scene/arena_menu.c)
  
  /// The attendant's menu: 1 for a solo series, 2 for a linked battle, 0 to leave.
-diff --git a/games/tbs/src/battle/battle/arena_ladder.c b/games/tbs/src/battle/battle/arena_ladder.c
-index 0c100c537a..2bde1d61ce 100644
---- a/games/tbs/src/battle/battle/arena_ladder.c
-+++ b/games/tbs/src/battle/battle/arena_ladder.c
+diff --git a/games/tbs/src/battle/arena_ladder.c b/games/tbs/src/battle/arena_ladder.c
+index 4433e4f8ea..8148433506 100644
+--- a/games/tbs/src/battle/arena_ladder.c
++++ b/games/tbs/src/battle/arena_ladder.c
 @@ -5,6 +5,7 @@
  
- #include "../battle_internal.h"
+ #include "battle_internal.h"
  #include "arena_config.h"
-+#include "module/arena.h"
++#include "arena/arena.h"
  
  /// Arena romhack: one rung of the team ladder. In a monster series, win number
  /// n (0-based) fights rung n; its enemies are levelled to targetLevel.
@@ -65,7 +65,7 @@ index 0c100c537a..2bde1d61ce 100644
  // Arena romhack: the team ladder. Members are rows of enemy_table.c; a small
 diff --git a/games/tbs/src/scene/arena_series.c b/games/tbs/src/scene/arena_series.c
 new file mode 100644
-index 0000000000..210f6f6170
+index 0000000000..97e92bb017
 --- /dev/null
 +++ b/games/tbs/src/scene/arena_series.c
 @@ -0,0 +1,75 @@
@@ -77,7 +77,7 @@ index 0000000000..210f6f6170
 +/// loss ends it (stock). Giving up and clearing are not losses.
 +// Part of battle_arena.c: it uses that file's statics.
 +
-+#include "static_assert.h"
++// Part of battle_arena.c (included before BattleArena_ChooseBattleMode), which has the includes.
 +
 +// MsgArenaGiveUpPrompt and MsgArenaNextRound say "of 12": a field message reads
 +// every number blank from the first number pushed, so the count is in the text.
@@ -87,26 +87,26 @@ index 0000000000..210f6f6170
 +/// win count are cleared, the attendant reports the run and the best streak is
 +/// kept. The record is not written into a file
 +/// (BattleArena_SaveMonsterBattleResults does nothing under ARENA_TRAINING).
-+/// Starting a series set FLAG_BATTLE_ARENA_PLAYER_AGREED; the stock flow clears
++/// Starting a series set FLAG_BATTLE_ARENA_PLAYER_APPLIED; the stock flow clears
 +/// it when a battle begins, so a series ended before any fight clears it here, or
 +/// the link poll reports the link lost.
 +static void ArenaSeries_End(void) {
 +  GameFlag_Clear(FLAG_MONSTER_BATTLE);
-+  GameFlag_Clear(FLAG_BATTLE_ARENA_PLAYER_AGREED);
++  GameFlag_Clear(FLAG_BATTLE_ARENA_PLAYER_APPLIED);
 +  FieldGameFlag_SetByte(FLAG_MONSTER_BATTLE_WINS, -1);
 +  MessageArgument_ClearAll();
-+  MessageArgument_Push(gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK],
++  MessageArgument_Push(gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_STREAK],
 +                       MESSAGE_ARGUMENT_NUMBER);
-+  if (gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] <
-+      gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK]) {
-+    gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] =
-+        gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK];
++  if (gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] <
++      gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_STREAK]) {
++    gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] =
++        gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_STREAK];
 +    Event_SetMessageId(MsgLobbyWonNumberBattleBroke);
 +  } else {
 +    Event_SetMessageId(MsgLobbyWonNumberBattle);
 +  }
-+  FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
-+  BattleArena_WriteSlotValue(LOBBY_SLOT_SIGNATURE);
++  Event_OpenMessage(ACTOR_ATTENDANT, 0);
++  BattleArena_WriteSlotValue(BATTLE_ARENA_SLOT_SIGNATURE);
 +}
 +
 +/// Talking to the attendant while a series runs: "Round n of m. Do you want to
@@ -114,15 +114,15 @@ index 0000000000..210f6f6170
 +static void ArenaSeries_GiveUp(void) {
 +  MessageArgument_ClearAll();
 +  MessageArgument_Push(
-+      gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK] + 1,
++      gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_STREAK] + 1,
 +      MESSAGE_ARGUMENT_NUMBER);
 +  Event_SetMessageId(MsgArenaGiveUpPrompt);
-+  FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++  Event_OpenMessage(ACTOR_ATTENDANT, 0);
 +  if (Event_AskYesNoWithActorAnimation(0, 0) == YES) {
 +    ArenaSeries_End();
 +  } else {
 +    Event_SetMessageId(MsgLobbyGoodLuck);
-+    FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++    Event_OpenMessage(ACTOR_ATTENDANT, 0);
 +  }
 +}
 +
@@ -130,38 +130,38 @@ index 0000000000..210f6f6170
 +/// say the round is won and leave the series running, or, after the last round,
 +/// say the tournament is cleared and end it as a win.
 +static void ArenaSeries_AfterWin(void) {
-+  s32 won = gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK];
++  s32 won = gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_STREAK];
 +
-+  Actor_SetAngleToward(ACTOR_ATTENDANT, gMainRoutineWork.leaderActorId, 0);
++  Actor_FaceActor(ACTOR_ATTENDANT, gMainRoutineState.leaderActorId, 0);
 +  if (won >= ARENA_LADDER_COUNT) {
 +    Event_SetMessageId(MsgArenaGauntletCleared);
-+    FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++    Event_OpenMessage(ACTOR_ATTENDANT, 0);
 +    ArenaSeries_End();
 +    return;
 +  }
 +  MessageArgument_ClearAll();
 +  MessageArgument_Push(won, MESSAGE_ARGUMENT_NUMBER);
 +  Event_SetMessageId(MsgArenaNextRound);
-+  FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++  Event_OpenMessage(ACTOR_ATTENDANT, 0);
 +}
 diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
-index 2b47d4b4f9..5e8494d232 100644
+index 00efa6fef7..f1db2e514d 100644
 --- a/games/tbs/src/scene/battle_arena.c
 +++ b/games/tbs/src/scene/battle_arena.c
-@@ -1065,6 +1065,10 @@ static s32 BattleArena_EnterBattle(void) {
+@@ -1002,6 +1002,10 @@ static s32 BattleArena_EnterBattle(void) {
+ #endif
  }
- 
  
 +#if ARENA_TRAINING
 +#include "arena_series.c"
 +#endif
 +
- /// Talking to ACTOR_ATTENDANT, who arranges a battle. With no partner, offers
- /// a monster battle. With one, calls off a monster battle in waiting, then asks
- /// the player to apply or to accept the partner's request; a yes is published
-@@ -1089,13 +1093,14 @@ static s32 BattleArena_ChooseBattleMode(void) {
+ /// Talking to the attendant, the woman behind the west counter, arranges a
+ /// battle. With no second Game Boy Advance on the cable she says "You do not
+ /// have an opponent. Would you like to battle a monster?", and Yes sends the
+@@ -1024,13 +1028,14 @@ static s32 BattleArena_ChooseBattleMode(void) {
    Event_Start();
-   Actor_SetAngleToward(ACTOR_ATTENDANT, gMainRoutineWork.leaderActorId, 0);
+   Actor_FaceActor(ACTOR_ATTENDANT, gMainRoutineState.leaderActorId, 0);
  #if ARENA_TRAINING
 -  // Solo or Multiplayer, unless a series is already under way.
 -  mode = 2;
@@ -178,11 +178,11 @@ index 2b47d4b4f9..5e8494d232 100644
 +  if (mode == 0)
 +    goto leave;
  #endif
-   // Look for the partner's signature twice, a frame apart.
-   if (BattleArena_PeerSlotMatches(LOBBY_SLOT_SIGNATURE) == 0) {
-@@ -1517,6 +1522,11 @@ static s32 BattleArena_SaveBattleResults(void) {
+   if (BattleArena_PeerSlotMatches(BATTLE_ARENA_SLOT_SIGNATURE) == 0) {
+     wait(1);
+@@ -1475,6 +1480,11 @@ static s32 BattleArena_SaveBattleResults(void) {
+ /// for its messages.
  static s32 BattleArena_SaveMonsterBattleResults(void) {
-   // See BattleArena_SaveBattleResults for the measured shared-helper trial.
    struct Window *window;
 +#if ARENA_TRAINING
 +  // The record is not written into a file here (no saving messages, and no
@@ -191,38 +191,38 @@ index 2b47d4b4f9..5e8494d232 100644
 +#endif
  
    Sound_Play(MUS_SAVED);
-   window = Message_OpenWindow(MsgLobbySavingMonsterBattle, 5, 4, 1);
-@@ -1615,7 +1625,9 @@ s32 BattleArena_RunRoundResult(void) {
-     if (gMainRoutineWork.coins > 999999)
-       gMainRoutineWork.coins = 999999;
+   window = Message_OpenWindow(MsgLobbySavingMonsterBattle, 5, 4,
+@@ -1575,7 +1585,9 @@ s32 Scene_Initialize(void) {
+     if (gMainRoutineState.holdings.coins > COIN_MAX)
+       gMainRoutineState.holdings.coins = COIN_MAX;
      ArenaMenu_ShowWin(ACTOR_ATTENDANT, reward);
 -#endif
 +    // The series stays running until it is lost, given up or cleared.
 +    ArenaSeries_AfterWin();
 +#else
      // The offer has two lines a level (FLAG_MONSTER_BATTLE_WINS, -1 when a
-     // series starts), the even line capped at 14. FLAG_AREA_TEMP_E8's byte
-     // counts the victories 0 to 2; the third raises the level and takes the
-@@ -1661,6 +1673,7 @@ s32 BattleArena_RunRoundResult(void) {
+     // series starts), the next monster's line going no further than
+     // MONSTER_OFFER_LAST_NEXT. FLAG_AREA_TEMP_E8's byte counts the victories 0
+@@ -1624,6 +1636,7 @@ s32 Scene_Initialize(void) {
        }
-       BattleArena_WriteSlotValue(LOBBY_SLOT_SIGNATURE);
+       BattleArena_WriteSlotValue(BATTLE_ARENA_SLOT_SIGNATURE);
      }
 +#endif
      Event_End();
-     // A monster battle lost: the series ends, and a new
-     // record is saved.
-@@ -1689,6 +1702,10 @@ s32 BattleArena_RunRoundResult(void) {
+     // A monster battle lost: the series ends, and a new best run is saved.
+   } else if (gMainRoutineState.entrance == BATTLE_ARENA_AFTER_MONSTER_LOSS) {
+@@ -1653,6 +1666,10 @@ s32 Scene_Initialize(void) {
      GameFlag_Clear(FLAG_MONSTER_BATTLE);
      FieldGameFlag_SetByte(FLAG_MONSTER_BATTLE_WINS, -1);
-     BattleArena_WriteSlotValue(LOBBY_SLOT_SIGNATURE);
+     BattleArena_WriteSlotValue(BATTLE_ARENA_SLOT_SIGNATURE);
 +#if ARENA_TRAINING
 +    // Full HP and PP: the only purpose now is to play again.
 +    Party_RestoreHpPp(1);
 +#endif
      Event_End();
-     // A linked battle won: count the win and the run; a
-     // longer run is the board's new record. Saved.
-@@ -1787,7 +1804,13 @@ u8 gBattleArena_SlotColumns[] = {
+     // A linked battle won: count the win and the run; a longer run is the
+     // board's new record. Saved.
+@@ -1751,7 +1768,13 @@ u8 gBattleArena_SlotColumns[] = {
  struct SceneEntrance gBattleArenaEntrances[] = {
      { BATTLE_ARENA_AFTER_LINK_LOSS, CONDITION_ALWAYS, 128, 0, 164, FACING_NORTH, 0, 16, 0, 416, 310, 0 },
      { BATTLE_ARENA_AFTER_LINK_WIN, CONDITION_ALWAYS, 352, 0, 148, FACING_NORTH, 0, 16, 0, 416, 310, 0 },
@@ -235,9 +235,9 @@ index 2b47d4b4f9..5e8494d232 100644
 +#endif
      { BATTLE_ARENA_AFTER_MONSTER_LOSS, CONDITION_ALWAYS, 216, 0, 200, FACING_WEST, 0, 16, 0, 416, 310, 0 },
      { BATTLE_ARENA_FROM_FILE_SCREEN, CONDITION_ALWAYS, 216, 0, 288, FACING_NORTH, 0, 16, 0, 416, 310, 0 },
-     { 0, CONDITION_ALWAYS, 216, 0, 208, FACING_NORTH, 0, -1, -1, -1, -1, 0 },
+     { ENTRANCE_DEFAULT, CONDITION_ALWAYS, 216, 0, 208, FACING_NORTH, 0, -1, -1, -1, -1, 0 },
 diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
-index bc3563a919..30da40eee4 100644
+index 1439ca92f9..550a216a9f 100644
 --- a/games/tbs/text/en.po
 +++ b/games/tbs/text/en.po
 @@ -65181,3 +65181,24 @@ msgstr "Raises Agility by {argument_signed_number}. Now {argument_signed_number}
@@ -266,5 +266,5 @@ index bc3563a919..30da40eee4 100644
 +"Monster Gauntlet!\n"
 +"Congratulations!{end_wait}"
 -- 
-2.53.0
+2.43.0
 

@@ -1,4 +1,4 @@
-From e8c2d3138b05967697781920e96aa481317e493a Mon Sep 17 00:00:00 2001
+From 623befa71c50f2e9bb9d59f651043e685a1a2a97 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Sun, 1 Nov 2026 16:02:17 +1100
 Subject: [PATCH] Arena: the file list shows the cups cleared instead of the
@@ -18,91 +18,104 @@ in the file list, which only uses Up, Down, A and B, if it is wanted later.)
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- games/tbs/include/menu/menu.h             |   2 +-
- games/tbs/include/module/window/screens.h |   9 +-
- games/tbs/include/system/save.h           |   4 +-
- games/tbs/src/window/screens/save.c       | 113 +++++++++++++---------
- 4 files changed, 74 insertions(+), 54 deletions(-)
+ games/tbs/include/menu/menu.h       |   2 +-
+ games/tbs/include/system/save.h     |   4 +-
+ games/tbs/include/window/screens.h  |  11 +--
+ games/tbs/src/window/screens_save.c | 121 ++++++++++++++++------------
+ 4 files changed, 80 insertions(+), 58 deletions(-)
 
 diff --git a/games/tbs/include/menu/menu.h b/games/tbs/include/menu/menu.h
-index 3033749205..6f4ce60af4 100644
+index 5d2dcd6638..09146071d6 100644
 --- a/games/tbs/include/menu/menu.h
 +++ b/games/tbs/include/menu/menu.h
-@@ -109,7 +109,7 @@ extern const u8 gMenu_HpString[];
+@@ -96,7 +96,7 @@ extern const u8 gMenu_HpString[];
+ /// The Status screen's level label: `Lv`; `Nv.` in Spanish, `Niv` in French.
  extern const u8 gMenu_LvString[];
- #endif
- /// The four Djinn sprites, one per element from Venus (90 to 93), that
--/// FileList_ShowDjinnSprites shows in a row.
-+/// FileList_ShowTrophySprites shows in a row.
- extern const s32 gMenu_PartySpriteResourceIds[4];
+ /// The four Djinn sprites, one per element from SPRITE_VENUS_DJINNI to
+-/// SPRITE_JUPITER_DJINNI, that FileList_ShowDjinnSprites shows in a row.
++/// SPRITE_JUPITER_DJINNI, that FileList_ShowTrophySprites shows in a row.
+ extern const s32 gFileList_DjinnSpriteIds[4];
  /// `.`, the decimal point of an item's stat multiplier (`x1.2`).
  extern u8 gMenu_PointString[];
-diff --git a/games/tbs/include/module/window/screens.h b/games/tbs/include/module/window/screens.h
-index 15f8fe43bf..9a702ed812 100644
---- a/games/tbs/include/module/window/screens.h
-+++ b/games/tbs/include/module/window/screens.h
-@@ -66,10 +66,11 @@ void FileList_ShowPartySprites(struct Window *origin, s32 x, s32 y,
-                                struct SaveFileSummary *descriptor);
- void FileList_HidePartySprites(void);
- void FileList_PlacePartySprites(void);
--void FileList_ShowDjinnSprites(struct Window *origin, s32 x, s32 y);
--void FileList_HideDjinnSprites(void);
--void FileList_PlaceDjinnSprites(void);
--void FileList_DrawDjinnCounts(struct Window *win, struct SaveFileSummary *row);
-+void FileList_ShowTrophySprites(struct Window *origin, s32 x, s32 y,
-+                                struct SaveFileSummary *summary);
-+void FileList_HideTrophySprites(void);
-+void FileList_PlaceTrophySprites(void);
-+void FileList_DrawTrophyCounts(struct Window *win, struct SaveFileSummary *row);
- void FileList_DrawSummary(struct Window *win, struct SaveFileSummary *rec);
- s32 FileList_SelectFile(s32 file, s32 mode);
- s32 Save_ToChosenFile(void);
 diff --git a/games/tbs/include/system/save.h b/games/tbs/include/system/save.h
-index 9c1f0184da..0885dcca7e 100644
+index 056a1e95bb..9563b77b26 100644
 --- a/games/tbs/include/system/save.h
 +++ b/games/tbs/include/system/save.h
-@@ -35,7 +35,9 @@ struct SaveFileSummary {
+@@ -39,7 +39,9 @@ struct SaveFileSummary {
    u16 area;          ///< area name number (Area_GetNameIndex)
    u32 playTime;      ///< frames
    u32 coins;
--  u8 djinn[4]; ///< the party's Djinn of each element
+-  s8 djinn[4]; ///< the party's Djinn of each element
 +  /// Arena romhack: the cups cleared in each tier (bronze, silver, gold, side
 +  /// cups), which the file list draws as four trophies (was the Djinn).
-+  u8 cups[4];
++  s8 cups[4];
    s8 party[5]; ///< up to four party members, ended by -1
-   /// Copied from MainRoutineWork.sendFlag, which saving at the end of the
+   /// Copied from MainRoutineState.sendFlag, which saving at the end of the
    /// game sets; the file list for cleared data lists a file without it as not
-diff --git a/games/tbs/src/window/screens/save.c b/games/tbs/src/window/screens/save.c
-index 88a2e431ec..6e34eba76b 100644
---- a/games/tbs/src/window/screens/save.c
-+++ b/games/tbs/src/window/screens/save.c
-@@ -3,6 +3,7 @@
- // Part of screens.c.
+diff --git a/games/tbs/include/window/screens.h b/games/tbs/include/window/screens.h
+index 227307ff30..936924b893 100644
+--- a/games/tbs/include/window/screens.h
++++ b/games/tbs/include/window/screens.h
+@@ -68,9 +68,10 @@ void FileList_ShowPartySprites(struct Window *window, s32 x, s32 y,
+                                struct SaveFileSummary *summary);
+ void FileList_HidePartySprites(void);
+ void FileList_PlacePartySprites(void);
+-void FileList_ShowDjinnSprites(struct Window *window, s32 x, s32 y);
+-void FileList_HideDjinnSprites(void);
+-void FileList_PlaceDjinnSprites(void);
++void FileList_ShowTrophySprites(struct Window *window, s32 x, s32 y,
++                                struct SaveFileSummary *summary);
++void FileList_HideTrophySprites(void);
++void FileList_PlaceTrophySprites(void);
  
+ /// What the file list is choosing a file for, which decides the files the
+ /// cursor may stop on.
+@@ -85,8 +86,8 @@ enum FileMenuMode {
+   FILE_LIST_CLEARED ///< the title's Send: cleared files only
+ };
+ 
+-void FileList_DrawDjinnCounts(struct Window *window,
+-                              struct SaveFileSummary *summary);
++void FileList_DrawTrophyCounts(struct Window *window,
++                               struct SaveFileSummary *summary);
+ void FileList_DrawSummary(struct Window *window,
+                           struct SaveFileSummary *summary);
+ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode);
+diff --git a/games/tbs/src/window/screens_save.c b/games/tbs/src/window/screens_save.c
+index f664eef08b..6be8266c8e 100644
+--- a/games/tbs/src/window/screens_save.c
++++ b/games/tbs/src/window/screens_save.c
+@@ -4,6 +4,7 @@
+ 
+ #include "screens_internal.h"
  #include "arena_config.h"
-+#include "module/arena.h"
++#include "arena/arena.h"
  
- #include "../screens_internal.h"
+ /// A file's half in bytes: the first is written to the file's slot, the
+ /// second to the slot SAVE_FILE_COUNT on. Then the file number for no free
+@@ -166,10 +167,10 @@ s32 Save_ScanFileSummaries(void) {
  
-@@ -156,8 +157,8 @@ s32 Save_ScanFileSummaries(void) {
- 
- /// Prepares the save buffer for writing: stamps the main routine's work with
+ /// Prepares the save buffer for writing: stamps the main routine's state with
  /// the time and options, then fills the file summary shown on the file menus
 -/// (the leader's name, level and class, the play time, area, coins, Djinn of
--/// each element, the party, the send flag and how many of game flags 48-127 are
+-/// each element, the party, the send flag and how many Djinn have been found)
+-/// and its checksum, the sum of SAVE_CHECKSUM_WORDS words from gGameFlagBytes
+-/// on.
 +/// (the leader's name, level and class, the play time, area, coins, the cups
-+/// cleared in each tier, the party, the send flag and how many of game flags 48-127 are
- /// set) and its checksum, the sum of the 968 words from gGameFlagBytes on.
- /// Returns the checksum.
++/// cleared in each tier, the party, the send flag and how many Djinn have been
++/// found) and its checksum, the sum of SAVE_CHECKSUM_WORDS words from
++/// gGameFlagBytes on.
  u32 Save_BuildFileSummary(void) {
-@@ -198,10 +199,15 @@ u32 Save_BuildFileSummary(void) {
-       Area_GetNameIndexFar(gMainRoutineWork.next, gMainRoutineWork.entrance);
+   u16 members[14];
+   struct SaveFileSummary *summary;
+@@ -213,10 +214,15 @@ u32 Save_BuildFileSummary(void) {
+       Area_GetNameIndexFar(gMainRoutineState.next, gMainRoutineState.entrance);
    summary->classId = leader->classId;
-   summary->coins = gMainRoutineWork.coins;
--  summary->djinn[0] = Party_SumDjinnCountsFar(0);
--  summary->djinn[1] = Party_SumDjinnCountsFar(1);
--  summary->djinn[2] = Party_SumDjinnCountsFar(2);
--  summary->djinn[3] = Party_SumDjinnCountsFar(3);
+   summary->coins = gMainRoutineState.holdings.coins;
+-  summary->djinn[ELEMENT_VENUS] = Party_SumDjinnCountsFar(ELEMENT_VENUS);
+-  summary->djinn[ELEMENT_MERCURY] = Party_SumDjinnCountsFar(ELEMENT_MERCURY);
+-  summary->djinn[ELEMENT_MARS] = Party_SumDjinnCountsFar(ELEMENT_MARS);
+-  summary->djinn[ELEMENT_JUPITER] = Party_SumDjinnCountsFar(ELEMENT_JUPITER);
 +  // Arena romhack: the cups cleared, a count for each tier of the trophies in
 +  // the lobby (the file list's four trophies): bronze (cups 0 and 1), silver
 +  // (2 and 3), gold (4 to 6) and the side cups (7 on).
@@ -114,17 +127,18 @@ index 88a2e431ec..6e34eba76b 100644
 +  }
    // Up to four party members, ended by -1.
    Party_ListMembersFar(members);
-   for (i = 0; i <= 3 && members[i] != 255; i++)
-@@ -592,7 +598,7 @@ void Window_FillTilemapRect(struct Window *window, s32 x, s32 y, s32 width,
+   for (i = 0; i <= 3 && members[i] != BATTLE_UNIT_LIST_END; i++)
+@@ -583,7 +589,8 @@ void Window_FillTilemapRect(struct Window *window, s32 x, s32 y, s32 width,
  #endif
  
- /// The file list shows the chosen file's party as walking sprites in a
--/// row, and four Djinn sprites, one for each element, over the file's Djinn
-+/// row, and four trophy sprites, one for each tier of cups, over the file's cup
- /// counts. Each sprite stands three tiles (24 pixels) from the one before.
+ /// The file list shows the chosen file's party as standing sprites in a row,
+-/// and four Djinn sprites, one for each element, over the file's Djinn counts.
++/// and four trophy sprites, one for each tier of cups, over the file's cup
++/// counts.
  #define FILE_LIST_SPRITE_SPACING 3
- /// Task priority of the tasks that place the sprites every frame.
-@@ -672,39 +678,49 @@ void FileList_PlacePartySprites(void) {
+ 
+ /// Shows the party of save file `summary` (up to four party members) as sprites
+@@ -658,39 +665,49 @@ void FileList_PlacePartySprites(void) {
    }
  }
  
@@ -141,15 +155,15 @@ index 88a2e431ec..6e34eba76b 100644
 +/// nothing when `window` is NULL.
 +void FileList_ShowTrophySprites(struct Window *window, s32 x, s32 y,
 +                                struct SaveFileSummary *summary) {
-   struct ItemMenuFiguresView *menu = gMenuWork;
+   struct ItemMenuState *menu = gMenuState;
    s32 i;
  
    if (window != NULL) {
      for (i = 0; i < 4; i++) {
--      struct Sprite *sprite = Sprite_CreateFar(gMenu_PartySpriteResourceIds[i]);
+-      struct Sprite *sprite = Sprite_CreateFar(gFileList_DjinnSpriteIds[i]);
 -
 -      if (sprite != NULL) {
--        Sprite_StartAnimationFar(sprite, 2);
+-        Sprite_StartAnimationFar(sprite, ANIM_WALK);
 -        sprite->flags = 0;
 -        sprite->image.priority = 0;
 +      struct Sprite *sprite = NULL;
@@ -157,22 +171,22 @@ index 88a2e431ec..6e34eba76b 100644
 +      if (summary->cups[i] != 0) {
 +        sprite = Sprite_CreateFar(sFileListTrophySprites[i]);
 +        if (sprite != NULL) {
-+          Sprite_StartAnimationFar(sprite, 2);
++          Sprite_StartAnimationFar(sprite, ANIM_WALK);
 +          sprite->flags = 0;
 +          sprite->image.priority = 0;
 +        }
        }
  
-       menu->animations[i] = sprite;
-       menu->positionsX[i] =
+       menu->figures[i] = sprite;
+       menu->figureX[i] =
            (window->x + x + i * FILE_LIST_SPRITE_SPACING) * 8 + 16;
--      menu->positionsY[i] = (window->y + y) * 8 + 16;
+-      menu->figureY[i] = (window->y + y) * 8 + 16;
 +      // Three pixels lower than the Djinn were: a trophy is taller.
-+      menu->positionsY[i] = (window->y + y) * 8 + 19;
++      menu->figureY[i] = (window->y + y) * 8 + 19;
      }
  
--    Task_Add(FileList_PlaceDjinnSprites, FILE_LIST_SPRITE_PRIORITY);
-+    Task_Add(FileList_PlaceTrophySprites, FILE_LIST_SPRITE_PRIORITY);
+-    Task_Add(FileList_PlaceDjinnSprites, TASK_PASS_FRAME);
++    Task_Add(FileList_PlaceTrophySprites, TASK_PASS_FRAME);
    }
  }
  
@@ -180,15 +194,15 @@ index 88a2e431ec..6e34eba76b 100644
 -void FileList_HideDjinnSprites(void) {
 +/// Stops placing the trophy sprites of the file list and releases them.
 +void FileList_HideTrophySprites(void) {
-   struct ItemMenuFiguresView *menu = gMenuWork;
+   struct ItemMenuState *menu = gMenuState;
    s32 i;
  
 -  Task_Remove(FileList_PlaceDjinnSprites);
 +  Task_Remove(FileList_PlaceTrophySprites);
    for (i = 0; i < 4; i++) {
-     if (menu->animations[i] != NULL) {
-       Sprite_DestroyFar(menu->animations[i]);
-@@ -713,9 +729,9 @@ void FileList_HideDjinnSprites(void) {
+     if (menu->figures[i] != NULL) {
+       Sprite_DestroyFar(menu->figures[i]);
+@@ -699,9 +716,9 @@ void FileList_HideDjinnSprites(void) {
    }
  }
  
@@ -197,41 +211,41 @@ index 88a2e431ec..6e34eba76b 100644
  /// place, at scale 1.0, for this frame.
 -void FileList_PlaceDjinnSprites(void) {
 +void FileList_PlaceTrophySprites(void) {
-   struct ItemMenuFiguresView *menu = gMenuWork;
+   struct ItemMenuState *menu = gMenuState;
    struct SpriteScale scale;
    struct SpritePlacement position;
-@@ -741,16 +757,16 @@ void FileList_PlaceDjinnSprites(void) {
-   } while (index <= 3);
+@@ -726,15 +743,16 @@ void FileList_PlaceDjinnSprites(void) {
+   }
  }
  
 -/// Draws the Djinn counts of save file `summary`, one for each element, two
--/// digits each, 24 pixels apart on row 16 of `window`, under the Djinn
+-/// digits each, 24 pixels apart on row 16 of `window`, under the Djinn sprites.
+-void FileList_DrawDjinnCounts(struct Window *window,
+-                              struct SaveFileSummary *summary) {
 +/// Draws the cup counts of save file `summary`, one for each tier, two
 +/// digits each, 24 pixels apart on row 16 of `window`, under the trophy
- /// sprites. Does nothing when `window` is NULL.
--void FileList_DrawDjinnCounts(struct Window *window,
++/// sprites.
 +void FileList_DrawTrophyCounts(struct Window *window,
-                               struct SaveFileSummary *summary) {
++                               struct SaveFileSummary *summary) {
    s32 i;
  
    if (window != NULL) {
      for (i = 0; i < 4; i++)
--      Text_DrawNumberAtOffset((s8)summary->djinn[i], 2, window,
-+      Text_DrawNumberAtOffset((s8)summary->cups[i], 2, window,
+-      Text_DrawNumberAtOffset(summary->djinn[i], 2, window,
++      Text_DrawNumberAtOffset(summary->cups[i], 2, window,
                                i * FILE_LIST_SPRITE_SPACING * 8, 16);
    }
  }
-@@ -836,7 +852,7 @@ enum FileMenuMode {
+@@ -802,14 +820,14 @@ void FileList_DrawSummary(struct Window *window,
  
- // The file list: lists the three files with each one's leader and area
- // (or why it cannot be chosen) and, for the file under the cursor, its
--// summary, its party and its Djinn, with the file's own palette glow. The
-+// summary, its party and its cups, with the file's own palette glow. The
- // cursor starts on `file` and moves up and down over the files `mode` allows
- // (see FileMenuMode). Returns the file chosen with A, -1 when cancelled with
- // B, or FILE_LIST_NO_FILE when no file is allowed.
-@@ -846,7 +862,7 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
-   struct SaveWork *save;
+ /// The file list: lists the three files with each one's leader and area (or why
+ /// it cannot be chosen) and, for the file under the cursor, its summary, its
+-/// party and its Djinn, with the file's own palette glow.
++/// party and its cups, with the file's own palette glow.
+ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
+   struct Window *fileList;
+ #if TBS_PATCH_1
+   struct SaveState *save;
    struct Window *summaryWindow;
    struct Window *partyWindow;
 -  struct Window *djinnWindow;
@@ -239,36 +253,36 @@ index 88a2e431ec..6e34eba76b 100644
    struct SaveFileSummary *summary;
    struct WindowSprite *modePicture;
    s32 summaryDirty;
-@@ -860,7 +876,7 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
+@@ -823,7 +841,7 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
    struct Window *summaryWindow;
-   struct SaveWork *save;
+   struct SaveState *save;
    struct Window *partyWindow;
 -  struct Window *djinnWindow;
 +  struct Window *trophyWindow;
    struct SaveFileSummary *summary;
    struct WindowSprite *modePicture;
    s32 cursorStyle;
-@@ -881,7 +897,7 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
-   save = *(gHeapSlots + HEAP_SLOT_SAVE);
+@@ -844,7 +862,7 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
+   save = gSaveState;
    summaryWindow = NULL;
    partyWindow = NULL;
 -  djinnWindow = NULL;
 +  trophyWindow = NULL;
    summaryDirty = 1;
-   work = *(gHeapSlots + HEAP_SLOT_WINDOW);
+   state = WINDOW_STATE;
    buildStamp = BuildStamp_GetTimeFar();
-@@ -1079,30 +1095,31 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
+@@ -1042,30 +1060,31 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
          FileList_ShowPartySprites(partyWindow, 0, 0,
                                    &save->summary[selectedFile]);
          wait(1);
--        if ((s8)save->summary[selectedFile].djinn[0] +
--                (s8)save->summary[selectedFile].djinn[1] +
--                (s8)save->summary[selectedFile].djinn[2] +
--                (s8)save->summary[selectedFile].djinn[3] !=
-+        if ((s8)save->summary[selectedFile].cups[0] +
-+                (s8)save->summary[selectedFile].cups[1] +
-+                (s8)save->summary[selectedFile].cups[2] +
-+                (s8)save->summary[selectedFile].cups[3] !=
+-        if (save->summary[selectedFile].djinn[0] +
+-                save->summary[selectedFile].djinn[1] +
+-                save->summary[selectedFile].djinn[2] +
+-                save->summary[selectedFile].djinn[3] !=
++        if (save->summary[selectedFile].cups[0] +
++                save->summary[selectedFile].cups[1] +
++                save->summary[selectedFile].cups[2] +
++                save->summary[selectedFile].cups[3] !=
              0) {
 -          if (djinnWindow == NULL)
 -            djinnWindow = Window_Create(16, 14, 13, 5, WINDOW_FLAG_INSTANT);
@@ -290,8 +304,8 @@ index 88a2e431ec..6e34eba76b 100644
 +          trophyWindow = NULL;
          }
        } else {
-         WindowColor_Apply(gMainRoutineWork.windowColor[0],
-                           gMainRoutineWork.windowColor[1]);
+         WindowColor_Apply(gMainRoutineState.windowHue,
+                           gMainRoutineState.windowBrightness);
 -        FileList_HideDjinnSprites();
 +        FileList_HideTrophySprites();
          FileList_HidePartySprites();
@@ -304,7 +318,7 @@ index 88a2e431ec..6e34eba76b 100644
          partyWindow = NULL;
          summaryWindow = NULL;
        }
-@@ -1163,9 +1180,9 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
+@@ -1126,9 +1145,9 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
      }
    }
    // Close the menu and return to the current game's palette glow.
@@ -317,5 +331,5 @@ index 88a2e431ec..6e34eba76b 100644
    Window_Close(summaryWindow, 2);
    Window_Close(fileList, 2);
 -- 
-2.53.0
+2.43.0
 

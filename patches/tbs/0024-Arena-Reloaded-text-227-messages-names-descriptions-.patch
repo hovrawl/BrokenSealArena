@@ -1,4 +1,4 @@
-From 9ef19dff59cfd682b8929d716533d08dc772bd9f Mon Sep 17 00:00:00 2001
+From 13b5e1c078c64b9ff10399808566326057621800 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Sun, 1 Nov 2026 09:16:32 +1100
 Subject: [PATCH] Arena: Reloaded text (227 messages: names, descriptions,
@@ -8,505 +8,13 @@ Decoded from the Reloaded v1.83a patch's message archive by scripts/ips-text-dif
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- games/tbs/src/game/ability_table.c | 108 +++----
- games/tbs/src/game/class_table.c   | 128 ++++----
- games/tbs/src/game/enemy_table.c   |  14 +-
- games/tbs/src/game/item_table.c    |   4 +-
- games/tbs/text/en.po               | 464 ++++++++++++++---------------
- 5 files changed, 358 insertions(+), 360 deletions(-)
+ games/tbs/src/game/class_table.c | 124 +++++----
+ games/tbs/src/game/enemy_table.c |  14 +-
+ games/tbs/text/en.po             | 464 +++++++++++++++----------------
+ 3 files changed, 302 insertions(+), 300 deletions(-)
 
-diff --git a/games/tbs/src/game/ability_table.c b/games/tbs/src/game/ability_table.c
-index 8ca3f5023d..71326f25c6 100644
---- a/games/tbs/src/game/ability_table.c
-+++ b/games/tbs/src/game/ability_table.c
-@@ -212,7 +212,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .targetMode = ABILITY_TARGET_ONE,
-         .element = ELEMENT_VENUS,
-     },
--    // ?
-+    // Remedy
-     {
-         .targetMode = ABILITY_TARGET_ALLIES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
-@@ -523,7 +523,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .ppCost = 22,
-         .power = 100,
-     },
--    // Blast
-+    // Starburst
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -734,7 +734,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .ppCost = 32,
-         .power = 145,
-     },
--    // ?
-+    // Punishment
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -744,7 +744,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .ppCost = 8,
-         .power = 45,
-     },
--    // ?
-+    // Retribution
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -754,7 +754,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .ppCost = 22,
-         .power = 115,
-     },
--    // ?
-+    // Scourge
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -1036,7 +1036,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 3,
-         .ppCost = 16,
-     },
--    // Taint
-+    // Poison
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
-@@ -1046,7 +1046,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .ppCost = 6,
-     },
--    // Poison
-+    // Toxic
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
-@@ -1193,7 +1193,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .ppCost = 5,
-     },
--    // ?
-+    // Psy Drain
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
-@@ -1204,7 +1204,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .ppCost = 1,
-         .power = 15,
-     },
--    // ?
-+    // Raise
-     {
-         .targetMode = ABILITY_TARGET_ALLIES,
-         .flags = ABILITY_USABLE_IN_FIELD | ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
-@@ -1215,7 +1215,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .ppCost = 22,
-         .power = 500,
-     },
--    // ?
-+    // Sweep
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
-@@ -1516,7 +1516,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .ppCost = 26,
-         .power = 120,
-     },
--    // Demon Spear
-+    // Bravery
-     {
-         .targetMode = ABILITY_TARGET_ALLIES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
-@@ -1526,7 +1526,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .ppCost = 8,
-     },
--    // Angel Spear
-+    // Courage
-     {
-         .targetMode = ABILITY_TARGET_ALLIES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
-@@ -1717,7 +1717,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .ppCost = 19,
-         .power = 90,
-     },
--    // Thunderstorm
-+    // Thunderhead
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -1842,7 +1842,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .targetMode = ABILITY_TARGET_ONE,
-         .element = ELEMENT_VENUS,
-     },
--    // ?
-+    // Tyrfing
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
-@@ -1910,7 +1910,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 17,
-     },
--    // Aqua Sock
-+    // Aqua Strike
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
-@@ -1927,7 +1927,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 17,
-     },
--    // Frost Bite
-+    // Frostbite
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -1954,7 +1954,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 95,
-     },
--    // Psy Leech
-+    // Psynergy Leech
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -1963,7 +1963,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 60,
-     },
--    // Broil
-+    // Fire Attack
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
-@@ -1989,7 +1989,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 17,
-     },
--    // Barrage
-+    // Explosion
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
-@@ -1998,7 +1998,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 17,
-     },
--    // Demon Fire
-+    // Demonfire
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
-@@ -2042,7 +2042,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 18,
-     },
--    // Murk
-+    // Milky Cloud
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -2294,7 +2294,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 1,
-     },
--    // ?
-+    // Mountain Water
-     {
-         .targetMode = ABILITY_TARGET_ALLIES,
-         .flags = ABILITY_USABLE_IN_FIELD | ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_HEAL_PP,
-@@ -2334,7 +2334,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 100,
-     },
--    // ?
-+    // {article_class:3}Fairy Ring
-     {
-         .targetMode = ABILITY_TARGET_ALLIES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
-@@ -3313,7 +3313,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .targetMode = ABILITY_TARGET_ONE,
-         .element = ELEMENT_VENUS,
-     },
--    // ?
-+    // Break
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_EFFECT,
-@@ -3323,7 +3323,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = ABILITY_RANGE_ALL,
-         .ppCost = 1,
-     },
--    // ?
-+    // Freeze Prism
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -3333,7 +3333,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .ppCost = 1,
-         .power = 160,
-     },
--    // ?
-+    // Spark Plasma
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -3343,7 +3343,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .ppCost = 1,
-         .power = 175,
-     },
--    // ?
-+    // Inferno
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -3358,7 +3358,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .targetMode = ABILITY_TARGET_ONE,
-         .element = ELEMENT_VENUS,
-     },
--    // ?
-+    // Mystic Flame
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -3366,7 +3366,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 50,
-     },
--    // ?
-+    // Cutting Edge
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
-@@ -3374,7 +3374,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 17,
-     },
--    // Fire Blessing
-+    // Fire Breath
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
-@@ -3382,7 +3382,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 55,
-     },
--    // Fire Blessing
-+    // Fire Breath
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
-@@ -3390,7 +3390,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 75,
-     },
--    // Fire Blessing
-+    // Fire Breath
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
-@@ -3398,7 +3398,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 105,
-     },
--    // Water Blessing
-+    // Water Breath
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
-@@ -3406,7 +3406,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 35,
-     },
--    // Water Blessing
-+    // Water Breath
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
-@@ -3414,7 +3414,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 60,
-     },
--    // Water Blessing
-+    // Water Breath
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
-@@ -3422,7 +3422,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 80,
-     },
--    // Ice Blessing
-+    // Blizzard Breath
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
-@@ -3430,7 +3430,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 60,
-     },
--    // Ice Blessing
-+    // Blizzard Breath
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
-@@ -3438,7 +3438,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 90,
-     },
--    // Ice Blessing
-+    // Blizzard Breath
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
-@@ -3446,7 +3446,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 120,
-     },
--    // Dark Blessing
-+    // Black Breath
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
-@@ -3455,7 +3455,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 70,
-     },
--    // Dark Blessing
-+    // Black Breath
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
-@@ -3464,7 +3464,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 110,
-     },
--    // Dark Blessing
-+    // Acid Breath
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
-@@ -3473,7 +3473,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 120,
-     },
--    // Acid Blessing
-+    // Acid Breath
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
-@@ -3482,7 +3482,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 160,
-     },
--    // Storm Blessing
-+    // Thunder Breath
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
-@@ -3490,7 +3490,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 120,
-     },
--    // Storm Blessing
-+    // Thunder Breath
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
-@@ -3582,7 +3582,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 120,
-     },
--    // Evil Blessing
-+    // Demon Breath
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ENEMY_DAMAGE,
-@@ -3600,7 +3600,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 100,
-     },
--    // ?
-+    // War Cry
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -3609,7 +3609,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 45,
-     },
--    // ?
-+    // Ghostly Rumble
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -3617,7 +3617,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 2,
-         .power = 35,
-     },
--    // ?
-+    // Ghostly Rumble
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -3625,7 +3625,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 15,
-     },
--    // Rumble
-+    // Ghostly Rumble
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -3840,7 +3840,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 12,
-     },
--    // Mortal Blow
-+    // Suicide Sting
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
-@@ -3936,7 +3936,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 17,
-     },
--    // Soothing Star
-+    // Healing Spores
-     {
-         .targetMode = ABILITY_TARGET_ALLIES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_HEAL_HP,
-@@ -3960,7 +3960,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .effect = ABILITY_EFFECT_ATTACK_DOWN,
-         .range = 3,
-     },
--    // Mad Spatter
-+    // Mud Spatter
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_DAMAGE,
-@@ -4156,7 +4156,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 18,
-     },
--    // Death Size
-+    // Death Scythe
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
-@@ -4199,7 +4199,7 @@ const struct AbilityDefinition gAbilityDefinitions[] = {
-         .range = 1,
-         .power = 18,
-     },
--    // Thrash
-+    // Ribbit Stomp
-     {
-         .targetMode = ABILITY_TARGET_FOES,
-         .flags = ABILITY_USABLE_IN_BATTLE | ABILITY_FORMULA_ATTACK_MULTIPLIED,
 diff --git a/games/tbs/src/game/class_table.c b/games/tbs/src/game/class_table.c
-index e05bbd6044..eef526c3a4 100644
+index bfc4ba1ba7..e97407b89d 100644
 --- a/games/tbs/src/game/class_table.c
 +++ b/games/tbs/src/game/class_table.c
 @@ -143,7 +143,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
@@ -516,666 +24,640 @@ index e05bbd6044..eef526c3a4 100644
 -    // Slayer
 +    // Sovereign
      {
-         .series = 1,
+         .series = CLASS_SERIES_SQUIRE,
          .required = {13},
-@@ -259,7 +259,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -255,7 +255,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
          .ward = 105,
      },
 -    // Champion
 +    // Baron
      {
-         .series = 2,
+         .series = CLASS_SERIES_GUARD,
          .required = {0, 0, 11},
-@@ -287,7 +287,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -283,7 +283,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
          .ward = 105,
      },
 -    // Hero
 +    // Phalanx
      {
-         .series = 2,
+         .series = CLASS_SERIES_GUARD,
          .required = {0, 0, 13},
-@@ -325,7 +325,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -316,7 +316,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
      {0},
-     // ?
+     {0},
      {0},
 -    // Wind Seer
 +    // Bolt User
      {
-         .series = 7,
+         .series = CLASS_SERIES_WIND_SEER,
          .required = {0, 0, 0, 5},
-@@ -380,7 +380,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -371,7 +371,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_HAUNT, ABILITY_EFFECT_REFLECT},
          .ward = 90,
      },
 -    // Mage
 +    // Illusionist
      {
-         .series = 7,
+         .series = CLASS_SERIES_WIND_SEER,
          .required = {0, 0, 0, 9},
-@@ -411,7 +411,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -402,7 +402,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_HAUNT, ABILITY_EFFECT_REFLECT},
          .ward = 90,
      },
 -    // Magister
 +    // Archmage
      {
-         .series = 7,
+         .series = CLASS_SERIES_WIND_SEER,
          .required = {0, 0, 0, 11},
-@@ -483,7 +483,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -469,7 +469,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
      {0},
-     // ?
+     {0},
      {0},
 -    // Water Seer
 +    // Water User
      {
-         .series = 6,
+         .series = CLASS_SERIES_WATER_SEER,
          .required = {0, 5},
-@@ -511,7 +511,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -497,7 +497,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          },
          .ward = 90,
      },
 -    // Scribe
 +    // Officiant
      {
-         .series = 6,
+         .series = CLASS_SERIES_WATER_SEER,
          .required = {0, 7},
-@@ -568,7 +568,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -554,7 +554,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          },
          .ward = 90,
      },
 -    // Paragon
 +    // Saint
      {
-         .series = 6,
+         .series = CLASS_SERIES_WATER_SEER,
          .required = {0, 11},
-@@ -694,7 +694,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -675,7 +675,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
          .ward = 100,
      },
 -    // Cavalier
 +    // Valiant
      {
-         .series = 3,
+         .series = CLASS_SERIES_SWORDSMAN,
          .required = {5, 4},
-@@ -724,7 +724,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -705,7 +705,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
          .ward = 100,
      },
 -    // Guardian
 +    // Fearless
      {
-         .series = 3,
+         .series = CLASS_SERIES_SWORDSMAN,
          .required = {5, 5},
-@@ -754,7 +754,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -735,7 +735,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
          .ward = 100,
      },
 -    // Protector
 +    // Paragon
      {
-         .series = 3,
+         .series = CLASS_SERIES_SWORDSMAN,
          .required = {6, 6},
-@@ -794,7 +794,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -770,7 +770,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
      {0},
-     // ?
+     {0},
      {0},
 -    // Swordsman
 +    // Armed
      {
-         .series = 3,
+         .series = CLASS_SERIES_SWORDSMAN,
          .required = {0, 0, 5},
-@@ -820,7 +820,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -796,7 +796,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
          .ward = 105,
      },
 -    // Defender
 +    // Fair
      {
-         .series = 3,
+         .series = CLASS_SERIES_SWORDSMAN,
          .required = {0, 2, 5},
-@@ -848,7 +848,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -824,7 +824,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
          .ward = 105,
      },
 -    // Cavalier
 +    // Virtuous
      {
-         .series = 3,
+         .series = CLASS_SERIES_SWORDSMAN,
          .required = {0, 4, 5},
-@@ -878,7 +878,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -854,7 +854,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
          .ward = 105,
      },
 -    // Luminier
 +    // Righteous
      {
-         .series = 3,
+         .series = CLASS_SERIES_SWORDSMAN,
          .required = {0, 5, 5},
-@@ -908,7 +908,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -884,7 +884,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
          .ward = 105,
      },
 -    // Radiant
 +    // Luminier
      {
-         .series = 3,
+         .series = CLASS_SERIES_SWORDSMAN,
          .required = {0, 6, 6},
-@@ -948,7 +948,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -919,7 +919,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
      {0},
-     // ?
+     {0},
      {0},
 -    // Dragoon
 +    // White Knight
      {
-         .series = 3,
+         .series = CLASS_SERIES_SWORDSMAN,
          .required = {3, 3, 3},
-@@ -1081,7 +1081,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1045,7 +1045,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
          .ward = 105,
      },
 -    // Illusionist
 +    // Practicant
      {
-         .series = 5,
+         .series = CLASS_SERIES_APPRENTICE,
          .required = {5, 0, 0, 2},
-@@ -1112,7 +1112,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1076,7 +1076,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
          .ward = 105,
      },
 -    // Enchanter
 +    // Psionicist
      {
-         .series = 5,
+         .series = CLASS_SERIES_APPRENTICE,
          .required = {5, 0, 0, 4},
-@@ -1143,7 +1143,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1107,7 +1107,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
          .ward = 105,
      },
 -    // Conjurer
 +    // Spellblade
      {
-         .series = 5,
+         .series = CLASS_SERIES_APPRENTICE,
          .required = {5, 0, 0, 5},
-@@ -1174,7 +1174,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1138,7 +1138,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
          .ward = 105,
      },
 -    // War Adept
 +    // Psy Knight
      {
-         .series = 5,
+         .series = CLASS_SERIES_APPRENTICE,
          .required = {6, 0, 0, 6},
-@@ -1245,7 +1245,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1204,7 +1204,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
          .ward = 100,
      },
 -    // Illusionist
 +    // Pupil
      {
-         .series = 5,
+         .series = CLASS_SERIES_APPRENTICE,
          .required = {0, 0, 5, 2},
-@@ -1275,7 +1275,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1234,7 +1234,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
          .ward = 100,
      },
 -    // Enchanter
 +    // Fated
      {
-         .series = 5,
+         .series = CLASS_SERIES_APPRENTICE,
          .required = {0, 0, 5, 4},
-@@ -1305,7 +1305,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1264,7 +1264,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
          .ward = 100,
      },
 -    // Conjurer
 +    // Mystic Knight
      {
-         .series = 5,
+         .series = CLASS_SERIES_APPRENTICE,
          .required = {0, 0, 5, 5},
-@@ -1335,7 +1335,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1294,7 +1294,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
          .ward = 100,
      },
 -    // War Adept
 +    // Star Knight
      {
-         .series = 5,
+         .series = CLASS_SERIES_APPRENTICE,
          .required = {0, 0, 6, 6},
-@@ -1375,7 +1375,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1329,7 +1329,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
      {0},
-     // ?
+     {0},
      {0},
 -    // Ninja
 +    // Shinobi
      {
-         .series = 5,
+         .series = CLASS_SERIES_APPRENTICE,
          .required = {3, 0, 3, 3},
-@@ -1405,7 +1405,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1359,7 +1359,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
          .ward = 105,
      },
 -    // Disciple
 +    // Ninja
      {
-         .series = 5,
+         .series = CLASS_SERIES_APPRENTICE,
          .required = {4, 0, 4, 4},
-@@ -1435,7 +1435,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1389,7 +1389,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SEAL, ABILITY_EFFECT_SEAL_2_TURNS},
          .ward = 105,
      },
 -    // Master
 +    // Jonin
      {
-         .series = 5,
+         .series = CLASS_SERIES_APPRENTICE,
          .required = {4, 0, 4, 5},
-@@ -1479,7 +1479,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1426,7 +1426,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
      {0},
-     // ?
+     {0},
      {0},
 -    // Seer
 +    // Herbalist
      {
-         .series = 8,
+         .series = CLASS_SERIES_SEER,
          .required = {1, 5},
-@@ -1508,7 +1508,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1455,7 +1455,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          },
          .ward = 90,
      },
 -    // Diviner
 +    // Naturalist
      {
-         .series = 8,
+         .series = CLASS_SERIES_SEER,
          .required = {2, 5},
-@@ -1537,7 +1537,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1484,7 +1484,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          },
          .ward = 90,
      },
 -    // Shaman
 +    // Therapist
      {
-         .series = 8,
+         .series = CLASS_SERIES_SEER,
          .required = {4, 5},
-@@ -1567,7 +1567,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1514,7 +1514,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          },
          .ward = 90,
      },
 -    // Druid
 +    // Healer
      {
-         .series = 8,
+         .series = CLASS_SERIES_SEER,
          .required = {5, 5},
-@@ -1597,7 +1597,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1544,7 +1544,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          },
          .ward = 90,
      },
 -    // Oracle
 +    // Thaumaturge
      {
-         .series = 8,
+         .series = CLASS_SERIES_SEER,
          .required = {6, 6},
-@@ -1667,7 +1667,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1609,7 +1609,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SLEEP},
          .ward = 90,
      },
 -    // Diviner
 +    // Haruspex
      {
-         .series = 8,
+         .series = CLASS_SERIES_SEER,
          .required = {2, 0, 0, 5},
-@@ -1698,7 +1698,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1640,7 +1640,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SLEEP},
          .ward = 90,
      },
 -    // Shaman
 +    // Diviner
      {
-         .series = 8,
+         .series = CLASS_SERIES_SEER,
          .required = {4, 0, 0, 5},
-@@ -1729,7 +1729,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1671,7 +1671,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SLEEP},
          .ward = 90,
      },
 -    // Druid
 +    // Clairvoyant
      {
-         .series = 8,
+         .series = CLASS_SERIES_SEER,
          .required = {5, 0, 0, 5},
-@@ -1760,7 +1760,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1702,7 +1702,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SLEEP},
          .ward = 90,
      },
 -    // Oracle
 +    // Augur
      {
-         .series = 8,
+         .series = CLASS_SERIES_SEER,
          .required = {6, 0, 0, 6},
-@@ -1801,7 +1801,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1738,7 +1738,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
      {0},
-     // ?
+     {0},
      {0},
 -    // Medium
 +    // Elementalist
      {
-         .series = 8,
+         .series = CLASS_SERIES_SEER,
          .required = {3, 3, 0, 3},
-@@ -1832,7 +1832,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1769,7 +1769,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SLEEP},
          .ward = 90,
      },
 -    // Dark Mage
 +    // Planar Mage
      {
-         .series = 8,
+         .series = CLASS_SERIES_SEER,
          .required = {4, 4, 0, 4},
-@@ -1863,7 +1863,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1800,7 +1800,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SLEEP},
          .ward = 90,
      },
 -    // Death Mage
 +    // Worldwaker
      {
-         .series = 8,
+         .series = CLASS_SERIES_SEER,
          .required = {5, 4, 0, 4},
-@@ -1908,7 +1908,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1838,7 +1838,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
      {0},
-     // ?
+     {0},
      {0},
 -    // Pilgrim
 +    // Monk
      {
-         .series = 9,
+         .series = CLASS_SERIES_PILGRIM,
          .required = {0, 5},
-@@ -1935,7 +1935,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1865,7 +1865,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_HAUNT, ABILITY_EFFECT_REFLECT},
          .ward = 95,
      },
 -    // Wanderer
 +    // Yamabushi
      {
-         .series = 9,
+         .series = CLASS_SERIES_PILGRIM,
          .required = {0, 5, 2},
-@@ -1995,7 +1995,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1925,7 +1925,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_HAUNT, ABILITY_EFFECT_REFLECT},
          .ward = 95,
      },
 -    // Water Monk
 +    // Shugenja
      {
-         .series = 9,
+         .series = CLASS_SERIES_PILGRIM,
          .required = {0, 5, 5},
-@@ -2026,7 +2026,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1956,7 +1956,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_HAUNT, ABILITY_EFFECT_REFLECT},
          .ward = 95,
      },
 -    // Guru
 +    // Enlightened
      {
-         .series = 9,
+         .series = CLASS_SERIES_PILGRIM,
          .required = {0, 6, 6},
-@@ -2067,7 +2067,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -1992,7 +1992,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
      {0},
-     // ?
+     {0},
      {0},
 -    // Pilgrim
 +    // Disciple
      {
-         .series = 9,
+         .series = CLASS_SERIES_PILGRIM,
          .required = {0, 0, 0, 5},
-@@ -2091,7 +2091,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2016,7 +2016,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_STUN, ABILITY_EFFECT_CHARM},
          .ward = 90,
      },
 -    // Wanderer
 +    // Acolyte
      {
-         .series = 9,
+         .series = CLASS_SERIES_PILGRIM,
          .required = {0, 0, 2, 5},
-@@ -2122,7 +2122,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2047,7 +2047,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_STUN, ABILITY_EFFECT_CHARM},
          .ward = 90,
      },
 -    // Ascetic
 +    // Cultist
      {
-         .series = 9,
+         .series = CLASS_SERIES_PILGRIM,
          .required = {0, 0, 4, 5},
-@@ -2153,7 +2153,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2078,7 +2078,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_STUN, ABILITY_EFFECT_CHARM},
          .ward = 90,
      },
 -    // Fire Monk
 +    // Zealot
      {
-         .series = 9,
+         .series = CLASS_SERIES_PILGRIM,
          .required = {0, 0, 5, 5},
-@@ -2184,7 +2184,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2109,7 +2109,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_STUN, ABILITY_EFFECT_CHARM},
          .ward = 90,
      },
 -    // Guru
 +    // Fanatic
      {
-         .series = 9,
+         .series = CLASS_SERIES_PILGRIM,
          .required = {0, 0, 6, 6},
-@@ -2225,7 +2225,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2145,7 +2145,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
      {0},
-     // ?
+     {0},
      {0},
 -    // Ranger
 +    // Wild Mage
      {
-         .series = 9,
+         .series = CLASS_SERIES_PILGRIM,
          .required = {0, 3, 3, 3},
-@@ -2256,7 +2256,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2176,7 +2176,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_STUN, ABILITY_EFFECT_CHARM},
          .ward = 105,
      },
 -    // Bard
 +    // Channeler
      {
-         .series = 9,
+         .series = CLASS_SERIES_PILGRIM,
          .required = {0, 4, 4, 4},
-@@ -2287,7 +2287,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2207,7 +2207,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_STUN, ABILITY_EFFECT_CHARM},
          .ward = 105,
      },
 -    // Warlock
 +    // Fury
      {
-         .series = 9,
+         .series = CLASS_SERIES_PILGRIM,
          .required = {0, 4, 5, 4},
-@@ -2420,7 +2420,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2333,7 +2333,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_DELUSION, ABILITY_EFFECT_CONFUSION},
          .ward = 110,
      },
 -    // Barbarian
 +    // Berserker
      {
-         .series = 4,
+         .series = CLASS_SERIES_BRUTE,
          .required = {5, 0, 5},
-@@ -2451,7 +2451,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2364,7 +2364,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_DELUSION, ABILITY_EFFECT_CONFUSION},
          .ward = 110,
      },
 -    // Berserker
 +    // Black Knight
      {
-         .series = 4,
+         .series = CLASS_SERIES_BRUTE,
          .required = {6, 0, 6},
-@@ -2551,7 +2551,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2460,7 +2460,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_DELUSION, ABILITY_EFFECT_CONFUSION},
          .ward = 110,
      },
 -    // Ronin
 +    // Shogun
      {
-         .series = 4,
+         .series = CLASS_SERIES_BRUTE,
          .required = {5, 0, 5, 4},
-@@ -2581,7 +2581,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2490,6 +2490,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_DELUSION, ABILITY_EFFECT_CONFUSION},
          .ward = 110,
      },
--    // ?
 +    // Leader
      {
-         .series = 4,
+         .series = CLASS_SERIES_BRUTE,
          .required = {4, 3, 4},
-@@ -2612,7 +2612,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2520,6 +2521,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ARENA_EFFECT_TAINT, ABILITY_EFFECT_POISON, ABILITY_EFFECT_VENOM},
          .ward = 105,
      },
--    // ?
 +    // Warlord
      {
-         .series = 4,
+         .series = CLASS_SERIES_BRUTE,
          .required = {5, 4, 5},
-@@ -2655,7 +2655,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2556,7 +2558,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
      {0},
-     // ?
+     {0},
      {0},
 -    // Hermit
 +    // Student
      {
-         .series = 10,
+         .series = CLASS_SERIES_HERMIT,
          .required = {0, 1, 0, 1},
-@@ -2681,7 +2681,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2582,7 +2584,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SLEEP},
          .ward = 85,
      },
 -    // Elder
 +    // Researcher
      {
-         .series = 10,
+         .series = CLASS_SERIES_HERMIT,
          .required = {0, 2, 0, 2},
-@@ -2774,7 +2774,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2675,7 +2677,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SLEEP},
          .ward = 85,
      },
 -    // Sage
 +    // Wise
      {
-         .series = 10,
+         .series = CLASS_SERIES_HERMIT,
          .required = {0, 6, 0, 6},
-@@ -2805,7 +2805,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2706,7 +2708,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_SLEEP},
          .ward = 85,
      },
 -    // Wizard
 +    // Arcanist
      {
-         .series = 10,
+         .series = CLASS_SERIES_HERMIT,
          .required = {0, 7, 0, 7},
-@@ -2904,7 +2904,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2801,6 +2803,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          },
          .ward = 85,
      },
--    // ?
 +    // Divine Mage
      {
-         .series = 10,
+         .series = CLASS_SERIES_HERMIT,
          .required = {0, 4, 3, 4},
-@@ -2935,7 +2935,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
+@@ -2831,6 +2834,7 @@ const struct ClassDefinition gClass_DefinitionTable[] = {
          .weakEffects = {ABILITY_EFFECT_HAUNT, ABILITY_EFFECT_REFLECT},
          .ward = 85,
      },
--    // ?
 +    // Fateweaver
      {
-         .series = 10,
+         .series = CLASS_SERIES_HERMIT,
          .required = {0, 5, 4, 5},
 diff --git a/games/tbs/src/game/enemy_table.c b/games/tbs/src/game/enemy_table.c
-index f8dde6528b..f2ca036532 100644
+index 7c6d2dff4a..bbccb498dc 100644
 --- a/games/tbs/src/game/enemy_table.c
 +++ b/games/tbs/src/game/enemy_table.c
-@@ -334,7 +334,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
+@@ -338,7 +338,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
          .itemChance = 6,
          .experience = 199,
      },
 -    // Lich
 +    // Lich Ghost
      {
-         .name = "              ",
+         .name = BLANK_NAME,
          .level = 23,
-@@ -984,7 +984,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
+@@ -988,7 +988,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
          .itemChance = 5,
          .experience = 194,
      },
 -    // Mauler
 +    // Grizzly
      {
-         .name = "              ",
+         .name = BLANK_NAME,
          .level = 9,
-@@ -1002,7 +1002,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
+@@ -1006,7 +1006,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
          .itemChance = 6,
          .experience = 37,
      },
 -    // Ravager
 +    // Brown Bear
      {
-         .name = "              ",
+         .name = BLANK_NAME,
          .level = 15,
-@@ -1020,7 +1020,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
+@@ -1024,7 +1024,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
          .itemChance = 5,
          .experience = 90,
      },
 -    // Grisly
 +    // Savage Bear
      {
-         .name = "              ",
+         .name = BLANK_NAME,
          .level = 23,
-@@ -1403,7 +1403,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
+@@ -1407,7 +1407,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
          .itemChance = 6,
          .experience = 62,
      },
 -    // Worm
 +    // Spear Grub
      {
-         .name = "              ",
+         .name = BLANK_NAME,
          .level = 18,
-@@ -1871,7 +1871,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
+@@ -1875,7 +1875,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
          .itemChance = 8,
          .experience = 412,
      },
 -    // Dread Hound
 +    // Cerberus
      {
-         .name = "              ",
+         .name = BLANK_NAME,
          .level = 18,
-@@ -1890,7 +1890,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
+@@ -1894,7 +1894,7 @@ const struct EnemyDefinition gEnemy_Definitions[] = {
          .itemChance = 7,
          .experience = 116,
      },
 -    // Cerebus
 +    // Hell Hound
      {
-         .name = "              ",
+         .name = BLANK_NAME,
          .level = 33,
-diff --git a/games/tbs/src/game/item_table.c b/games/tbs/src/game/item_table.c
-index d7bc54324d..cb5a2d518e 100644
---- a/games/tbs/src/game/item_table.c
-+++ b/games/tbs/src/game/item_table.c
-@@ -1110,7 +1110,7 @@ const struct ItemDefinition gItem_DefinitionTable[] = {
-         .secondaryBonus = 28,
-         .element = ELEMENT_NONE,
-     },
--    // Mirrored Shield
-+    // Mirror Shield
-     {
-         .price = 10000,
-         .type = ITEM_TYPE_SHIELD,
-@@ -1736,7 +1736,7 @@ const struct ItemDefinition gItem_DefinitionTable[] = {
-         .element = ELEMENT_NONE,
-         .abilityId = ABILITY_LUCKY_PEPPER,
-     },
--    // ?
-+    // Mountain Water
-     {
-         .price = 100,
-         .flags = ITEM_RARE | ITEM_STACKABLE,
 diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
-index f75d66189b..3194858b15 100644
+index fb58de2fc3..8a7c3d9b47 100644
 --- a/games/tbs/text/en.po
 +++ b/games/tbs/text/en.po
 @@ -526,7 +526,7 @@ msgstr "Long Sword: Unleashes Acid Bath"
@@ -2805,5 +2287,5 @@ index f75d66189b..3194858b15 100644
  msgctxt "message"
  msgid "05579"
 -- 
-2.53.0
+2.43.0
 

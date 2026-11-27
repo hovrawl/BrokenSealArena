@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Makes the half-size battle sheets that a linked four-a-side battle draws its
 opponents with (ARENA_LINK4): spr_304, 306, 307 and 308 from the characters'
-spr_300 to 303. Each 64 x 64 picture of a sheet becomes 32 x 32, so a unit costs
+battle sheets battle_isaac, battle_garet, battle_ivan and battle_mia (sprites 300
+to 303). Each 64 x 64 picture of a sheet becomes 32 x 32, so a unit costs
 16 blocks of sprite VRAM instead of 64.
 
 Usage: gen-opponent-sprites.py SPRITE_DIR   (games/tbs/src/graphics/sprite)
@@ -15,7 +16,8 @@ import sys
 from collections import Counter
 from PIL import Image
 
-PAIRS = {300: 304, 301: 306, 302: 307, 303: 308}
+PAIRS = {"battle_isaac": 304, "battle_garet": 306, "battle_ivan": 307,
+         "battle_mia": 308}
 
 
 def halve(src):
@@ -40,10 +42,10 @@ def halve(src):
 def main():
     directory = sys.argv[1]
     for source, target in PAIRS.items():
-        image = Image.open("%s/spr_%03d.png" % (directory, source))
+        image = Image.open("%s/%s.png" % (directory, source))
         assert image.mode == "P" and image.size == (64, 1280), image.size
         halve(image).save("%s/spr_%03d.png" % (directory, target))
-        print("spr_%03d -> spr_%03d" % (source, target))
+        print("%s -> spr_%03d" % (source, target))
 
 
 main()

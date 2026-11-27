@@ -1,4 +1,4 @@
-From 866482c3fe62a43fe46abe6e1fcc8dc271595821 Mon Sep 17 00:00:00 2001
+From 0a46ba3940caffdc88d41a6a4884bc5bfc19c6e9 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Sun, 1 Nov 2026 15:35:19 +1100
 Subject: [PATCH] Arena: cup gear is spread over the whole story stretch of
@@ -112,5 +112,5 @@ index cfde28eb2c..a0577c87c8 100644
      {6, 1, 7, 0, 0, {0}, 0, 10826, 10827, 10828, 0},
      // Crossbone Isle
 -- 
-2.53.0
+2.43.0
 

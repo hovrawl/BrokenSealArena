@@ -1,4 +1,4 @@
-From 043cb0b8c01b5ecb114afb10462b4a57bffb0efe Mon Sep 17 00:00:00 2001
+From fff6c4220ca47cd9e17c130d09cb68e1b6a83409 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Mon, 2 Nov 2026 09:03:31 +1100
 Subject: [PATCH] Arena: the attendant warns when the next round is a boss or a
@@ -16,16 +16,16 @@ block; gen-cups.py re-run (ids moved by two).
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- games/tbs/include/module/arena_cups.h  |   8 +-
+ games/tbs/include/arena/arena_cups.h   |   8 +-
  games/tbs/src/scene/arena_cup_info.inc |  38 ++++----
  games/tbs/src/scene/arena_series.c     |   9 ++
  games/tbs/text/en.po                   | 122 ++++++++++++++-----------
  4 files changed, 100 insertions(+), 77 deletions(-)
 
-diff --git a/games/tbs/include/module/arena_cups.h b/games/tbs/include/module/arena_cups.h
+diff --git a/games/tbs/include/arena/arena_cups.h b/games/tbs/include/arena/arena_cups.h
 index 9df99a76b9..da34204815 100644
---- a/games/tbs/include/module/arena_cups.h
-+++ b/games/tbs/include/module/arena_cups.h
+--- a/games/tbs/include/arena/arena_cups.h
++++ b/games/tbs/include/arena/arena_cups.h
 @@ -53,12 +53,14 @@ struct ArenaCupInfo {
    u8 requires; /* main cups cleared before it opens */
    u8 raiseTo;   /* party level at the first clear, 0 for none */
@@ -147,25 +147,25 @@ index c058464885..4338148605 100644
  
  const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3] = {
 diff --git a/games/tbs/src/scene/arena_series.c b/games/tbs/src/scene/arena_series.c
-index a1e25f0524..2001b836f7 100644
+index 107db54cdb..fca8cd66cd 100644
 --- a/games/tbs/src/scene/arena_series.c
 +++ b/games/tbs/src/scene/arena_series.c
 @@ -178,4 +178,13 @@ static void ArenaSeries_AfterWin(void) {
    Event_SetMessageId(ArenaCup_Heals() ? MsgArenaNextRound
                                        : MsgArenaNextRoundBossRush);
-   FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+   Event_OpenMessage(ACTOR_ATTENDANT, 0);
 +  // Round `won + 1` is next: warn when it is a boss or a mini-boss (the bit of the
 +  // round is its number less one).
 +  if (info->bossRounds & (1 << won)) {
 +    Event_SetMessageId(MsgArenaBossWarning);
-+    FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++    Event_OpenMessage(ACTOR_ATTENDANT, 0);
 +  } else if (info->miniBossRounds & (1 << won)) {
 +    Event_SetMessageId(MsgArenaMiniBossWarning);
-+    FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++    Event_OpenMessage(ACTOR_ATTENDANT, 0);
 +  }
  }
 diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
-index d3c6c9a36c..d28ec88c48 100644
+index adf5912579..d5325b3c8c 100644
 --- a/games/tbs/text/en.po
 +++ b/games/tbs/text/en.po
 @@ -65297,114 +65297,126 @@ msgstr ""
@@ -638,5 +638,5 @@ index d3c6c9a36c..d28ec88c48 100644
  "Well done!\n"
  "You cleared the\n"
 -- 
-2.53.0
+2.43.0
 

@@ -1,4 +1,4 @@
-From 6f36a1dad2fbcb28dcbfa4648e12aae46f692697 Mon Sep 17 00:00:00 2001
+From 10b77b1b633e5d500d1dc4f9c86c415d7c64e8ce Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Fri, 30 Oct 2026 16:22:27 +1100
 Subject: [PATCH] Arena: a series in progress is saved and resumed
@@ -16,13 +16,13 @@ link poll report a lost link.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- games/tbs/src/window/screens/arena_save.c | 15 +++++----------
+ games/tbs/src/window/arena_save.c | 15 +++++----------
  1 file changed, 5 insertions(+), 10 deletions(-)
 
-diff --git a/games/tbs/src/window/screens/arena_save.c b/games/tbs/src/window/screens/arena_save.c
-index 8b6a2da2cd..999c704766 100644
---- a/games/tbs/src/window/screens/arena_save.c
-+++ b/games/tbs/src/window/screens/arena_save.c
+diff --git a/games/tbs/src/window/arena_save.c b/games/tbs/src/window/arena_save.c
+index d5b163955b..34cf752043 100644
+--- a/games/tbs/src/window/arena_save.c
++++ b/games/tbs/src/window/arena_save.c
 @@ -1,8 +1,10 @@
  /// @file
  /// Arena romhack: saving in the arena. A file saved there is written as if the
@@ -36,7 +36,7 @@ index 8b6a2da2cd..999c704766 100644
 +/// the same round. The live values are put back after.
  // Part of screens.c.
  
- #include "../screens_internal.h"
+ #include "screens_internal.h"
 @@ -12,21 +14,16 @@
  struct ArenaSaveState {
    s32 next;
@@ -46,14 +46,14 @@ index 8b6a2da2cd..999c704766 100644
  };
  
  static void ArenaSave_Begin(struct ArenaSaveState *state) {
-   state->next = gMainRoutineWork.next;
-   state->entrance = gMainRoutineWork.entrance;
+   state->next = gMainRoutineState.next;
+   state->entrance = gMainRoutineState.entrance;
 -  state->series = 0;
    state->inArena = GameFlag_GetFar(FLAG_IN_BATTLE_ARENA);
    if (state->inArena) {
 -    state->series = GameFlag_GetFar(FLAG_MONSTER_BATTLE);
-     gMainRoutineWork.next = (s32)&SceneId_BattleArena;
-     gMainRoutineWork.entrance = BATTLE_ARENA_FROM_FILE_SCREEN;
+     gMainRoutineState.next = SCENE_BATTLE_ARENA;
+     gMainRoutineState.entrance = BATTLE_ARENA_FROM_FILE_SCREEN;
 -    if (state->series)
 -      GameFlag_ClearFar(FLAG_MONSTER_BATTLE);
    }
@@ -61,12 +61,12 @@ index 8b6a2da2cd..999c704766 100644
  
 @@ -34,7 +31,5 @@ static void ArenaSave_End(struct ArenaSaveState *state) {
    if (state->inArena) {
-     gMainRoutineWork.next = state->next;
-     gMainRoutineWork.entrance = state->entrance;
+     gMainRoutineState.next = state->next;
+     gMainRoutineState.entrance = state->entrance;
 -    if (state->series)
 -      GameFlag_SetFar(FLAG_MONSTER_BATTLE);
    }
  }
 -- 
-2.53.0
+2.43.0
 

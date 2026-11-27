@@ -149,3 +149,10 @@
   end by giving a Djinni, so not every Djinni is bought: each is fought, given or sold once its cup
   is cleared. Cup party levels are our own proposal anchored to enemy levels, which Reloaded barely
   changes (13 of 165 rows, by 1 to 3); it changes the enemies' stats instead.
+- **Upstream moved to `a87775874b`, the fully named decomp** (user, 2026-11-27): Nathan asked to
+  update upstream now that it names The Broken Seal fully (and has decompiled The Lost Age), fixing
+  the patches for the new source text with the same logic. Done as a re-application of all 45
+  patches in the new layout (`docs/CHANGES.md`, "Upstream moves"); our headers are now
+  `include/arena/`, our scene code is included into its scene's file rather than placed as its own
+  object, and the tables were regenerated from the old ROM's bytes. The Lost Age port is still not
+  started; the next goal is feasibility research for native mobile and PC ports (another thread).

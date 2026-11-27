@@ -71,7 +71,7 @@ Tests (each ends in shots; `build\smoke\shots\sheet.png` shows them all):
 - `round.txt`: win round 1; the next-round line, and the player outside the circle
   with control.
 - `clear.txt`: win with the win count poked to 11 mid-battle (`poke 0x020004EA 2
-  11`: `gMainRoutineWork` 0x02000240 + 0x2a4 + 6, the streak tally), so the win is
+  11`: `gMainRoutineState` (was `gMainRoutineWork`) 0x02000240 + 0x2a4 + 6, the streak tally), so the win is
   the 12th: the cleared line and the end-of-series line.
 - `lose.txt`: the win count poked to 11 before the circle, so the fight is round 12
   and mashing A loses; shots every few presses to catch the loss line (more A

@@ -25,22 +25,25 @@
 
 - A bank of the main image has a fixed size. The shop bank (`rom_main_06`) had
   114 bytes spare; adding code overflowed it ("cannot move location counter
-  backwards", `main.ld`). Bank 07's start was moved up 0x1000 for `tbs-en`. Check
-  slack from `out/tbs-en/tbs-en.map` before adding code to a bank. The same error came
-  from sprite data (four more sprite rows): the last region of `main.ld` now starts at
+  backwards", `ld_script.ld`, formerly `main.ld`). Bank 07's start was moved up 0x1000 for
+  `tbs-en`. Check slack from `out/tbs-en/tbs-en.map` before adding code to a bank. The
+  same error came from sprite data (four more sprite rows): `RESOURCE_DIRECTORY_START` now starts at
   0x08326000 and `build.ps1` pads to 0x08806000. Patch 0044 overflowed bank 06 again (by
   0x81d): bank 07 now starts at 0x080b7000 and bank 08 at 0x080c9d00 (the banks after have no
-  room: 08 ends within 0x2ac of 09). The next overflow needs code moved to another bank or an
-  `objects.tsv` object; `scripts/bank-slack.py` reads the map for the slack.
+  room: 08 ends within 0x2ac of 09). The bank starts are `#define`s at the top of
+  `ld_script.ld`, one block per edition: English is the `#else` block. The next overflow
+  needs code moved to another bank or an object of its own (a line in the linker script);
+  `scripts/bank-slack.py` reads the map for the slack.
 - A placement row's flag condition is only read when the actors are spawned. After
   changing the flag in the lobby, call `Event_SpawnActorPlacements(gFieldWork->tables[1],
   ACTOR_FIRST_PLACED)` again (it creates the new actors and resets the others' places).
 - A scene overlay can only call main-image functions that have a far-call stub and
-  an `import` row (`system/overlay/imports.inc` plus the scene's
-  `scene/import/<scene>.s`). Unexported functions need a new export in
-  `gamepak/far_call/<BANK>.S`. Scene overlays have no string literals or static
+  a row in `system/overlay/imports.inc` (`export Name, NameFar`; since upstream
+  `a87775874b` each overlay's import table is derived from what it calls, so there is no
+  per-scene list). Unexported functions need a new export in
+  `gamepak/far_call/<bank>.s`. Scene overlays have no string literals or static
   data of their own: use global `const` arrays.
-- `gMenuWork` is shared: the shop's `ShopWork` and the field menu's work occupy the
+- `gMenuState` (was `gMenuWork`) is shared: the shop's `ShopState` and the field menu's state occupy the
   same block, so shop code must not call menu-bank functions that read the other
   layout (`ItemMenu_DrawMemberStatus`). Copy the drawing instead.
 - Only `text/en.po` has the arena messages; the other editions do not build.
@@ -105,7 +108,7 @@
 
 ## Flags we claim
 
-- Claimed persistent flags are listed in `module/arena.h`: so far `FLAG_ARENA_TOURNAMENT`
+- Claimed persistent flags are listed in `arena/arena.h`: so far `FLAG_ARENA_TOURNAMENT`
   (0x7f8, one byte). Before claiming another, check `ENEMY_DEFEATED_FLAG(classId)`
   (0x600 plus an enemy: 0x600 to 0x6ff are taken), the shop stock (0x400 plus a row),
   the Djinn, Psynergy tint and area-visited ranges below 0x200, and the named
@@ -133,10 +136,15 @@
 
 ## Layout of upstream modules
 
-- Some upstream objects are unity builds: `shop/shop.c` includes the files under
-  `shop/shop/` ("Part of shop.c"), which share statics and `shop_internal.h`.
-  New code for such a module goes in a new part file included from the parent,
-  not in a new object. Check for "Part of ..." at the top of a file first.
+- Some upstream objects are unity builds: `shop/shop.c` includes `shop_run.c`,
+  `shop_stock.c` and the rest beside it ("Part of shop.c"; before upstream
+  `a87775874b` they were under `shop/shop/`), which share statics and
+  `shop_internal.h`. New code for such a module goes in a new part file beside the
+  parent, included from it, not in a new object. Check for "Part of ..." at the top
+  of a file first. Our scene code is the same: `arena_boot.c` is included at the end
+  of `file_screen.c`, `arena_menu.c` at the end of `battle_arena.c` and
+  `arena_series.c` inside it, so they are in those overlays (there are no separate
+  scene objects to place).
 - Scene enums such as `ACTOR_ATTENDANT` are defined inside the scene's `.c`, so
   a second file cannot see them: pass the value in, or move the enum to a header.
 - Shell variables inside `wsl -- bash -lc '...'` called from Git Bash were
@@ -145,6 +153,13 @@
 
 ## The data port
 
+- Upstream `a87775874b` rewrote the tables with designated rows (`[ABILITY_CURE] = {`)
+  and upstream names for every value, and dropped the per-row name comments for
+  abilities and items. `port-reloaded-tables.py` was written for the old positional tables;
+  for that move the tables were regenerated from the old arena ROM's bytes (decode the
+  stock and arena records by symbol, rewrite only the rows that differ, keep upstream's
+  spelling of values, add designated rows for ids stock leaves blank). Do the same on the
+  next upstream that reshapes them, and compare the built tables with the previous ROM.
 - Run `port-reloaded-tables.py` once, on pristine tables: it assumes the source still holds
   the stock values (its `--check` says so by comparing its own rendering with the file). To
   redo it, `git checkout` the table files first.
@@ -162,8 +177,9 @@
 
 - Cup data is generated from `scripts/cupdata.py`; do not edit the generated files in
   `~/alchemy`. The overlay (scene) and the battle code cannot share data, hence two outputs.
-- Bank 07 of the main image was full: new data went to its own object in `rom_tail_00`
-  (`objects.tsv`). Shifting bank starts in `main.ld` cascades to a "location counter" error.
+- Bank 07 of the main image was full: new data went to its own object at the end of
+  `.rom_tail` (a line in `ld_script.ld`, before `SPRITE_BANK_START`). Shifting bank starts
+  cascades to a "location counter" error.
 - A test cannot win by mashing A against a cup's later rounds: start cup A, then poke the
   win count mid-battle (`cup_clear.txt`). Round 1 of a cup is tuned for the party's level,
   not for the stock-game damage (a level-8 target Vermin hit Isaac for 43).

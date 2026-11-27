@@ -1,4 +1,4 @@
-From 9e0398ddcd28b1f2ea6746cf5313872b0c5220ce Mon Sep 17 00:00:00 2001
+From 50e0103d207a4f9d0a7f536429a1ec7b28d036b3 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Sun, 1 Nov 2026 15:43:40 +1100
 Subject: [PATCH] Arena: the greeter explains the arena the first time on a new
@@ -14,17 +14,49 @@ ids (scripts/gen-cups.py re-run). No automatic walk-up trigger: the talk is enou
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
+ games/tbs/include/arena/arena.h        |   4 +-
+ games/tbs/include/arena/arena_cups.h   |   2 +-
  games/tbs/include/arena_config.h       |   6 ++
- games/tbs/include/module/arena.h       |   4 +-
- games/tbs/include/module/arena_cups.h  |   2 +-
  games/tbs/src/scene/arena_boot.c       |   2 +
  games/tbs/src/scene/arena_cup_info.inc |  38 +++----
  games/tbs/src/scene/battle_arena.c     |  32 ++++++
  games/tbs/text/en.po                   | 141 +++++++++++++++----------
  7 files changed, 149 insertions(+), 76 deletions(-)
 
+diff --git a/games/tbs/include/arena/arena.h b/games/tbs/include/arena/arena.h
+index ffcf16370c..8503f54b53 100644
+--- a/games/tbs/include/arena/arena.h
++++ b/games/tbs/include/arena/arena.h
+@@ -21,12 +21,14 @@
+ //   0x7f8 FLAG_ARENA_TOURNAMENT   the chosen cup (byte)
+ //   0x7f0 FLAG_ARENA_PROGRESS     main cups cleared, 0 to ARENA_MAIN_CUPS (byte)
+ //   0x7e8 FLAG_ARENA_SIDE_CLEARED bit n: side cup n cleared (byte)
+-//   0x7e0                         reserved (byte)
++//   0x7e0 FLAG_ARENA_ONBOARDED    1 once the greeter has explained the arena
++//                                 (byte; New Game clears it)
+ //   0x7a0 to 0x7df                one bit for each reward given
+ //                                 (ARENA_REWARD_FLAG_FIRST in arena_cups.h)
+ #define FLAG_ARENA_TOURNAMENT 0x7f8
+ #define FLAG_ARENA_PROGRESS 0x7f0
+ #define FLAG_ARENA_SIDE_CLEARED 0x7e8
++#define FLAG_ARENA_ONBOARDED 0x7e0
+ 
+ #include "arena/arena_cups.h"
+ 
+diff --git a/games/tbs/include/arena/arena_cups.h b/games/tbs/include/arena/arena_cups.h
+index 764e6539ae..c4ba9150c5 100644
+--- a/games/tbs/include/arena/arena_cups.h
++++ b/games/tbs/include/arena/arena_cups.h
+@@ -66,6 +66,6 @@ extern const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT];
+ extern const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3];
+ extern const u8 gArenaCrossboneRows[3];
+ 
+-#define MSG_ARENA_CUP_NAME 10777
++#define MSG_ARENA_CUP_NAME 10779
+ 
+ #endif
 diff --git a/games/tbs/include/arena_config.h b/games/tbs/include/arena_config.h
-index 1544cfb9ae..1d877708ff 100644
+index eb11d4e93a..c2eec749ec 100644
 --- a/games/tbs/include/arena_config.h
 +++ b/games/tbs/include/arena_config.h
 @@ -19,6 +19,12 @@
@@ -40,50 +72,18 @@ index 1544cfb9ae..1d877708ff 100644
  /// The Pause menu, Save included, works in the arena.
  #ifndef ARENA_PAUSE_MENU
  #define ARENA_PAUSE_MENU 1
-diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
-index 6a7aaedb88..733a257373 100644
---- a/games/tbs/include/module/arena.h
-+++ b/games/tbs/include/module/arena.h
-@@ -21,12 +21,14 @@
- //   0x7f8 FLAG_ARENA_TOURNAMENT   the chosen cup (byte)
- //   0x7f0 FLAG_ARENA_PROGRESS     main cups cleared, 0 to ARENA_MAIN_CUPS (byte)
- //   0x7e8 FLAG_ARENA_SIDE_CLEARED bit n: side cup n cleared (byte)
--//   0x7e0                         reserved (byte)
-+//   0x7e0 FLAG_ARENA_ONBOARDED    1 once the greeter has explained the arena
-+//                                 (byte; New Game clears it)
- //   0x7a0 to 0x7df                one bit for each reward given
- //                                 (ARENA_REWARD_FLAG_FIRST in arena_cups.h)
- #define FLAG_ARENA_TOURNAMENT 0x7f8
- #define FLAG_ARENA_PROGRESS 0x7f0
- #define FLAG_ARENA_SIDE_CLEARED 0x7e8
-+#define FLAG_ARENA_ONBOARDED 0x7e0
- 
- #include "module/arena_cups.h"
- 
-diff --git a/games/tbs/include/module/arena_cups.h b/games/tbs/include/module/arena_cups.h
-index 764e6539ae..c4ba9150c5 100644
---- a/games/tbs/include/module/arena_cups.h
-+++ b/games/tbs/include/module/arena_cups.h
-@@ -66,6 +66,6 @@ extern const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT];
- extern const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3];
- extern const u8 gArenaCrossboneRows[3];
- 
--#define MSG_ARENA_CUP_NAME 10777
-+#define MSG_ARENA_CUP_NAME 10779
- 
- #endif
 diff --git a/games/tbs/src/scene/arena_boot.c b/games/tbs/src/scene/arena_boot.c
-index b59191df9c..43c2876777 100644
+index 3d5fd3e939..cd8252dffd 100644
 --- a/games/tbs/src/scene/arena_boot.c
 +++ b/games/tbs/src/scene/arena_boot.c
-@@ -93,6 +93,8 @@ void ArenaBoot_NewGame(void) {
+@@ -45,6 +45,8 @@ void ArenaBoot_NewGame(void) {
    GameFlag_Clear(FLAG_KEEP_PARTY_POSITION);
    GameFlag_Clear(FLAG_MENU_OPEN);
    GameFlag_Set(FLAG_IN_BATTLE_ARENA);
 +  // A new game starts with the greeter's introduction still to come.
 +  GameFlag_SetByte(FLAG_ARENA_ONBOARDED, 0);
    gSleepDisabled = 1;
-   Event_SetDestination((s32)&SceneId_BattleArena,
+   Event_SetDestination(SCENE_BATTLE_ARENA,
                         BATTLE_ARENA_FROM_FILE_SCREEN);
 diff --git a/games/tbs/src/scene/arena_cup_info.inc b/games/tbs/src/scene/arena_cup_info.inc
 index a0577c87c8..1849550477 100644
@@ -181,10 +181,10 @@ index a0577c87c8..1849550477 100644
  
  const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3] = {
 diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
-index 6bbaa9ce5e..e60246f5ba 100644
+index 83092ec03e..e5ac5842ba 100644
 --- a/games/tbs/src/scene/battle_arena.c
 +++ b/games/tbs/src/scene/battle_arena.c
-@@ -1516,6 +1516,33 @@ static s32 BattleArena_TalkToVisitor(s32 actorId) {
+@@ -1476,6 +1476,33 @@ static s32 BattleArena_TalkToVisitor(s32 actorId) {
  #endif
  }
  
@@ -196,17 +196,17 @@ index 6bbaa9ce5e..e60246f5ba 100644
 +  s32 first;
 +
 +  Event_Start();
-+  Actor_SetAngleToward(actorId, gMainRoutineWork.leaderActorId, 0);
++  Actor_FaceActor(actorId, gMainRoutineState.leaderActorId, 0);
 +  first = FieldGameFlag_GetByte(FLAG_ARENA_ONBOARDED) == 0;
 +  if (first) {
 +    Event_SetMessageId(MsgArenaGreeterIntro1);
-+    FieldMessage_ShowAtActor(actorId, 0);
++    Event_OpenMessage(actorId, 0);
 +    Event_SetMessageId(MsgArenaGreeterIntro2);
-+    FieldMessage_ShowAtActor(actorId, 0);
++    Event_OpenMessage(actorId, 0);
 +    FieldGameFlag_SetByte(FLAG_ARENA_ONBOARDED, 1);
 +  } else {
 +    Event_SetMessageId(MsgFieldWelcomeToBattleArenaWherePeople);
-+    FieldMessage_ShowAtActor(actorId, 0);
++    Event_OpenMessage(actorId, 0);
 +  }
 +  Event_End();
 +#ifdef UBFIX
@@ -215,10 +215,10 @@ index 6bbaa9ce5e..e60246f5ba 100644
 +}
 +#endif
 +
- /// Talking to ACTOR_PARTY_ORDER_VISITOR, who alternates, by
- /// FLAG_BATTLE_ARENA_PARTY_ORDER_NEXT, between the linked finals' limit of
- /// three allies (worded for the party's size) and how to change the party's
-@@ -2009,8 +2036,13 @@ struct Trigger gBattleArenaTriggers[] = {
+ /// Talking to the fair-haired boy on the west side of the hall gives two tips
+ /// in turn. First, up to three allies can fight in the linked finals, so with
+ /// four in the party the rightmost has to pass; then, the party's order can be
+@@ -1976,8 +2003,13 @@ struct Trigger gBattleArenaTriggers[] = {
  #endif
      {TRIGGER_TALK, ACTOR_HEALER, CONDITION_ALWAYS,
       EVENT(BattleArena_OpenSanctum)},
@@ -233,7 +233,7 @@ index 6bbaa9ce5e..e60246f5ba 100644
       EVENT(BattleArena_TalkToVisitor)},
      {TRIGGER_TALK, ACTOR_FINALS_VISITOR, CONDITION_ALWAYS,
 diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
-index 26e9ff6d2b..67f6f707bd 100644
+index a10433b2ba..d833319975 100644
 --- a/games/tbs/text/en.po
 +++ b/games/tbs/text/en.po
 @@ -65244,114 +65244,145 @@ msgstr ""
@@ -725,5 +725,5 @@ index 26e9ff6d2b..67f6f707bd 100644
  "Well done!\n"
  "You cleared the\n"
 -- 
-2.53.0
+2.43.0
 

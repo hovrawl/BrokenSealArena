@@ -1,4 +1,4 @@
-From d8e78234fdc1cebbc75d802f5a32bc9b4c01910e Mon Sep 17 00:00:00 2001
+From 820fe20ae393c11e8f8dffb8dff3b9f02c96bc46 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Sun, 1 Nov 2026 15:06:35 +1100
 Subject: [PATCH] Arena: no win streak after a cup, and the shops give no Game
@@ -12,52 +12,52 @@ purchase (Shop_BuySpecialItem returns at once in the arena).
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
  games/tbs/src/scene/arena_series.c | 9 +++------
- games/tbs/src/shop/shop/stock.c    | 6 ++++++
+ games/tbs/src/shop/shop_stock.c    | 6 ++++++
  2 files changed, 9 insertions(+), 6 deletions(-)
 
 diff --git a/games/tbs/src/scene/arena_series.c b/games/tbs/src/scene/arena_series.c
-index ea4a227442..46ceddec0a 100644
+index c4cbf019b9..647bdfe2a7 100644
 --- a/games/tbs/src/scene/arena_series.c
 +++ b/games/tbs/src/scene/arena_series.c
 @@ -21,21 +21,18 @@ static void ArenaSeries_End(void) {
-   GameFlag_Clear(FLAG_BATTLE_ARENA_PLAYER_AGREED);
+   GameFlag_Clear(FLAG_BATTLE_ARENA_PLAYER_APPLIED);
    FieldGameFlag_SetByte(FLAG_MONSTER_BATTLE_WINS, -1);
    MessageArgument_ClearAll();
--  MessageArgument_Push(gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK],
+-  MessageArgument_Push(gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_STREAK],
 -                       MESSAGE_ARGUMENT_NUMBER);
-   if (gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK] == 0) {
+   if (gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_STREAK] == 0) {
      // Quit before winning a round: they did not want to compete. (The stock line
      // would say "You won 0 battle.")
      Event_SetMessageId(MsgArenaTryAgain);
-+    FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
-   } else if (gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] <
-              gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK]) {
++    Event_OpenMessage(ACTOR_ATTENDANT, 0);
+   } else if (gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] <
+              gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_STREAK]) {
 +    // The streak is not told: it means nothing until the endless challenge
 +    // (the first clear scene already congratulates). The best is still kept.
-     gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] =
-         gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK];
+     gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_BEST_STREAK] =
+         gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_STREAK];
 -    Event_SetMessageId(MsgLobbyWonNumberBattleBroke);
 -  } else {
 -    Event_SetMessageId(MsgLobbyWonNumberBattle);
    }
--  FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
-   BattleArena_WriteSlotValue(LOBBY_SLOT_SIGNATURE);
+-  Event_OpenMessage(ACTOR_ATTENDANT, 0);
+   BattleArena_WriteSlotValue(BATTLE_ARENA_SLOT_SIGNATURE);
  }
  
-diff --git a/games/tbs/src/shop/shop/stock.c b/games/tbs/src/shop/shop/stock.c
-index 93b3d5da86..a6960f2196 100644
---- a/games/tbs/src/shop/shop/stock.c
-+++ b/games/tbs/src/shop/shop/stock.c
+diff --git a/games/tbs/src/shop/shop_stock.c b/games/tbs/src/shop/shop_stock.c
+index 218f5e98cc..9f9939054f 100644
+--- a/games/tbs/src/shop/shop_stock.c
++++ b/games/tbs/src/shop/shop_stock.c
 @@ -3,6 +3,7 @@
  // Part of shop.c.
  
- #include "../shop_internal.h"
+ #include "shop_internal.h"
 +#include "arena_config.h"
  
  /// The shop credit each Game Ticket costs, by how many have been given: five
  /// at each price: 300, then 500 doubling to 8000. The gift count stops at 28
-@@ -47,6 +48,11 @@ void Shop_BuySpecialItem(struct Window *window, struct Window *itemWindow) {
-   creditCost = sGameTicketCreditCosts[gMainRoutineWork.shopGifts];
+@@ -48,6 +49,11 @@ void Shop_GiveGameTicket(struct Window *window, struct Window *itemWindow) {
+   creditCost = sGameTicketCreditCosts[gMainRoutineState.holdings.shopGifts];
    memberIndex = 0;
  
 +#if ARENA_TRAINING
@@ -65,9 +65,9 @@ index 93b3d5da86..a6960f2196 100644
 +  // none.
 +  return;
 +#endif
-   // Gifts spend accumulated shop credit; they do not debit the party's coins.
-   if (creditCost > gMainRoutineWork.shopCredit)
-     return;
+   // A ticket is paid for by the coins already spent, which it uses up; the
+   // party's coins are left alone.
+   if (creditCost > gMainRoutineState.holdings.shopCredit)
 -- 
-2.53.0
+2.43.0
 

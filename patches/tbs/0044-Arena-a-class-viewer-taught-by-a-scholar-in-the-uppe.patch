@@ -1,4 +1,4 @@
-From a814fc5ba5f5ee6f3810150a02b998899e8db26c Mon Sep 17 00:00:00 2001
+From 429fceac0427f70742564bee59a20ecb5dd21d16 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Mon, 2 Nov 2026 09:49:05 +1100
 Subject: [PATCH] Arena: a class viewer, taught by a scholar in the upper hall
@@ -30,25 +30,24 @@ ends at 0x080c9c6c, bank 08 before 0x080f0000).
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- games/tbs/include/module/arena.h             |   5 +
- games/tbs/include/module/arena_cups.h        |   2 +-
- games/tbs/main.ld                            |   4 +-
- games/tbs/src/gamepak/far_call/SHOP.S        |   1 +
- games/tbs/src/scene/arena_cup_info.inc       |  82 ++--
- games/tbs/src/scene/arena_menu.c             |  18 +
- games/tbs/src/scene/battle_arena.c           |  12 +-
- games/tbs/src/scene/import/battle_arena.s    |   1 +
- games/tbs/src/shop/shop.c                    |   1 +
- games/tbs/src/shop/shop/arena_class_viewer.c | 471 +++++++++++++++++++
- games/tbs/src/system/overlay/imports.inc     |   1 +
- games/tbs/text/en.po                         | 198 +++++---
- 12 files changed, 690 insertions(+), 106 deletions(-)
- create mode 100644 games/tbs/src/shop/shop/arena_class_viewer.c
+ games/tbs/include/arena/arena.h          |   5 +
+ games/tbs/include/arena/arena_cups.h     |   2 +-
+ games/tbs/ld_script.ld                   |   4 +-
+ games/tbs/src/gamepak/far_call/shop.s    |   1 +
+ games/tbs/src/scene/arena_cup_info.inc   |  82 ++--
+ games/tbs/src/scene/arena_menu.c         |  18 +
+ games/tbs/src/scene/battle_arena.c       |  12 +-
+ games/tbs/src/shop/arena_class_viewer.c  | 471 +++++++++++++++++++++++
+ games/tbs/src/shop/shop.c                |   1 +
+ games/tbs/src/system/overlay/imports.inc |   1 +
+ games/tbs/text/en.po                     | 198 +++++++---
+ 11 files changed, 689 insertions(+), 106 deletions(-)
+ create mode 100644 games/tbs/src/shop/arena_class_viewer.c
 
-diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
-index 847f65ce1d..2d09a2fa61 100644
---- a/games/tbs/include/module/arena.h
-+++ b/games/tbs/include/module/arena.h
+diff --git a/games/tbs/include/arena/arena.h b/games/tbs/include/arena/arena.h
+index 4cd54f25b5..e4cc51cca6 100644
+--- a/games/tbs/include/arena/arena.h
++++ b/games/tbs/include/arena/arena.h
 @@ -61,6 +61,8 @@ s32 ArenaCup_Current(void);
  s32 ArenaCup_Heals(void);
  /// Talking to the party manager: stats, Djinn and the item shops.
@@ -67,10 +66,10 @@ index 847f65ce1d..2d09a2fa61 100644
 +s32 ClassViewer_Run(s32 unitId);
  
  #endif
-diff --git a/games/tbs/include/module/arena_cups.h b/games/tbs/include/module/arena_cups.h
+diff --git a/games/tbs/include/arena/arena_cups.h b/games/tbs/include/arena/arena_cups.h
 index 34fd23386f..a98cad1723 100644
---- a/games/tbs/include/module/arena_cups.h
-+++ b/games/tbs/include/module/arena_cups.h
+--- a/games/tbs/include/arena/arena_cups.h
++++ b/games/tbs/include/arena/arena_cups.h
 @@ -70,6 +70,6 @@ extern const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT];
  extern const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3];
  extern const u8 gArenaCrossboneRows[3];
@@ -79,29 +78,25 @@ index 34fd23386f..a98cad1723 100644
 +#define MSG_ARENA_CUP_NAME 10808
  
  #endif
-diff --git a/games/tbs/main.ld b/games/tbs/main.ld
-index 8dae890700..1f07f3e23e 100644
---- a/games/tbs/main.ld
-+++ b/games/tbs/main.ld
-@@ -72,12 +72,12 @@ SECTIONS
-         . = ABSOLUTE(DEFINED(TBS_EDITION_JA)                            ? 0x080ac000 :
-                      DEFINED(TBS_EDITION_DE)                            ? 0x080b7600 :
-                      DEFINED(TBS_EDITION_ES) || DEFINED(TBS_EDITION_FR) ? 0x080b9000 :
--                                                                          0x080b6000);
-+                                                                          0x080b7000);
-         INCLUDE "rom_main_07.ld"
-         . = ABSOLUTE(DEFINED(TBS_EDITION_JA)                            ? 0x080c0000 :
-                      DEFINED(TBS_EDITION_DE)                            ? 0x080cae00 :
-                      DEFINED(TBS_EDITION_ES) || DEFINED(TBS_EDITION_FR) ? 0x080cc800 :
--                                                                          0x080c9000);
-+                                                                          0x080c9d00);
-         INCLUDE "rom_main_08.ld"
-         . = ABSOLUTE(DEFINED(TBS_EDITION_JA)                            ? 0x080e7000 :
-                      DEFINED(TBS_EDITION_DE)                            ? 0x080f1600 :
-diff --git a/games/tbs/src/gamepak/far_call/SHOP.S b/games/tbs/src/gamepak/far_call/SHOP.S
-index c4cebe5aef..ce9139dcc3 100644
---- a/games/tbs/src/gamepak/far_call/SHOP.S
-+++ b/games/tbs/src/gamepak/far_call/SHOP.S
+diff --git a/games/tbs/ld_script.ld b/games/tbs/ld_script.ld
+index a3f11d34fa..167573fc81 100644
+--- a/games/tbs/ld_script.ld
++++ b/games/tbs/ld_script.ld
+@@ -82,8 +82,8 @@
+ #define FIELD_SEQUENCE_BANK_START 0x0808a000
+ #define MENU_BANK_START           0x080a1000
+ #define SHOP_BANK_START           0x080b0000
+-#define BATTLE_BANK_START         0x080b6000
+-#define BATTLE_EFFECT_BANK_START  0x080c9000
++#define BATTLE_BANK_START         0x080b7000
++#define BATTLE_EFFECT_BANK_START  0x080c9d00
+ #define CREDITS_BANK_START        0x080f0000
+ #define TITLE_BANK_START          0x080f2000
+ #define LUCKY_DICE_BANK_START     0x080f4000
+diff --git a/games/tbs/src/gamepak/far_call/shop.s b/games/tbs/src/gamepak/far_call/shop.s
+index 7750311771..9e4f89bf8f 100644
+--- a/games/tbs/src/gamepak/far_call/shop.s
++++ b/games/tbs/src/gamepak/far_call/shop.s
 @@ -18,3 +18,4 @@ FarCall_ShopTable:
  	export Inn_PlaySleepFar, Inn_PlaySleep
  	export ItemPicker_ChooseMemberFar, ItemPicker_ChooseMember
@@ -259,10 +254,10 @@ index 57e08e1c5d..bf7722592b 100644
  
  const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3] = {
 diff --git a/games/tbs/src/scene/arena_menu.c b/games/tbs/src/scene/arena_menu.c
-index 1c87085b1f..067946293d 100644
+index 7869668644..666574a41f 100644
 --- a/games/tbs/src/scene/arena_menu.c
 +++ b/games/tbs/src/scene/arena_menu.c
-@@ -273,3 +273,21 @@ s32 BattleArena_PartyManager(s32 actorId) {
+@@ -223,3 +223,21 @@ s32 BattleArena_PartyManager(s32 actorId) {
    Event_End();
    return 0;
  }
@@ -274,7 +269,7 @@ index 1c87085b1f..067946293d 100644
 +  s32 member;
 +
 +  Event_Start();
-+  Actor_SetAngleToward(actorId, gMainRoutineWork.leaderActorId, 0);
++  Actor_FaceActor(actorId, gMainRoutineState.leaderActorId, 0);
 +  for (;;) {
 +    member = ItemPicker_ChooseMember(3);
 +    if (member < 0)
@@ -285,10 +280,10 @@ index 1c87085b1f..067946293d 100644
 +  return 0;
 +}
 diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
-index 17b6c858d8..d14c07928a 100644
+index 63e8dceb70..87ec082d6a 100644
 --- a/games/tbs/src/scene/battle_arena.c
 +++ b/games/tbs/src/scene/battle_arena.c
-@@ -214,7 +214,9 @@ enum BattleArenaActorId {
+@@ -193,7 +193,9 @@ enum BattleArenaActorId {
    /// Congratulates the player after the last main cup (MsgArenaChampion).
    ACTOR_CHAMPION,
    /// Hints at the side cups, from the third cup on (MsgArenaScout).
@@ -298,28 +293,28 @@ index 17b6c858d8..d14c07928a 100644
 +  ACTOR_CLASS_VIEWER
  };
  
- /// The words of gBattleArena_SlotValues, by slot: the signature, then the state
-@@ -1995,6 +1997,9 @@ struct ActorPlacement gBattleArenaActorPlacements[] = {
-         PIXELS(272), 0, PIXELS(268), FACING_WEST, TALK_FACING_PARTY_AND_BACK, 0 },
-     { 0x87, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 2), MOVEMENT_TYPE_STAND,
-         PIXELS(160), 0, PIXELS(268), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
+ /// The words of gBattleArena_SlotValues, by slot. They are the signature, then
+@@ -1962,6 +1964,9 @@ struct ActorPlacement gBattleArenaActorPlacements[] = {
+         272, 0, 268, FACING_WEST, TALK_FACING_PARTY_AND_BACK, 0),
+     ACTOR_PLACEMENT(SPRITE_MAN_WITH_PICKAXE, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 2), MOVEMENT_TYPE_STAND,
+         160, 0, 268, FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0),
 +    // Arena romhack: the scholar of the class viewer (ACTOR_CLASS_VIEWER).
-+    { 0x6f, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
-+        PIXELS(56), 0, PIXELS(168), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
-     { GARET, IF_FLAG_SET(0x1), MOVEMENT_TYPE_STAND,
-         PIXELS(352), 0, PIXELS(108), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
-     { IVAN, IF_FLAG_SET(0x2), MOVEMENT_TYPE_STAND,
-@@ -2087,6 +2092,9 @@ struct ActorPlacement gBattleArenaBattleActorPlacements[] = {
-         PIXELS(272), 0, PIXELS(268), FACING_WEST, TALK_FACING_PARTY_AND_BACK, 0 },
-     { 0x87, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 2), MOVEMENT_TYPE_STAND,
-         PIXELS(160), 0, PIXELS(268), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
++    ACTOR_PLACEMENT(SPRITE_OLD_WOMAN, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
++        56, 0, 168, FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0),
+     ACTOR_PLACEMENT(GARET, IF_FLAG_SET(FLAG_IN_PARTY(GARET)), MOVEMENT_TYPE_STAND,
+         352, 0, 108, FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0),
+     ACTOR_PLACEMENT(IVAN, IF_FLAG_SET(FLAG_IN_PARTY(IVAN)), MOVEMENT_TYPE_STAND,
+@@ -2054,6 +2059,9 @@ struct ActorPlacement gBattleArenaBattleActorPlacements[] = {
+         272, 0, 268, FACING_WEST, TALK_FACING_PARTY_AND_BACK, 0),
+     ACTOR_PLACEMENT(SPRITE_MAN_WITH_PICKAXE, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 2), MOVEMENT_TYPE_STAND,
+         160, 0, 268, FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0),
 +    // Arena romhack: the scholar of the class viewer (ACTOR_CLASS_VIEWER).
-+    { 0x6f, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
-+        PIXELS(56), 0, PIXELS(168), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
-     { GARET, IF_FLAG_SET(0x1), MOVEMENT_TYPE_STAND,
-         PIXELS(104), 0, PIXELS(144), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
-     { IVAN, IF_FLAG_SET(0x2), MOVEMENT_TYPE_STAND,
-@@ -2129,6 +2137,8 @@ struct Trigger gBattleArenaTriggers[] = {
++    ACTOR_PLACEMENT(SPRITE_OLD_WOMAN, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
++        56, 0, 168, FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0),
+     ACTOR_PLACEMENT(GARET, IF_FLAG_SET(FLAG_IN_PARTY(GARET)), MOVEMENT_TYPE_STAND,
+         104, 0, 144, FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0),
+     ACTOR_PLACEMENT(IVAN, IF_FLAG_SET(FLAG_IN_PARTY(IVAN)), MOVEMENT_TYPE_STAND,
+@@ -2096,6 +2104,8 @@ struct Trigger gBattleArenaTriggers[] = {
       EVENT(BattleArena_ChooseBattleMode)},
      {TRIGGER_TALK, ACTOR_CHAMPION, CONDITION_ALWAYS, MSGNO(MsgArenaChampion)},
      {TRIGGER_TALK, ACTOR_SCOUT, CONDITION_ALWAYS, MSGNO(MsgArenaScout)},
@@ -328,32 +323,11 @@ index 17b6c858d8..d14c07928a 100644
  #if ARENA_TRAINING
      {TRIGGER_TALK, ACTOR_LINKED_WINS_TELLER, CONDITION_ALWAYS,
       EVENT(BattleArena_PartyManager)},
-diff --git a/games/tbs/src/scene/import/battle_arena.s b/games/tbs/src/scene/import/battle_arena.s
-index bde38f87ae..5c45840660 100644
---- a/games/tbs/src/scene/import/battle_arena.s
-+++ b/games/tbs/src/scene/import/battle_arena.s
-@@ -43,6 +43,7 @@
- 	.set import.ArenaMenu_IconChoose, 1
- 	.set import.ItemPicker_ChooseMember, 1
- 	.set import.ArenaShop_Run, 1
-+	.set import.ClassViewer_Run, 1
- 	.set import.WindowSprite_CreateFromResource, 1
- 	.set import.Sprite_Create, 1
- 	.set import.Sprite_Destroy, 1
-diff --git a/games/tbs/src/shop/shop.c b/games/tbs/src/shop/shop.c
-index 6c5cc6441c..e00b603786 100644
---- a/games/tbs/src/shop/shop.c
-+++ b/games/tbs/src/shop/shop.c
-@@ -32,3 +32,4 @@
- #include "shop/inn.c"
- #include "shop/item_picker.c"
- #include "shop/arena_shop.c"
-+#include "shop/arena_class_viewer.c"
-diff --git a/games/tbs/src/shop/shop/arena_class_viewer.c b/games/tbs/src/shop/shop/arena_class_viewer.c
+diff --git a/games/tbs/src/shop/arena_class_viewer.c b/games/tbs/src/shop/arena_class_viewer.c
 new file mode 100644
-index 0000000000..6d26e5f214
+index 0000000000..014aa1c654
 --- /dev/null
-+++ b/games/tbs/src/shop/shop/arena_class_viewer.c
++++ b/games/tbs/src/shop/arena_class_viewer.c
 @@ -0,0 +1,471 @@
 +/// @file
 +/// Arena romhack: the class viewer (the scholar in the lobby's upper hall). A
@@ -367,10 +341,10 @@ index 0000000000..6d26e5f214
 +/// "Class viewer"). Far-called from the Battle Arena overlay.
 +// Part of shop.c.
 +
-+#include "../shop_internal.h"
++#include "shop_internal.h"
 +#include "ability_ids.h"
-+#include "character.h"
-+#include "module/arena.h"
++#include "game/character.h"
++#include "arena/arena.h"
 +
 +/// The class table has twenty lines: the classes whose ids share a tens digit
 +/// (Squire to Sovereign are ids 1 to 5, Guard to Phalanx 10 to 14, and so on).
@@ -518,7 +492,7 @@ index 0000000000..6d26e5f214
 +    for (element = 0; element < ELEMENT_COUNT; element++) {
 +      s32 x = 64 + element * 40;
 +
-+      figures[element] = Sprite_CreateFar(VENUS_DJINNI + element);
++      figures[element] = Sprite_CreateFar(SPRITE_VENUS_DJINNI + element);
 +      if (figures[element] != 0) {
 +        Sprite_StartAnimationFar(figures[element], 2);
 +        positions[element * 2] = 8 + x + 8;
@@ -529,9 +503,9 @@ index 0000000000..6d26e5f214
 +    }
 +    ClassViewer_DrawPercent(top, MsgArenaCvHp, class->hp * 5, 0, 32);
 +    ClassViewer_DrawPercent(top, MsgArenaCvPp, class->pp * 5, 0, 40);
-+    ClassViewer_DrawPercent(top, MsgArenaCvAttack, class->atk * 5, 0, 48);
-+    ClassViewer_DrawPercent(top, MsgArenaCvDefense, class->def * 5, 112, 32);
-+    ClassViewer_DrawPercent(top, MsgArenaCvAgility, class->agi * 5, 112, 40);
++    ClassViewer_DrawPercent(top, MsgArenaCvAttack, class->attack * 5, 0, 48);
++    ClassViewer_DrawPercent(top, MsgArenaCvDefense, class->defense * 5, 112, 32);
++    ClassViewer_DrawPercent(top, MsgArenaCvAgility, class->agility * 5, 112, 40);
 +    ClassViewer_DrawPercent(top, MsgArenaCvLuck, class->luck * 5, 112, 48);
 +    ClassViewer_DrawPercent(top, MsgArenaCvWard, class->ward, 0, 56);
 +  }
@@ -578,7 +552,7 @@ index 0000000000..6d26e5f214
 +          ICON_KIND_ABILITY, abilities[first + slot], top, x + 16, y + 4);
 +
 +      if (icon != 0)
-+        icon->sentinel = 252;
++        icon->depth = 252;
 +    } else {
 +      Text_SetColorFar(TEXT_COLOR_RED);
 +      Text_DrawNumberInWindowFar(levels[first + slot], 2, top, x + 16, y + 8);
@@ -621,7 +595,7 @@ index 0000000000..6d26e5f214
 +/// file comment and docs/UI-SPECS.md for the screens. Called from the Battle
 +/// Arena overlay through SHOP.S.
 +s32 ClassViewer_Run(s32 unitId) {
-+  struct ShopWork *shop;
++  struct ShopState *shop;
 +  struct Window *anchorWindow;
 +  struct Window *top;
 +  struct Window *list;
@@ -647,8 +621,8 @@ index 0000000000..6d26e5f214
 +    figures[i] = 0;
 +  while (gKeysHeld != 0)
 +    wait(1);
-+  Shop_InitializeWork();
-+  shop = gMenuWork;
++  Shop_InitializeState();
++  shop = gMenuState;
 +  // The Djinn the party owns, by element: every member's held Djinn, set or on
 +  // standby, counted together (they can be traded).
 +  for (element = 0; element < ELEMENT_COUNT; element++) {
@@ -664,7 +638,7 @@ index 0000000000..6d26e5f214
 +    }
 +  }
 +  anchorWindow = Window_CreateFar(-5, 0, 5, 5, WINDOW_FLAG_INSTANT);
-+  anchor = WindowSprite_CreateFar(shop->cursorIcon, OUTPUT_SIZE_16X16,
++  anchor = WindowSprite_CreateFar(shop->cursorIcon, WINDOW_SPRITE_SIZE_16X16,
 +                                  anchorWindow, 0, 0);
 +  anchor->motion = WINDOW_SPRITE_MOTION_WOBBLE;
 +  anchor->kind = 0;
@@ -672,7 +646,7 @@ index 0000000000..6d26e5f214
 +  shop->cursor.anchor = anchor;
 +  top = Window_CreateFar(0, 0, 30, 11, WINDOW_FLAG_INSTANT);
 +  list = Window_CreateFar(0, 11, 30, 9, WINDOW_FLAG_INSTANT);
-+  shop->mode = 12;
++  shop->cursorFrames = 12;
 +
 +  while (1) {
 +    if (redraw != 0) {
@@ -823,23 +797,32 @@ index 0000000000..6d26e5f214
 +  Window_CloseFar(top, 2);
 +  Window_CloseFar(anchorWindow, 2);
 +  wait(1);
-+  Shop_ReleaseWork();
++  Shop_ReleaseState();
 +  return 0;
 +}
+diff --git a/games/tbs/src/shop/shop.c b/games/tbs/src/shop/shop.c
+index 6d5888630c..e824f120b9 100644
+--- a/games/tbs/src/shop/shop.c
++++ b/games/tbs/src/shop/shop.c
+@@ -16,3 +16,4 @@
+ #include "shop_inn.c"
+ #include "shop_item_picker.c"
+ #include "arena_shop.c"
++#include "arena_class_viewer.c"
 diff --git a/games/tbs/src/system/overlay/imports.inc b/games/tbs/src/system/overlay/imports.inc
-index 489761293a..6242a4be36 100644
+index 1338a83616..c8bb95b069 100644
 --- a/games/tbs/src/system/overlay/imports.inc
 +++ b/games/tbs/src/system/overlay/imports.inc
-@@ -367,6 +367,7 @@
- 	import Inn_PlaySleep, Inn_PlaySleepFar
- 	import ItemPicker_ChooseMember, ItemPicker_ChooseMemberFar
- 	import ArenaShop_Run, ArenaShop_RunFar
-+	import ClassViewer_Run, ClassViewer_RunFar
- @ Battle bank (far_call/BATTLE.S)
- 	import DjinnRecovery_CountDownTwenty, DjinnRecovery_CountDownTwentyFar
- 	import DebugParameterSet_Load, DebugParameterSet_LoadFar
+@@ -353,6 +353,7 @@
+ 	export Inn_PlaySleep, Inn_PlaySleepFar
+ 	export ItemPicker_ChooseMember, ItemPicker_ChooseMemberFar
+ 	export ArenaShop_Run, ArenaShop_RunFar
++	export ClassViewer_Run, ClassViewer_RunFar
+ @ Battle bank (far_call/battle.s)
+ 	export DjinnRecovery_CountDownTwenty, DjinnRecovery_CountDownTwentyFar
+ 	export DebugParameterSet_Load, DebugParameterSet_LoadFar
 diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
-index dc6a7919f8..c1e62530a3 100644
+index 3906cada2b..3936d8c0a7 100644
 --- a/games/tbs/text/en.po
 +++ b/games/tbs/text/en.po
 @@ -65333,114 +65333,190 @@ msgctxt "MsgArenaResetDone"
@@ -1424,5 +1407,5 @@ index dc6a7919f8..c1e62530a3 100644
  "Well done!\n"
  "You cleared the\n"
 -- 
-2.53.0
+2.43.0
 

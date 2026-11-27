@@ -1,4 +1,4 @@
-From bde0cca82c6c652a6115dd6e626a855084da2cb9 Mon Sep 17 00:00:00 2001
+From 6b74c9bb341eded0973c09b5df46095d1821ff26 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Mon, 2 Nov 2026 08:57:18 +1100
 Subject: [PATCH] Arena: the file list shows each cup's trophy, five to a page,
@@ -15,63 +15,69 @@ only.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- games/tbs/include/module/window/screens.h |   4 +-
- games/tbs/include/system/save.h           |   7 +-
- games/tbs/src/window/screens/save.c       | 135 +++++++++++++---------
- 3 files changed, 89 insertions(+), 57 deletions(-)
+ games/tbs/include/system/save.h     |   7 +-
+ games/tbs/include/window/screens.h  |   5 +-
+ games/tbs/src/window/screens_save.c | 130 +++++++++++++++++-----------
+ 3 files changed, 87 insertions(+), 55 deletions(-)
 
-diff --git a/games/tbs/include/module/window/screens.h b/games/tbs/include/module/window/screens.h
-index 9a702ed812..90c625683d 100644
---- a/games/tbs/include/module/window/screens.h
-+++ b/games/tbs/include/module/window/screens.h
-@@ -67,10 +67,10 @@ void FileList_ShowPartySprites(struct Window *origin, s32 x, s32 y,
- void FileList_HidePartySprites(void);
- void FileList_PlacePartySprites(void);
- void FileList_ShowTrophySprites(struct Window *origin, s32 x, s32 y,
--                                struct SaveFileSummary *summary);
-+                                struct SaveFileSummary *summary, s32 page);
- void FileList_HideTrophySprites(void);
- void FileList_PlaceTrophySprites(void);
--void FileList_DrawTrophyCounts(struct Window *win, struct SaveFileSummary *row);
-+void FileList_DrawTrophyCounts(struct Window *win, s32 page);
- void FileList_DrawSummary(struct Window *win, struct SaveFileSummary *rec);
- s32 FileList_SelectFile(s32 file, s32 mode);
- s32 Save_ToChosenFile(void);
 diff --git a/games/tbs/include/system/save.h b/games/tbs/include/system/save.h
-index 0885dcca7e..af959c5767 100644
+index 9563b77b26..4fb362d1be 100644
 --- a/games/tbs/include/system/save.h
 +++ b/games/tbs/include/system/save.h
-@@ -35,9 +35,10 @@ struct SaveFileSummary {
+@@ -39,9 +39,10 @@ struct SaveFileSummary {
    u16 area;          ///< area name number (Area_GetNameIndex)
    u32 playTime;      ///< frames
    u32 coins;
 -  /// Arena romhack: the cups cleared in each tier (bronze, silver, gold, side
 -  /// cups), which the file list draws as four trophies (was the Djinn).
--  u8 cups[4];
+-  s8 cups[4];
 +  /// Arena romhack: which cups are cleared, as a bitmask (bit n = cup n; 32
 +  /// cups fit), which the file list draws as trophies, a page at a time (was
 +  /// the Djinn counts).
 +  u8 cupBits[4];
    s8 party[5]; ///< up to four party members, ended by -1
-   /// Copied from MainRoutineWork.sendFlag, which saving at the end of the
+   /// Copied from MainRoutineState.sendFlag, which saving at the end of the
    /// game sets; the file list for cleared data lists a file without it as not
-diff --git a/games/tbs/src/window/screens/save.c b/games/tbs/src/window/screens/save.c
-index 6e34eba76b..3fc55ae883 100644
---- a/games/tbs/src/window/screens/save.c
-+++ b/games/tbs/src/window/screens/save.c
-@@ -158,7 +158,7 @@ s32 Save_ScanFileSummaries(void) {
- /// Prepares the save buffer for writing: stamps the main routine's work with
+diff --git a/games/tbs/include/window/screens.h b/games/tbs/include/window/screens.h
+index 936924b893..228f51f4b2 100644
+--- a/games/tbs/include/window/screens.h
++++ b/games/tbs/include/window/screens.h
+@@ -69,7 +69,7 @@ void FileList_ShowPartySprites(struct Window *window, s32 x, s32 y,
+ void FileList_HidePartySprites(void);
+ void FileList_PlacePartySprites(void);
+ void FileList_ShowTrophySprites(struct Window *window, s32 x, s32 y,
+-                                struct SaveFileSummary *summary);
++                                struct SaveFileSummary *summary, s32 page);
+ void FileList_HideTrophySprites(void);
+ void FileList_PlaceTrophySprites(void);
+ 
+@@ -86,8 +86,7 @@ enum FileMenuMode {
+   FILE_LIST_CLEARED ///< the title's Send: cleared files only
+ };
+ 
+-void FileList_DrawTrophyCounts(struct Window *window,
+-                               struct SaveFileSummary *summary);
++void FileList_DrawTrophyCounts(struct Window *window, s32 page);
+ void FileList_DrawSummary(struct Window *window,
+                           struct SaveFileSummary *summary);
+ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode);
+diff --git a/games/tbs/src/window/screens_save.c b/games/tbs/src/window/screens_save.c
+index 6be8266c8e..6bea91c200 100644
+--- a/games/tbs/src/window/screens_save.c
++++ b/games/tbs/src/window/screens_save.c
+@@ -168,7 +168,7 @@ s32 Save_ScanFileSummaries(void) {
+ /// Prepares the save buffer for writing: stamps the main routine's state with
  /// the time and options, then fills the file summary shown on the file menus
  /// (the leader's name, level and class, the play time, area, coins, the cups
--/// cleared in each tier, the party, the send flag and how many of game flags 48-127 are
-+/// cleared as bits, the party, the send flag and how many of game flags 48-127 are
- /// set) and its checksum, the sum of the 968 words from gGameFlagBytes on.
- /// Returns the checksum.
+-/// cleared in each tier, the party, the send flag and how many Djinn have been
++/// cleared as bits, the party, the send flag and how many Djinn have been
+ /// found) and its checksum, the sum of SAVE_CHECKSUM_WORDS words from
+ /// gGameFlagBytes on.
  u32 Save_BuildFileSummary(void) {
-@@ -199,14 +199,13 @@ u32 Save_BuildFileSummary(void) {
-       Area_GetNameIndexFar(gMainRoutineWork.next, gMainRoutineWork.entrance);
+@@ -214,14 +214,13 @@ u32 Save_BuildFileSummary(void) {
+       Area_GetNameIndexFar(gMainRoutineState.next, gMainRoutineState.entrance);
    summary->classId = leader->classId;
-   summary->coins = gMainRoutineWork.coins;
+   summary->coins = gMainRoutineState.holdings.coins;
 -  // Arena romhack: the cups cleared, a count for each tier of the trophies in
 -  // the lobby (the file list's four trophies): bronze (cups 0 and 1), silver
 -  // (2 and 3), gold (4 to 6) and the side cups (7 on).
@@ -87,19 +93,18 @@ index 6e34eba76b..3fc55ae883 100644
    }
    // Up to four party members, ended by -1.
    Party_ListMembersFar(members);
-@@ -598,8 +597,9 @@ void Window_FillTilemapRect(struct Window *window, s32 x, s32 y, s32 width,
+@@ -589,8 +588,8 @@ void Window_FillTilemapRect(struct Window *window, s32 x, s32 y, s32 width,
  #endif
  
- /// The file list shows the chosen file's party as walking sprites in a
--/// row, and four trophy sprites, one for each tier of cups, over the file's cup
--/// counts. Each sprite stands three tiles (24 pixels) from the one before.
-+/// row, and below it the file's cup trophies, a page of them at a time (L and R
-+/// turn the page). Each party sprite stands three tiles (24 pixels) from the
-+/// one before.
+ /// The file list shows the chosen file's party as standing sprites in a row,
+-/// and four trophy sprites, one for each tier of cups, over the file's cup
+-/// counts.
++/// and below it the file's cup trophies, a page of them at a time (L and R
++/// turn the page).
  #define FILE_LIST_SPRITE_SPACING 3
- /// Task priority of the tasks that place the sprites every frame.
- #define FILE_LIST_SPRITE_PRIORITY (200 << 4)
-@@ -678,38 +678,61 @@ void FileList_PlacePartySprites(void) {
+ 
+ /// Shows the party of save file `summary` (up to four party members) as sprites
+@@ -665,38 +664,61 @@ void FileList_PlacePartySprites(void) {
    }
  }
  
@@ -125,14 +130,14 @@ index 6e34eba76b..3fc55ae883 100644
 +  return (summary->cupBits[cup >> 3] >> (cup & 7)) & 1;
 +}
 +
-+/// The sprite slot of trophy `index` on a page: the Djinn figures' four slots
-+/// and then the unused first of the Djinn menu's figure scales, which lies in
-+/// a gap of the shop's work that the party sprites do not reach.
-+static struct Sprite **FileList_TrophySlot(struct ItemMenuFiguresView *menu,
++/// The sprite slot of trophy `index` on a page: the four figure slots and then
++/// the unused first of the Djinn menu's figure scales, which lies in a gap of
++/// the shop's state that the party sprites do not reach.
++static struct Sprite **FileList_TrophySlot(struct ItemMenuState *menu,
 +                                           s32 index) {
 +  if (index < 4)
-+    return &menu->animations[index];
-+  return (struct Sprite **)&menu->phases[index - 4];
++    return &menu->figures[index];
++  return (struct Sprite **)&menu->figureScales[index - 4];
 +}
 +
 +/// Shows the trophies of page `page` of save file `summary`'s cups in a row from
@@ -142,7 +147,7 @@ index 6e34eba76b..3fc55ae883 100644
  void FileList_ShowTrophySprites(struct Window *window, s32 x, s32 y,
 -                                struct SaveFileSummary *summary) {
 +                                struct SaveFileSummary *summary, s32 page) {
-   struct ItemMenuFiguresView *menu = gMenuWork;
+   struct ItemMenuState *menu = gMenuState;
    s32 i;
  
    if (window != NULL) {
@@ -156,7 +161,7 @@ index 6e34eba76b..3fc55ae883 100644
 +      if (cup < ARENA_CUP_COUNT) {
 +        sprite = Sprite_CreateFar(sFileListTrophySprites[cup]);
          if (sprite != NULL) {
-           Sprite_StartAnimationFar(sprite, 2);
+           Sprite_StartAnimationFar(sprite, ANIM_WALK);
            sprite->flags = 0;
            sprite->image.priority = 0;
 +          if (!FileList_CupCleared(summary, cup))
@@ -164,27 +169,27 @@ index 6e34eba76b..3fc55ae883 100644
          }
        }
 -
--      menu->animations[i] = sprite;
--      menu->positionsX[i] =
+-      menu->figures[i] = sprite;
+-      menu->figureX[i] =
 -          (window->x + x + i * FILE_LIST_SPRITE_SPACING) * 8 + 16;
 -      // Three pixels lower than the Djinn were: a trophy is taller.
--      menu->positionsY[i] = (window->y + y) * 8 + 19;
+-      menu->figureY[i] = (window->y + y) * 8 + 19;
 +      *FileList_TrophySlot(menu, i) = sprite;
      }
 +    // The first trophy's place; the others follow at FILE_LIST_CUP_SPACING.
-+    menu->positionsX[0] = (window->x + x) * 8 + 16;
-+    menu->positionsY[0] = (window->y + y) * 8 + 19;
++    menu->figureX[0] = (window->x + x) * 8 + 16;
++    menu->figureY[0] = (window->y + y) * 8 + 19;
  
-     Task_Add(FileList_PlaceTrophySprites, FILE_LIST_SPRITE_PRIORITY);
+     Task_Add(FileList_PlaceTrophySprites, TASK_PASS_FRAME);
    }
-@@ -721,10 +744,12 @@ void FileList_HideTrophySprites(void) {
+@@ -708,10 +730,12 @@ void FileList_HideTrophySprites(void) {
    s32 i;
  
    Task_Remove(FileList_PlaceTrophySprites);
 -  for (i = 0; i < 4; i++) {
--    if (menu->animations[i] != NULL) {
--      Sprite_DestroyFar(menu->animations[i]);
--      menu->animations[i] = NULL;
+-    if (menu->figures[i] != NULL) {
+-      Sprite_DestroyFar(menu->figures[i]);
+-      menu->figures[i] = NULL;
 +  for (i = 0; i < FILE_LIST_CUPS_PER_PAGE; i++) {
 +    struct Sprite **slot = FileList_TrophySlot(menu, i);
 +
@@ -194,40 +199,38 @@ index 6e34eba76b..3fc55ae883 100644
      }
    }
  }
-@@ -737,9 +762,8 @@ void FileList_PlaceTrophySprites(void) {
+@@ -724,8 +748,8 @@ void FileList_PlaceTrophySprites(void) {
    struct SpritePlacement position;
    s32 index;
  
--  index = 0;
--  do {
--    struct Sprite *sprite = menu->animations[index];
+-  for (index = 0; index <= 3; index++) {
+-    struct Sprite *sprite = menu->figures[index];
 +  for (index = 0; index < FILE_LIST_CUPS_PER_PAGE; index++) {
 +    struct Sprite *sprite = *FileList_TrophySlot(menu, index);
  
      if (sprite != NULL) {
-       s32 one = Q16_ONE;
-@@ -747,27 +771,25 @@ void FileList_PlaceTrophySprites(void) {
+       FIXED fullSize = FIXED_ONE;
+@@ -733,9 +757,9 @@ void FileList_PlaceTrophySprites(void) {
  
-       scale.x = one;
-       scale.y = one;
--      position.x = menu->positionsX[index] << 16;
-+      position.x = (menu->positionsX[0] + index * FILE_LIST_CUP_SPACING) << 16;
+       scale.x = fullSize;
+       scale.y = fullSize;
+-      position.x = toFIXED(menu->figureX[index]);
++      position.x = toFIXED(menu->figureX[0] + index * FILE_LIST_CUP_SPACING);
        position.height = height;
--      position.y = (menu->positionsY[index] << 16) + height;
-+      position.y = (menu->positionsY[0] << 16) + height;
+-      position.y = toFIXED(menu->figureY[index]) + height;
++      position.y = toFIXED(menu->figureY[0]) + height;
        position.groundHeight = 0;
-       Actor_ApplyProjectedPlacementFar(sprite, &position, &scale, FACING_SOUTH);
-     }
--    index++;
--  } while (index <= 3);
-+  }
+       Render_ApplyProjectedPlacementFar(sprite, &position, &scale,
+                                         FACING_SOUTH);
+@@ -743,17 +767,16 @@ void FileList_PlaceTrophySprites(void) {
+   }
  }
  
 -/// Draws the cup counts of save file `summary`, one for each tier, two
 -/// digits each, 24 pixels apart on row 16 of `window`, under the trophy
--/// sprites. Does nothing when `window` is NULL.
+-/// sprites.
 -void FileList_DrawTrophyCounts(struct Window *window,
--                              struct SaveFileSummary *summary) {
+-                               struct SaveFileSummary *summary) {
 -  s32 i;
 +/// The page indicator "n/m" of the cup trophies, under them on row 16 of
 +/// `window`; drawn only when there is more than one page ("L R" turn it).
@@ -237,7 +240,7 @@ index 6e34eba76b..3fc55ae883 100644
  
 -  if (window != NULL) {
 -    for (i = 0; i < 4; i++)
--      Text_DrawNumberAtOffset((s8)summary->cups[i], 2, window,
+-      Text_DrawNumberAtOffset(summary->cups[i], 2, window,
 -                              i * FILE_LIST_SPRITE_SPACING * 8, 16);
 +  if (window != NULL && FILE_LIST_CUP_PAGES > 1) {
 +    Text_DrawNumberAtOffset(page + 1, 1, window, 32, 16);
@@ -246,25 +249,25 @@ index 6e34eba76b..3fc55ae883 100644
    }
  }
  
-@@ -893,7 +915,10 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
+@@ -858,7 +881,10 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
    struct WindowSprite *cursorSprite;
  #endif
  
 +  s32 trophyPage;
 +
-   spriteWork = HeapSlot_Alloc(HEAP_SLOT_MENU, sizeof(*spriteWork));
+   spriteState = HeapSlot_Alloc(HEAP_SLOT_MENU, sizeof(*spriteState));
 +  trophyPage = 0;
-   save = *(gHeapSlots + HEAP_SLOT_SAVE);
+   save = gSaveState;
    summaryWindow = NULL;
    partyWindow = NULL;
-@@ -1095,17 +1120,13 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
+@@ -1060,17 +1086,13 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
          FileList_ShowPartySprites(partyWindow, 0, 0,
                                    &save->summary[selectedFile]);
          wait(1);
--        if ((s8)save->summary[selectedFile].cups[0] +
--                (s8)save->summary[selectedFile].cups[1] +
--                (s8)save->summary[selectedFile].cups[2] +
--                (s8)save->summary[selectedFile].cups[3] !=
+-        if (save->summary[selectedFile].cups[0] +
+-                save->summary[selectedFile].cups[1] +
+-                save->summary[selectedFile].cups[2] +
+-                save->summary[selectedFile].cups[3] !=
 -            0) {
 +        if (*(u32 *)save->summary[selectedFile].cupBits != 0) {
            if (trophyWindow == NULL)
@@ -278,7 +281,7 @@ index 6e34eba76b..3fc55ae883 100644
          } else {
            FileList_HideTrophySprites();
            Window_Close(trophyWindow, 2);
-@@ -1144,6 +1165,7 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
+@@ -1109,6 +1131,7 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
      if (gKeysRepeat & KEY_UP) {
        Sound_PlayFar(SE_MENU_CURSOR_MOVE);
        summaryDirty = 1;
@@ -286,7 +289,7 @@ index 6e34eba76b..3fc55ae883 100644
        do {
          selectedFile = (selectedFile + SAVE_FILE_COUNT - 1) % SAVE_FILE_COUNT;
          if (menuMode == FILE_LIST_SAVE)
-@@ -1158,6 +1180,7 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
+@@ -1123,6 +1146,7 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
      } else if (gKeysRepeat & KEY_DOWN) {
        Sound_PlayFar(SE_MENU_CURSOR_MOVE);
        summaryDirty = 1;
@@ -294,10 +297,10 @@ index 6e34eba76b..3fc55ae883 100644
        do {
          selectedFile = (selectedFile + SAVE_FILE_COUNT + 1) % SAVE_FILE_COUNT;
          if (menuMode == FILE_LIST_SAVE)
-@@ -1169,6 +1192,14 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
-                  (s8)save->summary[selectedFile].flagCount == 0) ||
+@@ -1134,6 +1158,14 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
+                  save->summary[selectedFile].djinnCount == 0) ||
                  (menuMode == FILE_LIST_CLEARED &&
-                  (s8)save->summary[selectedFile].sendFlag == 0)));
+                  save->summary[selectedFile].sendFlag == 0)));
 +    } else if ((gKeysPressed & (KEY_L | KEY_R)) && FILE_LIST_CUP_PAGES > 1 &&
 +               *(u32 *)save->summary[selectedFile].cupBits != 0) {
 +      // Arena romhack: L and R turn the page of cup trophies.
@@ -310,5 +313,5 @@ index 6e34eba76b..3fc55ae883 100644
        Sound_PlayFar(SE_MENU_CANCEL);
        result = -1;
 -- 
-2.53.0
+2.43.0
 

@@ -1,4 +1,4 @@
-From 642770e582db24a22363b153b9bee6680f3f4b7e Mon Sep 17 00:00:00 2001
+From 9287f717a00122bea79190e19f7a8c05c40f322a Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Sun, 1 Nov 2026 08:21:45 +1100
 Subject: [PATCH] Arena: the Reloaded engine rules, level-up, ailments and
@@ -17,13 +17,13 @@ with has been ported:
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
  games/tbs/include/arena_config.h            | 14 ++++
- games/tbs/src/battle/battle/ability.c       | 37 +++++++++++
+ games/tbs/src/battle/battle_ability.c       | 37 +++++++++++
+ games/tbs/src/game/arena_rules.c            | 72 +++++++++++++++++++++
  games/tbs/src/game/game.c                   |  1 +
- games/tbs/src/game/game/arena_rules.c       | 72 +++++++++++++++++++++
- games/tbs/src/game/game/battle_arithmetic.c | 17 +++++
- games/tbs/src/game/game/levels.c            | 21 ++++--
- 6 files changed, 156 insertions(+), 6 deletions(-)
- create mode 100644 games/tbs/src/game/game/arena_rules.c
+ games/tbs/src/game/game_battle_arithmetic.c | 17 +++++
+ games/tbs/src/game/game_levels.c            | 28 ++++----
+ 6 files changed, 157 insertions(+), 12 deletions(-)
+ create mode 100644 games/tbs/src/game/arena_rules.c
 
 diff --git a/games/tbs/include/arena_config.h b/games/tbs/include/arena_config.h
 index c0220a26aa..91c209eaaa 100644
@@ -50,21 +50,21 @@ index c0220a26aa..91c209eaaa 100644
  #ifndef ARENA_LINK4
  #define ARENA_LINK4 1
  #endif
-diff --git a/games/tbs/src/battle/battle/ability.c b/games/tbs/src/battle/battle/ability.c
-index a855bff46f..0ef59213f5 100644
---- a/games/tbs/src/battle/battle/ability.c
-+++ b/games/tbs/src/battle/battle/ability.c
+diff --git a/games/tbs/src/battle/battle_ability.c b/games/tbs/src/battle/battle_ability.c
+index 0aee1abff6..33398a4422 100644
+--- a/games/tbs/src/battle/battle_ability.c
++++ b/games/tbs/src/battle/battle_ability.c
 @@ -4,6 +4,7 @@
  // Part of battle.c.
  
- #include "../battle_internal.h"
+ #include "battle_internal.h"
 +#include "arena_config.h"
  
- /// Returns 1 for an effect that still applies when the ability's damage has
- /// just knocked its target out: the drains, which give the damage they dealt
-@@ -52,6 +53,17 @@ s32 Ability_EffectAppliesToDowned(s32 effect) {
- /// scale by: 256 is 1.
- #define FULL_RATE 256
+ /// Returns 1 for an effect that still applies when the damage has just knocked
+ /// the target out: the drains.
+@@ -45,6 +46,17 @@ s32 Ability_EffectAppliesToDowned(s32 effect) {
+ /// resistance, plus this many.
+ #define DJINN_BONUS_CHANCE 30
  
 +#if ARENA_RULES_DAMAGE
 +/// Arena romhack: the share of the target's max HP, in percent, that each summon
@@ -80,7 +80,7 @@ index a855bff46f..0ef59213f5 100644
  /// A message operand that shows nothing: the event only waits for the player.
  #define MESSAGE_NONE -1
  
-@@ -579,8 +591,33 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+@@ -508,8 +520,33 @@ UNREAD_RESULT BattleAbility_ApplyToTarget(struct BattleActionRun *plan,
          if (pass == 0)
            elementBonus = 0;
          power = ability->power;
@@ -114,23 +114,11 @@ index a855bff46f..0ef59213f5 100644
            s32 maxHpPercent;
  
            switch (abilityId) {
-diff --git a/games/tbs/src/game/game.c b/games/tbs/src/game/game.c
-index a21118eaed..ed809e5b46 100644
---- a/games/tbs/src/game/game.c
-+++ b/games/tbs/src/game/game.c
-@@ -27,6 +27,7 @@
- #include "game_internal.h"
- 
- // The parts, in ROM order (src/README.md, "Objects and parts").
-+#include "game/arena_rules.c"
- #include "game/units.c"
- #include "game/inventory.c"
- #include "game/levels.c"
-diff --git a/games/tbs/src/game/game/arena_rules.c b/games/tbs/src/game/game/arena_rules.c
+diff --git a/games/tbs/src/game/arena_rules.c b/games/tbs/src/game/arena_rules.c
 new file mode 100644
 index 0000000000..3c8e3d9b9c
 --- /dev/null
-+++ b/games/tbs/src/game/game/arena_rules.c
++++ b/games/tbs/src/game/arena_rules.c
 @@ -0,0 +1,72 @@
 +/// @file
 +/// Arena romhack: the rules of the Golden Sun Reloaded rebalance that are code,
@@ -204,11 +192,23 @@ index 0000000000..3c8e3d9b9c
 +  return rate;
 +}
 +#endif
-diff --git a/games/tbs/src/game/game/battle_arithmetic.c b/games/tbs/src/game/game/battle_arithmetic.c
-index ef9783f516..bbf234daef 100644
---- a/games/tbs/src/game/game/battle_arithmetic.c
-+++ b/games/tbs/src/game/game/battle_arithmetic.c
-@@ -357,12 +357,24 @@ action4_done:
+diff --git a/games/tbs/src/game/game.c b/games/tbs/src/game/game.c
+index d368b917c5..acbc171b6a 100644
+--- a/games/tbs/src/game/game.c
++++ b/games/tbs/src/game/game.c
+@@ -7,6 +7,7 @@
+ #include "game_internal.h"
+ 
+ // The parts, in ROM order (src/README.md, "Objects and parts").
++#include "arena_rules.c"
+ #include "game_units.c"
+ #include "game_inventory.c"
+ #include "game_levels.c"
+diff --git a/games/tbs/src/game/game_battle_arithmetic.c b/games/tbs/src/game/game_battle_arithmetic.c
+index 075f5f654f..2b386db848 100644
+--- a/games/tbs/src/game/game_battle_arithmetic.c
++++ b/games/tbs/src/game/game_battle_arithmetic.c
+@@ -318,12 +318,24 @@ restore_checked:
  
    // A positive base rate is adjusted by the element levels, the target's luck
    // and its weaknesses; 0 or a negative one is a fixed chance.
@@ -225,15 +225,15 @@ index ef9783f516..bbf234daef 100644
 +#else
    score = Battle_GetEffectBaseSuccessRate(effectId);
    if (score > 0) {
-     s32 difference = Unit_GetElementLevel(caster, resistanceCategory) -
-                      Unit_GetElementLevel(target, resistanceCategory) -
-                      (unit->luck >> 1);
+     s32 difference = Unit_GetElementLevel(caster, element) -
+                      Unit_GetElementLevel(target, element) - (unit->luck >> 1);
+ 
      score += difference * 3;
 +#endif
      if (BattleAbility_IsWeakToEffect(unit, effectId) != 0) {
-       score += 25;
+       score += WEAKNESS_BONUS;
      }
-@@ -375,7 +387,12 @@ action4_done:
+@@ -336,7 +348,12 @@ restore_checked:
    }
  
    for (attempt = 0; attempt < attempts; attempt++) {
@@ -246,11 +246,11 @@ index ef9783f516..bbf234daef 100644
        return 1;
      }
    }
-diff --git a/games/tbs/src/game/game/levels.c b/games/tbs/src/game/game/levels.c
-index dd5904cb43..0b67ecadeb 100644
---- a/games/tbs/src/game/game/levels.c
-+++ b/games/tbs/src/game/game/levels.c
-@@ -325,6 +325,15 @@ u32 Unit_GetExperienceForLevel(s32 unitId, s32 level) {
+diff --git a/games/tbs/src/game/game_levels.c b/games/tbs/src/game/game_levels.c
+index ca1b9171ac..3294aa009a 100644
+--- a/games/tbs/src/game/game_levels.c
++++ b/games/tbs/src/game/game_levels.c
+@@ -311,6 +311,16 @@ u32 Unit_GetExperienceForLevel(s32 unitId, s32 level) {
    return -1;
  }
  
@@ -260,41 +260,48 @@ index dd5904cb43..0b67ecadeb 100644
 +#if ARENA_RULES_LEVELUP
 +#define LEVEL_GAIN(difference) ArenaRules_LevelGain(difference, gains->level)
 +#else
-+#define LEVEL_GAIN(difference) (((Random16() * 20 >> 16) + (difference)) / 20)
++#define LEVEL_GAIN(difference)                                                 \
++  ((Random16_Below(GROWTH_BAND_LEVELS) + (difference)) / GROWTH_BAND_LEVELS)
 +#endif
 +
- /// Raises a character one level (up to 99), adding to each base stat the
- /// growth between the two points of its growth curve around the new level
- /// (one point every 20 levels), a twentieth of it per level with a random
-@@ -378,22 +387,22 @@ struct LevelUpResult *Unit_LevelUp(s32 unitId, struct LevelUpResult *gains) {
-     CLAMP(growthBand, 0, 4);
+ /// Raises a character one level, up to 99, each base stat growing along its
+ /// curve with a random part. Returns gains.
+ struct LevelUpResult *Unit_LevelUp(s32 unitId, struct LevelUpResult *gains) {
+@@ -356,28 +366,22 @@ struct LevelUpResult *Unit_LevelUp(s32 unitId, struct LevelUpResult *gains) {
+     CLAMP(growthBand, 0, GROWTH_POINTS - 2);
      growthDifference =
-         work->growth->hp[growthBand + 1] - work->growth->hp[growthBand];
--    gains->hp += ((Random16() * 20 >> 16) + growthDifference) / 20;
+         state->growth->hp[growthBand + 1] - state->growth->hp[growthBand];
+-    gains->hp += (Random16_Below(GROWTH_BAND_LEVELS) + growthDifference) /
+-                 GROWTH_BAND_LEVELS;
 +    gains->hp += LEVEL_GAIN(growthDifference);
      growthDifference =
-         work->growth->pp[growthBand + 1] - work->growth->pp[growthBand];
--    gains->pp += ((Random16() * 20 >> 16) + growthDifference) / 20;
+         state->growth->pp[growthBand + 1] - state->growth->pp[growthBand];
+-    gains->pp += (Random16_Below(GROWTH_BAND_LEVELS) + growthDifference) /
+-                 GROWTH_BAND_LEVELS;
 +    gains->pp += LEVEL_GAIN(growthDifference);
+     growthDifference = state->growth->attack[growthBand + 1] -
+                        state->growth->attack[growthBand];
+-    gains->attack += (Random16_Below(GROWTH_BAND_LEVELS) + growthDifference) /
+-                     GROWTH_BAND_LEVELS;
++    gains->attack += LEVEL_GAIN(growthDifference);
+     growthDifference = state->growth->defense[growthBand + 1] -
+                        state->growth->defense[growthBand];
+-    gains->defense += (Random16_Below(GROWTH_BAND_LEVELS) + growthDifference) /
+-                      GROWTH_BAND_LEVELS;
++    gains->defense += LEVEL_GAIN(growthDifference);
+     growthDifference = state->growth->agility[growthBand + 1] -
+                        state->growth->agility[growthBand];
+-    gains->agility += (Random16_Below(GROWTH_BAND_LEVELS) + growthDifference) /
+-                      GROWTH_BAND_LEVELS;
++    gains->agility += LEVEL_GAIN(growthDifference);
      growthDifference =
-         work->growth->atk[growthBand + 1] - work->growth->atk[growthBand];
--    gains->atk += ((Random16() * 20 >> 16) + growthDifference) / 20;
-+    gains->atk += LEVEL_GAIN(growthDifference);
-     growthDifference =
-         work->growth->def[growthBand + 1] - work->growth->def[growthBand];
--    gains->def += ((Random16() * 20 >> 16) + growthDifference) / 20;
-+    gains->def += LEVEL_GAIN(growthDifference);
-     growthDifference =
-         work->growth->agi[growthBand + 1] - work->growth->agi[growthBand];
--    gains->agi += ((Random16() * 20 >> 16) + growthDifference) / 20;
-+    gains->agi += LEVEL_GAIN(growthDifference);
-     growthDifference =
-         work->growth->luck[growthBand + 1] - work->growth->luck[growthBand];
--    gains->luck += ((Random16() * 20 >> 16) + growthDifference) / 20;
+         state->growth->luck[growthBand + 1] - state->growth->luck[growthBand];
+-    gains->luck += (Random16_Below(GROWTH_BAND_LEVELS) + growthDifference) /
+-                   GROWTH_BAND_LEVELS;
 +    gains->luck += LEVEL_GAIN(growthDifference);
      // Commit the six gains before rebuilding Psynergy and derived stats.
      unit->baseHp += gains->hp;
      unit->basePp += gains->pp;
 -- 
-2.53.0
+2.43.0
 
