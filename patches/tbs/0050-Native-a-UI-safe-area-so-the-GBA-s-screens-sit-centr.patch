@@ -1,0 +1,247 @@
+From 4db115112222d95eb346899a99ee07186397eb38 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 27 Nov 2026 07:03:09 +0000
+Subject: [PATCH] Native: a UI safe area, so the GBA's screens sit centred on a
+ wide screen
+
+Outside battle the window, screen, menu and shop code (window.o,
+screens.o, menu.o, shop.o, built with NATIVE_UI_SPACE) lays out in a
+240-pixel safe area, centred on a wider screen; in battle the safe area
+is the whole screen, as the battle HUD and target cursors go by the
+screen's width. WindowSystem_InitField and WindowSystem_InitBattle pick
+it (Screen_SetUiSafeArea).
+
+- DISPLAY_WIDTH in that code is gNativeUiWidth.
+- BG0, the windows' layer, scrolls left by the safe area's offset.
+- Its sprites (Oam_AddSpriteAtDepth) are listed as UI sprites, which the
+  OAM builder moves right by the offset; one past either edge of the safe
+  area, as the GBA hides one, stays hidden.
+- Field sprites it places (party and Djinn figures,
+  Render_ApplyProjectedPlacementFar) move by the offset too.
+
+Before, at 288 every GBA screen hugged the left with a lopsided strip of
+field on the right, and edge-anchored pieces split from their windows.
+
+The GBA ROM is byte-identical.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8ykfbWFo924wEqysLhg
+---
+ games/tbs/include/system/io_reg.h     | 11 ++++
+ games/tbs/src/window/window_windows.c |  6 +++
+ port/Makefile                         |  4 ++
+ port/include/native/native.h          |  6 +++
+ port/src/native_decompress.c          |  3 +-
+ port/src/native_screen.c              | 75 +++++++++++++++++++++++++++
+ port/src/ppu.c                        |  3 +-
+ 7 files changed, 106 insertions(+), 2 deletions(-)
+
+diff --git a/games/tbs/include/system/io_reg.h b/games/tbs/include/system/io_reg.h
+index 1069544017..1f0cb98a36 100644
+--- a/games/tbs/include/system/io_reg.h
++++ b/games/tbs/include/system/io_reg.h
+@@ -90,8 +90,19 @@ enum DisplayControl {
+ /// The screen's size in pixels.
+ #ifdef NATIVE
+ // The desktop build picks its width at start-up (port/src/native_screen.c).
++// The window, screen, menu and shop code (NATIVE_UI_SPACE) sees the width of
++// the UI's safe area instead: 240 outside battle, centred on a wider screen,
++// so the GBA's layouts keep together; its sprites are moved with it.
+ extern int gNativeDisplayWidth;
++extern int gNativeUiWidth;
++void Screen_SetUiSafeArea(int on);
++#ifdef NATIVE_UI_SPACE
++#define DISPLAY_WIDTH gNativeUiWidth
++#define Oam_AddSpriteAtDepth NativeUi_AddSpriteAtDepth
++#define Render_ApplyProjectedPlacementFar NativeUi_ApplyProjectedPlacementFar
++#else
+ #define DISPLAY_WIDTH gNativeDisplayWidth
++#endif
+ #else
+ #define DISPLAY_WIDTH 240
+ #endif
+diff --git a/games/tbs/src/window/window_windows.c b/games/tbs/src/window/window_windows.c
+index c32792f348..15286cbac6 100644
+--- a/games/tbs/src/window/window_windows.c
++++ b/games/tbs/src/window/window_windows.c
+@@ -76,6 +76,9 @@ void WindowSystem_InitField(void) {
+   volatile u32 fill;
+ #endif
+ 
++#ifdef NATIVE
++  Screen_SetUiSafeArea(1);
++#endif
+   // Clear the state block before linking any of its embedded lists.
+   state = HeapSlot_AllocEwram(HEAP_SLOT_WINDOW, sizeof(struct WindowState));
+ #if TBS_PATCH_1
+@@ -128,6 +131,9 @@ void WindowSystem_InitBattle(s32 loadGlyphTiles) {
+                             5 * TILE_ROW_SIZE_4BPP);
+   }
+ 
++#ifdef NATIVE
++  Screen_SetUiSafeArea(0);
++#endif
+   state = (struct WindowState *)HeapSlot_AllocEwram(HEAP_SLOT_WINDOW,
+                                                     sizeof(struct WindowState));
+ #if TBS_PATCH_1
+diff --git a/port/Makefile b/port/Makefile
+index 46f522925f..00160b28d4 100644
+--- a/port/Makefile
++++ b/port/Makefile
+@@ -131,6 +131,10 @@ GEN_OBJS  := $(BUILD)/gen/ram_symbols.o $(BUILD)/gen/far_aliases.ld $(BUILD)/gen
+ $(TARGET): $(MAIN_GAME_OBJS) $(OVERLAY_RELOCS) $(PORT_OBJS) $(GEN_OBJS)
+ 	$(CC) $(LDFLAGS) -o $@ $^ $(PLATFORM_LIBS) -lm
+ 
++# The UI code works in the safe area's coordinates (io_reg.h, native_screen.c).
++UI_SPACE_OBJS := $(foreach s,window/window window/screens menu/menu shop/shop,$(BUILD)/obj/games/$(GAME)/src/$(s).o)
++$(UI_SPACE_OBJS): GAME_CFLAGS += -DNATIVE_UI_SPACE=1
++
+ # Game C.
+ $(BUILD)/obj/%.o: %.c
+ 	@mkdir -p $(@D)
+diff --git a/port/include/native/native.h b/port/include/native/native.h
+index 070b5f67ba..55d9ac5ba5 100644
+--- a/port/include/native/native.h
++++ b/port/include/native/native.h
+@@ -53,6 +53,12 @@ extern int gNativeDisplayWidth;
+ /// Takes `--width N` (or 3:2, 16:10, 16:9) from the command line, else
+ /// TBS_WIDTH, and sets the screen width; call before the game starts.
+ void Screen_ChooseWidth(int argc, char **argv);
++void Screen_SetUiSafeArea(int on);
++/// The UI's safe area (native_screen.c): its offset from the screen's left,
++/// and the OAM builder's hooks that move the UI's sprites by it.
++extern int gNativeUiOffset;
++u32 Screen_PlaceUiSprite(const void *node, u32 attr01);
++void Screen_ClearUiSprites(void);
+ 
+ /// Maps the regions; call before any game code runs.
+ void Native_MapMemory(void);
+diff --git a/port/src/native_decompress.c b/port/src/native_decompress.c
+index b41a424cd0..bbb767ab21 100644
+--- a/port/src/native_decompress.c
++++ b/port/src/native_decompress.c
+@@ -392,7 +392,7 @@ void Oam_BuildBufferKernel(void *work) {
+     u32 *node = (u32 *)(uintptr_t)gOamDepthLists[slot];
+ 
+     while (node != NULL) {
+-      out[0] = node[1];
++      out[0] = Screen_PlaceUiSprite(node, node[1]);
+       out[1] = node[2];
+       out += 2;
+       if (--left == 0)
+@@ -406,6 +406,7 @@ void Oam_BuildBufferKernel(void *work) {
+     out += 2;
+   }
+ affine:
++  Screen_ClearUiSprites();
+   matrix = (u16 *)((u8 *)work + 6);
+   for (i = 0; i < gOamMatrixCount; i++, matrix += 16) {
+     u32 ab = gOamMatrices[i * 2];
+diff --git a/port/src/native_screen.c b/port/src/native_screen.c
+index 639b7d659c..a77dae9946 100644
+--- a/port/src/native_screen.c
++++ b/port/src/native_screen.c
+@@ -10,6 +10,13 @@
+ 
+ int gNativeDisplayWidth = 240;
+ 
++// The UI's safe area: the width the window, menu and shop code lays out in,
++// and how far right of the screen's left edge it sits. Outside battle it is
++// the GBA's 240, centred; in battle the whole screen, as the battle HUD and
++// the target cursors already go by the screen's width.
++int gNativeUiWidth = 240;
++int gNativeUiOffset = 0;
++
+ static int Width_Parse(const char *text) {
+   int width;
+ 
+@@ -38,4 +45,72 @@ void Screen_ChooseWidth(int argc, char **argv) {
+       choice = argv[i + 1];
+   if (choice && *choice)
+     gNativeDisplayWidth = Width_Parse(choice);
++  Screen_SetUiSafeArea(1);
++}
++
++void Screen_SetUiSafeArea(int on) {
++  gNativeUiWidth = on ? 240 : gNativeDisplayWidth;
++  gNativeUiOffset = (gNativeDisplayWidth - gNativeUiWidth) / 2;
++}
++
++// --- UI sprites ------------------------------------------------------------------
++// The UI code queues its sprites through NativeUi_AddSpriteAtDepth; the OAM
++// builder moves the ones listed here right by gNativeUiOffset, and hides
++// those parked past the safe area's right edge (the GBA's way to hide one).
++
++void Oam_AddSpriteAtDepth(void *slotEntry, s32 slot);
++
++#define UI_SPRITE_MAX 256
++static const void *sUiSprites[UI_SPRITE_MAX];
++static int sUiSpriteCount;
++
++void NativeUi_AddSpriteAtDepth(void *slotEntry, s32 slot) {
++  if (gNativeUiOffset != 0 && sUiSpriteCount < UI_SPRITE_MAX)
++    sUiSprites[sUiSpriteCount++] = slotEntry;
++  Oam_AddSpriteAtDepth(slotEntry, slot);
++}
++
++u32 Screen_PlaceUiSprite(const void *node, u32 attr01) {
++  int i;
++  s32 x;
++
++  for (i = 0; i < sUiSpriteCount; i++)
++    if (sUiSprites[i] == node)
++      break;
++  if (i == sUiSpriteCount)
++    return attr01;
++  {
++    static const u8 widths[3][4] = {{8, 16, 32, 64}, {16, 32, 32, 64},
++                                    {8, 8, 16, 32}};
++    u32 shape = (attr01 >> 14) & 3, size = (attr01 >> 30) & 3;
++    s32 width = shape < 3 ? widths[shape][size] : 8;
++
++    if ((attr01 & 0x300) == 0x300) // affine, double size
++      width *= 2;
++    x = (attr01 >> 16) & 511;
++    if (x >= 256)
++      x -= 512;
++    // Off the safe area's either edge, as the GBA hides one, stays hidden.
++    if (x >= gNativeUiWidth || x + width <= 0)
++      x = SCREEN_MAX_WIDTH + 8;
++    else
++      x += gNativeUiOffset;
++  }
++  return (attr01 & ~(511u << 16)) | ((u32)(x & 511) << 16);
++}
++
++void Screen_ClearUiSprites(void) { sUiSpriteCount = 0; }
++
++// Field sprites the UI places (the menus' party and Djinn figures): their
++// placement's first word is the screen x of the centre, in 16.16.
++void Render_ApplyProjectedPlacementFar(void *sprite, s32 *placement,
++                                       void *scale, s32 facing);
++
++void NativeUi_ApplyProjectedPlacementFar(void *sprite, s32 *placement,
++                                         void *scale, s32 facing) {
++  s32 shift = gNativeUiOffset << 16;
++
++  placement[0] += shift;
++  Render_ApplyProjectedPlacementFar(sprite, placement, scale, facing);
++  placement[0] -= shift;
+ }
+diff --git a/port/src/ppu.c b/port/src/ppu.c
+index cc342f4193..c4ba9b53e7 100644
+--- a/port/src/ppu.c
++++ b/port/src/ppu.c
+@@ -48,7 +48,8 @@ static u32 Rgb(u16 c) {
+ 
+ static void Bg_Text(int bg, int y) {
+   u16 control = REG16(0x08 + bg * 2);
+-  u32 hofs = REG16(0x10 + bg * 4) & 0x1ff;
++  // BG0 is the windows' layer: it moves with the UI's safe area.
++  u32 hofs = (REG16(0x10 + bg * 4) - (bg == 0 ? gNativeUiOffset : 0)) & 0x1ff;
+   u32 vofs = REG16(0x12 + bg * 4) & 0x1ff;
+   const u8 *tiles = VRAM + ((control >> 2) & 3) * 0x4000;
+   const u16 *map = (const u16 *)(VRAM + ((control >> 8) & 31) * 0x800);
+-- 
+2.43.0
+

@@ -1,0 +1,16 @@
+# Touch on the manager's icon row at width 288 (run with --width 288): tap
+# Items to select it, tap it again to choose it, then tap the first icon of
+# the shop row twice.
+include to_manager.txt
+shot /tmp/shots/t0.png
+touch 146 148
+wait 10
+shot /tmp/shots/t1.png
+touch 146 148
+wait 120
+shot /tmp/shots/t2.png
+touch 86 148
+wait 30
+touch 86 148
+wait 200
+shot /tmp/shots/t3.png

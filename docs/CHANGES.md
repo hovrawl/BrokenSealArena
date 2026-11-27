@@ -979,6 +979,50 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
   row writes past it and crashes. The SDL window uses the width but was not
   built here (no SDL3 in the cloud container).
 
+## 49. Native: the window layer is 64 tiles wide (desktop only)
+
+- The window layer (BG0: menus, messages, the battle HUD) reads a 64x32 map
+  natively, like the field's layers in 48. `WINDOW_MAP_WIDTH` and
+  `WINDOW_MAP_ROW_SHIFT` (`window.h`) replace the 32 (`BG_SCREEN_WIDTH`, 61
+  places) and the `<< 5` row shifts (6 places) in the window code; on the GBA
+  they are those same values. The `<< 5` shifts left as they were broke the HP
+  row of the battle HUD and some labels at every width, which is how they were
+  found.
+- Crashes only the desktop build had, before this work too: a cursor with no
+  anchor (`MenuCursor_SetPositionImmediate`), and the shops' hidden windows at
+  x = -5, whose borders and erases wrote before the map. Natively those return
+  early.
+- Verified: at 288 the battle command row, the HUD and the manager's shops no
+  longer wrap or crash; `battle.txt`, `fight.txt` and `manager.txt` at 240 and
+  288.
+
+## 50. Native: a UI safe area, so the GBA's screens sit centred
+
+- The GBA's screens were laid out for 240 pixels; stretched across 288 their
+  windows drifted apart. Outside battle the window, screen, menu and shop code
+  (`window.o`, `screens.o`, `menu.o`, `shop.o`, built with `NATIVE_UI_SPACE`)
+  now lays out in 240 pixels centred on the screen: `DISPLAY_WIDTH` there is
+  `gNativeUiWidth`, BG0 scrolls by the offset, and the sprites that code queues
+  and the field figures it places move by it. In battle the safe area is the
+  whole screen. `Screen_SetUiSafeArea` is called where the window system starts
+  for the field and for battle.
+- Verified: the lobby's Pause menu, the manager and its shops at 240, 256 and
+  288 (`wide_lobby.txt`, `manager.txt`): the same layout as at 240, centred.
+- Not yet: in the lobby at 288 the room ends before the screen does (black past
+  the right wall); the battle screens at 288 are wide but not reviewed.
+
+## 51. Native: touch and mouse, first on the icon rows
+
+- One pointer (`native/touch.h`, `native_touch.c`): SDL's mouse (SDL also
+  feeds it from touch) or the headless `touch X Y` script command. Game code
+  asks `Touch_TappedRect` / `Touch_TappedUiRect` whether a rectangle was
+  pressed and let go this frame. Tap targets are at least 24 pixels.
+- The icon rows (`IconMenu_Run`): tap an icon to select it, tap it again to
+  choose it. That covers the manager's menu and its choice of shop.
+- Verified (headless): `touch_manager_240.txt` and `touch_manager_288.txt` tap
+  Items, then Weapons, into the weapon shop. The SDL side builds against the
+  SDL 3.2 headers but was not run here.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

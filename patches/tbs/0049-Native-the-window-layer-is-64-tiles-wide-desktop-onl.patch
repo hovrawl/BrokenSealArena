@@ -1,0 +1,726 @@
+From 8dc7366937c460842133d61c86e08496036033f0 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 27 Nov 2026 06:56:57 +0000
+Subject: [PATCH] Native: the window layer is 64 tiles wide; desktop-only crash
+ fixes
+
+The windows' tilemap (menus, messages, the battle HUD) was a 32-tile BG
+map, so at 288 pixels its boxes wrapped to the left edge and the battle
+command row wrote past it and crashed. Natively it is 64 tiles wide:
+WINDOW_MAP_WIDTH and WINDOW_MAP_ROW_SHIFT (window.h; BG_SCREEN_WIDTH and 5
+on the GBA) replace the 32 in the window code, WINDOW_TILEMAP_VRAM is a
+native wide map and BG0 reads it (BGCNT_NATIVE_WIDE, set where the debug
+text screen points BG0 at screen block 4). Three text routines had the
+row as "<< 5"; missing them left the HUD without its HP row.
+
+Desktop-only crashes the cartridge shrugs off, at any width:
+- The shops' hidden anchor window at x = -5 made the window code read and
+  write past the tilemap: Window_DrawBorder, Window_EraseBorderRect and
+  Window_ClearTextTilesInRect skip a window off the left edge natively.
+- The arena's shops place their cursor before it has a sprite:
+  MenuCursor_SetPositionImmediate skips the null anchor natively.
+
+The GBA ROM is byte-identical.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8ykfbWFo924wEqysLhg
+---
+ games/tbs/include/window/window.h             | 22 ++++++++++---
+ games/tbs/src/menu/menu_djinn.c               |  2 +-
+ games/tbs/src/menu/menu_djinn_preview.c       |  2 +-
+ games/tbs/src/scene/file_screen.c             | 12 +++----
+ games/tbs/src/shop/shop_cursor.c              |  9 ++++++
+ games/tbs/src/system/system_debug_text.c      |  5 +++
+ games/tbs/src/window/glyph_arm.c              |  4 +--
+ .../src/window/screens_battle_command_row.c   | 20 ++++++------
+ games/tbs/src/window/screens_name_entry.c     | 10 +++---
+ games/tbs/src/window/screens_party_status.c   |  6 ++--
+ games/tbs/src/window/screens_save.c           |  6 ++--
+ games/tbs/src/window/screens_window_sprites.c |  2 +-
+ games/tbs/src/window/window_borders.c         | 19 +++++++----
+ games/tbs/src/window/window_glyphs.c          |  4 +--
+ games/tbs/src/window/window_sprites.c         | 16 +++++-----
+ games/tbs/src/window/window_text_tiles.c      | 32 +++++++++++--------
+ games/tbs/src/window/window_windows.c         | 15 ++++++---
+ 17 files changed, 115 insertions(+), 71 deletions(-)
+
+diff --git a/games/tbs/include/window/window.h b/games/tbs/include/window/window.h
+index 284e99f742..28892ddff1 100644
+--- a/games/tbs/include/window/window.h
++++ b/games/tbs/include/window/window.h
+@@ -116,10 +116,27 @@ enum { WINDOW_SPRITE_COUNT = 64 };
+ /// (gFont_KanjiGlyphs).
+ #define KANJI_FIRST_CODE (TEXT_LAST_FONT_CODE + 1)
+ 
++#ifdef NATIVE
++// The desktop build's screen can be wider than 32 tiles, so the windows' map
++// is 64 tiles wide there (port/include/native/wide_map.h).
++#include "native/wide_map.h"
++#define WINDOW_MAP_WIDTH NATIVE_WIDE_MAP_WIDTH
++#define WINDOW_MAP_ROW_SHIFT 6
++#define WINDOW_TILEMAP_VRAM NATIVE_WIDE_MAP(4)
++#else
++/// The windows' tilemap's width in tiles: a row's entries.
++#define WINDOW_MAP_WIDTH BG_SCREEN_WIDTH
++#define WINDOW_MAP_ROW_SHIFT 5 ///< log2 of WINDOW_MAP_WIDTH
++/// The UI tilemap in VRAM (BG screen block 4), which WindowSystem_UploadTilemap
++/// copies the state block's tilemap to.
++#define WINDOW_TILEMAP_VRAM ((u8 *)0x06002000)
++#endif
++
+ /// The window system's state: the windows' tilemap, the windows, the three text
+ /// messages, the 64 window sprites, and the decoded message and its arguments.
+ struct WindowState {
+-  u16 tilemap[640]; ///< the windows' BG tilemap, 32 by 20 tiles
++  /// the windows' BG tilemap, 32 by 20 tiles (64 by 20 natively)
++  u16 tilemap[WINDOW_MAP_WIDTH * DISPLAY_TILE_HEIGHT];
+   struct Window windows[WINDOW_COUNT]; ///< 12 in Japanese, 8 in the others
+   struct Message messages[3]; ///< the messages, a NULL window when free
+   struct WindowSprite sprites[WINDOW_SPRITE_COUNT];
+@@ -222,9 +239,6 @@ enum {
+ #define TEXT_CANVAS_SIZE (120 * TILE_SIZE_4BPP)
+ #define TEXT_CANVAS_FIRST_TILE 296
+ 
+-/// The UI tilemap in VRAM (BG screen block 4), which WindowSystem_UploadTilemap
+-/// copies the state block's tilemap to.
+-#define WINDOW_TILEMAP_VRAM ((u8 *)0x06002000)
+ 
+ /// The BG palette of the windows and their text, the UI palette.
+ #define WINDOW_PALETTE 15
+diff --git a/games/tbs/src/menu/menu_djinn.c b/games/tbs/src/menu/menu_djinn.c
+index ec8bc84eb9..2cb4aabe0e 100644
+--- a/games/tbs/src/menu/menu_djinn.c
++++ b/games/tbs/src/menu/menu_djinn.c
+@@ -732,7 +732,7 @@ void Window_SetRectPalette(s32 x, s32 y, s32 width, s32 height, s32 palette) {
+ 
+   if (width > 0 && height > 0) {
+     do {
+-      tileCursor = &((u16 (*)[BG_SCREEN_WIDTH])state->tilemap)[y][x];
++      tileCursor = &((u16 (*)[WINDOW_MAP_WIDTH])state->tilemap)[y][x];
+       for (column = width; column != 0; column--) {
+         tile = *tileCursor;
+         if (BG_TILE_PALETTE_OF(tile) == WINDOW_PALETTE) {
+diff --git a/games/tbs/src/menu/menu_djinn_preview.c b/games/tbs/src/menu/menu_djinn_preview.c
+index 5aab9b7504..444c1085ae 100644
+--- a/games/tbs/src/menu/menu_djinn_preview.c
++++ b/games/tbs/src/menu/menu_djinn_preview.c
+@@ -274,7 +274,7 @@ s32 DjinnMenu_RunPreview(u32 mode) {
+       s16 *saved;
+       s32 size;
+ 
+-      size = DJINN_TUTORIAL_COVERED_ROWS * BG_SCREEN_WIDTH * sizeof(u16);
++      size = DJINN_TUTORIAL_COVERED_ROWS * WINDOW_MAP_WIDTH * sizeof(u16);
+       saved = Heap_AllocEwram(size);
+       pressedKeys = 0;
+       repeatedKeys = 0;
+diff --git a/games/tbs/src/scene/file_screen.c b/games/tbs/src/scene/file_screen.c
+index f58897fb88..c89cd60d86 100644
+--- a/games/tbs/src/scene/file_screen.c
++++ b/games/tbs/src/scene/file_screen.c
+@@ -982,7 +982,7 @@ FileScreen_FillTileGridByWindowWidth(struct Window *window,
+   shadow = ((struct WindowState *)gWindowState[0])->tilemap;
+   decodedTiles = Heap_AllocEwram(768);
+   FieldDecompress_TaggedLz(compressedTiles, decodedTiles);
+-  cell = window->y * BG_SCREEN_WIDTH + window->x;
++  cell = window->y * WINDOW_MAP_WIDTH + window->x;
+   vram = (u16 *)WINDOW_TILEMAP_VRAM + cell;
+   shadow += cell;
+   for (row = 0; row < TILE_GRID_ROWS; row++) {
+@@ -992,8 +992,8 @@ FileScreen_FillTileGridByWindowWidth(struct Window *window,
+       *vram++ = tile;
+       *shadow++ = tile;
+     }
+-    vram += BG_SCREEN_WIDTH - TILE_GRID_COLUMNS;
+-    shadow += BG_SCREEN_WIDTH - TILE_GRID_COLUMNS;
++    vram += WINDOW_MAP_WIDTH - TILE_GRID_COLUMNS;
++    shadow += WINDOW_MAP_WIDTH - TILE_GRID_COLUMNS;
+   }
+   Heap_Release(decodedTiles);
+ }
+@@ -1009,7 +1009,7 @@ FileScreen_FillTileGridByGridWidth(const struct Window *window) {
+   s32 row;
+   s32 base;
+ 
+-  cell = window->y * BG_SCREEN_WIDTH + window->x;
++  cell = window->y * WINDOW_MAP_WIDTH + window->x;
+   vram = (s16 *)WINDOW_TILEMAP_VRAM + cell;
+   mirror += cell;
+   row = 0;
+@@ -1028,8 +1028,8 @@ FileScreen_FillTileGridByGridWidth(const struct Window *window) {
+       mirror++;
+     }
+     row++;
+-    vram += BG_SCREEN_WIDTH - TILE_GRID_COLUMNS;
+-    mirror += BG_SCREEN_WIDTH - TILE_GRID_COLUMNS;
++    vram += WINDOW_MAP_WIDTH - TILE_GRID_COLUMNS;
++    mirror += WINDOW_MAP_WIDTH - TILE_GRID_COLUMNS;
+     base += TILE_GRID_COLUMNS;
+   } while (row < TILE_GRID_ROWS);
+   Heap_Release(buffer);
+diff --git a/games/tbs/src/shop/shop_cursor.c b/games/tbs/src/shop/shop_cursor.c
+index 153a7962d4..6a71e9c2a9 100644
+--- a/games/tbs/src/shop/shop_cursor.c
++++ b/games/tbs/src/shop/shop_cursor.c
+@@ -248,6 +248,15 @@ void MenuCursor_SetPositionImmediate(struct MenuCursor *cursor, s32 x, s32 y) {
+   cursor->frames = 1;
+   cursor->frame = 0;
+   cursor->x = x;
++#ifdef NATIVE
++  // The arena's shops place the cursor before giving it a sprite; the GBA's
++  // writes through the null anchor land in the BIOS, unseen.
++  if (cursor->anchor == NULL) {
++    cursor->targetY = y;
++    cursor->y = y;
++    return;
++  }
++#endif
+   cursor->anchor->sprite.oam.x = cursor->anchor->x = x;
+   cursor->targetY = y;
+   cursor->y = y;
+diff --git a/games/tbs/src/system/system_debug_text.c b/games/tbs/src/system/system_debug_text.c
+index 560831e638..e2fb5c0308 100644
+--- a/games/tbs/src/system/system_debug_text.c
++++ b/games/tbs/src/system/system_debug_text.c
+@@ -146,7 +146,12 @@ void DebugText_Clear(void) {
+   Dma_Fill32(WINDOW_TILE_PAIR(WINDOW_TILE_BLANK), DEBUG_TEXT_SCREEN,
+              DEBUG_TEXT_SCREEN_BYTES);
+   gDebugTextCursor = (u16 *)DEBUG_TEXT_SCREEN;
++#ifdef NATIVE
++  // BG0 shows the windows' wide map natively (window.h).
++  Io_Write16(BGCNT_SCREEN_BASE(4) | BGCNT_NATIVE_WIDE, &REG_BG0CNT);
++#else
+   Io_Write16(BGCNT_SCREEN_BASE(4), &REG_BG0CNT);
++#endif
+ }
+ 
+ /// Loads the window font and border tiles into BG character block 0, the window
+diff --git a/games/tbs/src/window/glyph_arm.c b/games/tbs/src/window/glyph_arm.c
+index b82b20aae8..797fe44737 100644
+--- a/games/tbs/src/window/glyph_arm.c
++++ b/games/tbs/src/window/glyph_arm.c
+@@ -315,7 +315,7 @@ s32 Glyph_DrawArm(struct Window *window, u32 character, u32 x, u32 y,
+ 
+ /// Builds the screen transition's window 1 edges for each of the screen's 160
+ /// scanlines from the window borders in the UI tilemap at `tilemap`
+-/// (BG_SCREEN_WIDTH tiles a row, DISPLAY_TILE_WIDTH shown), so the windows
++/// (WINDOW_MAP_WIDTH tiles a row, DISPLAY_TILE_WIDTH shown), so the windows
+ /// stay in view while the transition covers the rest: each line takes a pair
+ /// of halfwords in `scanlineBounds`, the second (left << 8) | right, and a
+ /// corner's line is a pixel narrower.
+@@ -422,7 +422,7 @@ void ScanlineWindow_BuildEdges(u16 *scanlineBounds, u16 *tilemap) {
+     scanlineBounds++;
+     *scanlineBounds++ = horizontalBounds;
+     scanlineBounds++;
+-    tilemap += BG_SCREEN_WIDTH - DISPLAY_TILE_WIDTH;
++    tilemap += WINDOW_MAP_WIDTH - DISPLAY_TILE_WIDTH;
+     *scanlineBounds++ = horizontalBounds;
+     scanlineBounds++;
+     *scanlineBounds++ = horizontalBounds;
+diff --git a/games/tbs/src/window/screens_battle_command_row.c b/games/tbs/src/window/screens_battle_command_row.c
+index 52d4de24a7..ecb170ef26 100644
+--- a/games/tbs/src/window/screens_battle_command_row.c
++++ b/games/tbs/src/window/screens_battle_command_row.c
+@@ -142,7 +142,7 @@ s32 BattleCommandRow_Run(s32 mode) {
+             s32 col;
+             for (col = 0; col <= 2; col++)
+               *(state->tilemap +
+-                (entryIndex + COMMAND_ROW_TOP) * BG_SCREEN_WIDTH + panel * 3 +
++                (entryIndex + COMMAND_ROW_TOP) * WINDOW_MAP_WIDTH + panel * 3 +
+                 WINDOW_X - 18 + (col & 3)) = WINDOW_TILE_COMMAND_PANEL;
+           }
+         }
+@@ -152,13 +152,13 @@ s32 BattleCommandRow_Run(s32 mode) {
+             for (col = 0; col <= 2; col++) {
+               volatile u16 *vram =
+                   (volatile u16 *)BG_SCREEN_BLOCK(BATTLE_BG1_SCREEN_BLOCK) +
+-                  21 * BG_SCREEN_WIDTH + WINDOW_X;
++                  21 * WINDOW_MAP_WIDTH + WINDOW_X;
+ 
+-              vram[panel * 3 + entryIndex * BG_SCREEN_WIDTH + (col & 3) -
++              vram[panel * 3 + entryIndex * WINDOW_MAP_WIDTH + (col & 3) -
+                    selectionUi->iconCount * 3] =
+                   panel * 16 + entryIndex * 4 + col + COMMAND_ROW_ICON_TILE;
+               *(state->tilemap +
+-                (entryIndex + COMMAND_ROW_TOP) * BG_SCREEN_WIDTH + panel * 3 +
++                (entryIndex + COMMAND_ROW_TOP) * WINDOW_MAP_WIDTH + panel * 3 +
+                 (col & 3) - selectionUi->iconCount * 3 + WINDOW_X) = 0;
+             }
+           }
+@@ -170,7 +170,7 @@ s32 BattleCommandRow_Run(s32 mode) {
+             s32 col;
+             for (col = 0; col <= 2; col++)
+               *(state->tilemap +
+-                (entryIndex + COMMAND_ROW_TOP) * BG_SCREEN_WIDTH + panel * 3 +
++                (entryIndex + COMMAND_ROW_TOP) * WINDOW_MAP_WIDTH + panel * 3 +
+                 2 + (col & 3)) = WINDOW_TILE_COMMAND_PANEL;
+           }
+         }
+@@ -180,13 +180,13 @@ s32 BattleCommandRow_Run(s32 mode) {
+             for (col = 0; col <= 2; col++) {
+               volatile u16 *vram =
+                   (volatile u16 *)BG_SCREEN_BLOCK(BATTLE_BG1_SCREEN_BLOCK) +
+-                  21 * BG_SCREEN_WIDTH + 20;
++                  21 * WINDOW_MAP_WIDTH + 20;
+ 
+-              vram[panel * 3 + entryIndex * BG_SCREEN_WIDTH + (col & 3) -
++              vram[panel * 3 + entryIndex * WINDOW_MAP_WIDTH + (col & 3) -
+                    selectionUi->iconCount * 3] =
+                   panel * 16 + entryIndex * 4 + col + COMMAND_ROW_ICON_TILE;
+               *(state->tilemap +
+-                (entryIndex + COMMAND_ROW_TOP) * BG_SCREEN_WIDTH + panel * 3 +
++                (entryIndex + COMMAND_ROW_TOP) * WINDOW_MAP_WIDTH + panel * 3 +
+                 (col & 3) - selectionUi->iconCount * 3 + 20) = 0;
+             }
+           }
+@@ -324,7 +324,7 @@ s32 BattleCommandRow_Run(s32 mode) {
+         // The VBlank handler uploads this tilemap (WindowSystem_UploadTilemap).
+         for (col = 0; col <= 2; col++)
+           *(volatile u16 *)(state->tilemap +
+-                            (entryIndex + COMMAND_ROW_TOP) * BG_SCREEN_WIDTH +
++                            (entryIndex + COMMAND_ROW_TOP) * WINDOW_MAP_WIDTH +
+                             panel * 3 + 5 + (col & 3)) =
+               WINDOW_TILE_COMMAND_PANEL;
+       }
+@@ -378,7 +378,7 @@ void Window_HighlightRect(s32 x, s32 y, s32 width, s32 height, s32 paletteBit) {
+ 
+   if (width > 0 && height > 0) {
+     do {
+-      u16 *cell = &((u16 (*)[BG_SCREEN_WIDTH])state->tilemap)[y][x];
++      u16 *cell = &((u16 (*)[WINDOW_MAP_WIDTH])state->tilemap)[y][x];
+       s32 remaining = width;
+ 
+       while (remaining != 0) {
+diff --git a/games/tbs/src/window/screens_name_entry.c b/games/tbs/src/window/screens_name_entry.c
+index e6bf164d5f..58d43d4812 100644
+--- a/games/tbs/src/window/screens_name_entry.c
++++ b/games/tbs/src/window/screens_name_entry.c
+@@ -63,7 +63,7 @@ void Window_CopyTilemapRegion(const struct Window *window, const void *source) {
+   s32 row;
+ 
+   Decompress_TaggedLz(source, buffer);
+-  cell = window->y * BG_SCREEN_WIDTH + window->x;
++  cell = window->y * WINDOW_MAP_WIDTH + window->x;
+   vram = (s16 *)WINDOW_TILEMAP_VRAM + cell;
+   mirror += cell;
+ 
+@@ -76,8 +76,8 @@ void Window_CopyTilemapRegion(const struct Window *window, const void *source) {
+       *vram++ = value;
+       *mirror++ = value;
+     }
+-    vram += BG_SCREEN_WIDTH - window->width;
+-    mirror += BG_SCREEN_WIDTH - window->width;
++    vram += WINDOW_MAP_WIDTH - window->width;
++    mirror += WINDOW_MAP_WIDTH - window->width;
+   }
+   Heap_Release(buffer);
+ }
+@@ -484,7 +484,7 @@ s32 NameEntry_EditMemberName(s32 member) {
+       u32 cell;
+       u32 letter;
+ 
+-      cell = ((keyboardWindow->y + keyRow + 1) << 5) + tx;
++      cell = ((keyboardWindow->y + keyRow + 1) << WINDOW_MAP_ROW_SHIFT) + tx;
+       // Key glyphs use the low byte of the mirrored tilemap entries.
+       letter = ((u8 *)&state->tilemap)[cell * 2];
+       if (letterCount == NAME_MAX_LETTERS)
+@@ -792,7 +792,7 @@ s32 NameEntry_EditMemberName(s32 member) {
+       u32 cell;
+       u8 *dst;
+ 
+-      cell = ((keyboardWindow->y + keyRow + 1) << 5) + tx;
++      cell = ((keyboardWindow->y + keyRow + 1) << WINDOW_MAP_ROW_SHIFT) + tx;
+       // Key glyphs use the low byte of the mirrored tilemap entries.
+       letter = ((u8 *)&state->tilemap)[cell * 2];
+       // The keyboard's dakuten key.
+diff --git a/games/tbs/src/window/screens_party_status.c b/games/tbs/src/window/screens_party_status.c
+index 07fda4bd48..2a28e0f75b 100644
+--- a/games/tbs/src/window/screens_party_status.c
++++ b/games/tbs/src/window/screens_party_status.c
+@@ -105,7 +105,7 @@ void Window_DrawColumnBorders(struct Window *window, u32 flags) {
+     column = gWindow_PartyColumnOffsets[i] + shift;
+     if (column < lastColumn) {
+       for (row = 0; row != rows; row++) {
+-        cell = (u16 *)(((window->y + row) * BG_SCREEN_WIDTH +
++        cell = (u16 *)(((window->y + row) * WINDOW_MAP_WIDTH +
+                         (window->x + column)) *
+                            2 +
+                        (u32)state->tilemap);
+@@ -119,7 +119,7 @@ void Window_DrawColumnBorders(struct Window *window, u32 flags) {
+     }
+   }
+   if (state->battleMode) {
+-    cell = state->tilemap + (window->y + window->height - 1) * BG_SCREEN_WIDTH +
++    cell = state->tilemap + (window->y + window->height - 1) * WINDOW_MAP_WIDTH +
+            window->x;
+     *cell++ = WINDOW_TILE_BATTLE_BORDER_BOTTOM_LEFT;
+     for (column = 1; column < lastColumn; column++) {
+@@ -171,7 +171,7 @@ UNREAD_RESULT PartyStatus_DrawBars(struct Window *window, s32 x, s32 y,
+   y += window->y;
+   for (i = 0; i < PARTY_STATUS_BAR_LENGTH / 8; i++, x++) {
+     // This tile's eight pixels: filled up to `length`, empty after.
+-    tile = state->tilemap[y * BG_SCREEN_WIDTH + x];
++    tile = state->tilemap[y * WINDOW_MAP_WIDTH + x];
+     bar = PIXELS_4BPP(BAR_EMPTY_COLOR);
+     shadow = PIXELS_4BPP(BAR_EMPTY_SHADOW_COLOR);
+     tile &= TILE_NUMBER_MASK;
+diff --git a/games/tbs/src/window/screens_save.c b/games/tbs/src/window/screens_save.c
+index 6bea91c200..46760c0fbe 100644
+--- a/games/tbs/src/window/screens_save.c
++++ b/games/tbs/src/window/screens_save.c
+@@ -569,8 +569,8 @@ void Window_FillTilemapRect(struct Window *window, s32 x, s32 y, s32 width,
+     height = DISPLAY_TILE_HEIGHT - y;
+ 
+   if (width > 0 && height > 0) {
+-    // Byte offsets: BG_SCREEN_WIDTH entries of 2 bytes a row.
+-    s32 yOffset = y * (BG_SCREEN_WIDTH * 2);
++    // Byte offsets: WINDOW_MAP_WIDTH entries of 2 bytes a row.
++    s32 yOffset = y * (WINDOW_MAP_WIDTH * 2);
+     s32 xOffset = x << 1;
+     s32 offset = yOffset + xOffset;
+     do {
+@@ -579,7 +579,7 @@ void Window_FillTilemapRect(struct Window *window, s32 x, s32 y, s32 width,
+       for (; remaining != 0; remaining--)
+         *cell++ = BG_TILE_PALETTE(HIGHLIGHT_PALETTE) | 6;
+       height--;
+-      offset += BG_SCREEN_WIDTH * 2;
++      offset += WINDOW_MAP_WIDTH * 2;
+     } while (height != 0);
+     ((struct WindowState *)tilemap)->dirty = 1;
+   }
+diff --git a/games/tbs/src/window/screens_window_sprites.c b/games/tbs/src/window/screens_window_sprites.c
+index c7ebb5b97e..54153a52f2 100644
+--- a/games/tbs/src/window/screens_window_sprites.c
++++ b/games/tbs/src/window/screens_window_sprites.c
+@@ -269,6 +269,6 @@ void BgScreen_FillRect(s32 x, s32 y, u32 width, u32 height, s32 value) {
+   for (row = 0; row < height; row++) {
+     for (column = 0; column < width; column++)
+       *dst++ = value;
+-    dst += BG_SCREEN_WIDTH - width;
++    dst += WINDOW_MAP_WIDTH - width;
+   }
+ }
+diff --git a/games/tbs/src/window/window_borders.c b/games/tbs/src/window/window_borders.c
+index f7e70b32d9..f7afe2c061 100644
+--- a/games/tbs/src/window/window_borders.c
++++ b/games/tbs/src/window/window_borders.c
+@@ -148,12 +148,17 @@ u16 *Memory_FillHalfwordsDma(u16 *dst, s32 value, s32 count) {
+ /// width by height tiles, and frees the text tiles the rectangle showed.
+ void Window_DrawBorder(s32 x, s32 y, u32 width, u32 height) {
+   struct WindowState *state = WINDOW_STATE;
+-  u16 *cursor = (u16 *)((y * BG_SCREEN_WIDTH + x) * 2 + (u32)state->tilemap);
++  u16 *cursor = (u16 *)((y * WINDOW_MAP_WIDTH + x) * 2 + (u32)state->tilemap);
+   u32 row;
+ 
+   if (width <= 1 || height <= 1 || width > DISPLAY_TILE_WIDTH ||
+       height > DISPLAY_TILE_WIDTH)
+     return;
++#ifdef NATIVE
++  // Left of the screen (x negative) the GBA draws past the tilemap, unseen.
++  if ((u32)x >= WINDOW_MAP_WIDTH || (u32)y >= DISPLAY_TILE_HEIGHT)
++    return;
++#endif
+   Window_ClearTextTilesInRect(x, y, width, height);
+   // The top edge.
+   if (state->mindRead != 0)
+@@ -166,7 +171,7 @@ void Window_DrawBorder(s32 x, s32 y, u32 width, u32 height) {
+     *cursor++ = WINDOW_TILE_BORDER_ROUND_CORNER | TILE_HFLIP;
+   else
+     *cursor++ = WINDOW_TILE_BORDER_TOP_RIGHT;
+-  cursor += BG_SCREEN_WIDTH - width;
++  cursor += WINDOW_MAP_WIDTH - width;
+   // The sides and the fill between them.
+   for (row = 1; row < height - 1; row++) {
+     *cursor++ = WINDOW_TILE_BORDER_LEFT;
+@@ -174,7 +179,7 @@ void Window_DrawBorder(s32 x, s32 y, u32 width, u32 height) {
+       cursor = Memory_FillHalfwordsDma(
+           cursor, WINDOW_TILE_PAIR(WINDOW_TILE_WINDOW_FILL), width - 2);
+     *cursor++ = WINDOW_TILE_BORDER_RIGHT;
+-    cursor += BG_SCREEN_WIDTH - width;
++    cursor += WINDOW_MAP_WIDTH - width;
+   }
+   // The bottom edge.
+   if (state->mindRead != 0)
+@@ -195,7 +200,7 @@ void Window_DrawBorder(s32 x, s32 y, u32 width, u32 height) {
+ void Window_MapTextCanvasTiles(s32 x, s32 y, u32 width, u32 height,
+                                s32 fullWidth) {
+   struct WindowState *state = WINDOW_STATE;
+-  u16 *cursor = (u16 *)((y * BG_SCREEN_WIDTH + x) * 2 + (u32)state->tilemap);
++  u16 *cursor = (u16 *)((y * WINDOW_MAP_WIDTH + x) * 2 + (u32)state->tilemap);
+   u32 row;
+   u32 col;
+ 
+@@ -205,7 +210,7 @@ void Window_MapTextCanvasTiles(s32 x, s32 y, u32 width, u32 height,
+   // Canvas tiles run down each column of the interior: the tile at interior
+   // row r (from 1) of column c (from 0) is TEXT_CANVAS_FIRST_TILE - 1 + r plus
+   // c columns of height - 2 tiles.
+-  cursor += BG_SCREEN_WIDTH;
++  cursor += WINDOW_MAP_WIDTH;
+   if (fullWidth == 0) {
+     for (row = 1; row < height - 1; row++) {
+       cursor++;
+@@ -214,7 +219,7 @@ void Window_MapTextCanvasTiles(s32 x, s32 y, u32 width, u32 height,
+             (TEXT_CANVAS_FIRST_TILE - 1 + row + (col - 1) * (height - 2)) &
+             TILE_NUMBER_AND_FLIPS);
+       cursor++;
+-      cursor += BG_SCREEN_WIDTH - width;
++      cursor += WINDOW_MAP_WIDTH - width;
+     }
+   } else {
+     for (row = 1; row < height - 1; row++) {
+@@ -222,7 +227,7 @@ void Window_MapTextCanvasTiles(s32 x, s32 y, u32 width, u32 height,
+         *cursor++ = WINDOW_TILE(
+             (TEXT_CANVAS_FIRST_TILE - 1 + row + col * (height - 2)) &
+             TILE_NUMBER_AND_FLIPS);
+-      cursor += BG_SCREEN_WIDTH - width;
++      cursor += WINDOW_MAP_WIDTH - width;
+     }
+   }
+   state->dirty = 1;
+diff --git a/games/tbs/src/window/window_glyphs.c b/games/tbs/src/window/window_glyphs.c
+index ffba573309..412aabe916 100644
+--- a/games/tbs/src/window/window_glyphs.c
++++ b/games/tbs/src/window/window_glyphs.c
+@@ -385,8 +385,8 @@ UNUSED void Text_DrawWideStringAsTiles(u16 *buffer, const struct Window *window,
+     state->textBufferEnd = (state->textBufferEnd + 1) & TEXT_BUFFER_MASK;
+   }
+ 
+-  cell = ((window->y + offsetY + 1) << 5) + (window->x + offsetX) + 1;
+-  if (cell < BG_SCREEN_WIDTH * DISPLAY_TILE_HEIGHT) {
++  cell = ((window->y + offsetY + 1) << WINDOW_MAP_ROW_SHIFT) + (window->x + offsetX) + 1;
++  if (cell < WINDOW_MAP_WIDTH * DISPLAY_TILE_HEIGHT) {
+     // Inside the tilemap.
+     s32 src;
+     s32 dst;
+diff --git a/games/tbs/src/window/window_sprites.c b/games/tbs/src/window/window_sprites.c
+index b72d610a33..f492890ac2 100644
+--- a/games/tbs/src/window/window_sprites.c
++++ b/games/tbs/src/window/window_sprites.c
+@@ -207,8 +207,8 @@ void Window_PutGlyph(struct Window *win, u32 tile, u32 x, u32 y, s32 mode) {
+     // Past the border's top-left tile, and only inside the tilemap.
+     x++;
+     y++;
+-    pos = (win->y + y) * BG_SCREEN_WIDTH + (win->x + x);
+-    if (pos < BG_SCREEN_WIDTH * DISPLAY_TILE_HEIGHT)
++    pos = (win->y + y) * WINDOW_MAP_WIDTH + (win->x + x);
++    if (pos < WINDOW_MAP_WIDTH * DISPLAY_TILE_HEIGHT)
+       ((struct WindowState *)state)->tilemap[pos] = WINDOW_TILE(tile);
+   }
+ }
+@@ -279,7 +279,7 @@ void Window_PutGlyph(struct Window *win, u32 tile, u32 x, u32 y, s32 mode) {
+       // dividers); no scene staged so far opens such a window.
+       u32 line;
+ 
+-      line = (win->y + y) * BG_SCREEN_WIDTH;
++      line = (win->y + y) * WINDOW_MAP_WIDTH;
+       switch (
+           *(((struct WindowState *)base)->tilemap + (line + (win->x + x)))) {
+       case WINDOW_TILE_BORDER_TOP:
+@@ -293,8 +293,8 @@ void Window_PutGlyph(struct Window *win, u32 tile, u32 x, u32 y, s32 mode) {
+       x++;
+       y++;
+     }
+-    pos = (win->y + y) * BG_SCREEN_WIDTH + (win->x + x);
+-    if (pos < BG_SCREEN_WIDTH * DISPLAY_TILE_HEIGHT)
++    pos = (win->y + y) * WINDOW_MAP_WIDTH + (win->x + x);
++    if (pos < WINDOW_MAP_WIDTH * DISPLAY_TILE_HEIGHT)
+       ((struct WindowState *)state)->tilemap[pos] = WINDOW_TILE(tile);
+   }
+ }
+@@ -303,7 +303,7 @@ void Window_PutGlyph(struct Window *win, u32 tile, u32 x, u32 y, s32 mode) {
+ 
+ /// The windows' tilemap entries in use: a screen block's rows down the
+ /// screen.
+-#define TILEMAP_ENTRIES (BG_SCREEN_WIDTH * DISPLAY_TILE_HEIGHT)
++#define TILEMAP_ENTRIES (WINDOW_MAP_WIDTH * DISPLAY_TILE_HEIGHT)
+ 
+ /// Writes value into a window's tilemap at tile (x, y) of its interior, with
+ /// the palette mode names (TILEMAP_ENTRY_), or as it is for
+@@ -345,14 +345,14 @@ void Window_SetTilemapEntry(struct Window *window, s32 value, s32 x, s32 y,
+   case TILEMAP_ENTRY_HIGHLIGHT:
+   case TILEMAP_ENTRY_WINDOW:
+   case TILEMAP_ENTRY_ICON:
+-    index = (window->y + y) * BG_SCREEN_WIDTH + (window->x + x);
++    index = (window->y + y) * WINDOW_MAP_WIDTH + (window->x + x);
+     if ((u32)index >= TILEMAP_ENTRIES)
+       return;
+     state->tilemap[index] = palette | value;
+     return;
+   case TILEMAP_ENTRY_PLAIN:
+   default:
+-    index = (window->y + y) * BG_SCREEN_WIDTH + (window->x + x);
++    index = (window->y + y) * WINDOW_MAP_WIDTH + (window->x + x);
+     if ((u32)index >= TILEMAP_ENTRIES)
+       return;
+     state->tilemap[index] = value;
+diff --git a/games/tbs/src/window/window_text_tiles.c b/games/tbs/src/window/window_text_tiles.c
+index a7125b20e2..fa8130592b 100644
+--- a/games/tbs/src/window/window_text_tiles.c
++++ b/games/tbs/src/window/window_text_tiles.c
+@@ -322,10 +322,16 @@ s32 Text_DrawStringAsTiles(u16 *text, u16 *tiles, u16 *mirror, s32 x) {
+ /// tiles) for reuse: their taken and shown bits are cleared.
+ void Window_ClearTextTilesInRect(s32 x, s32 y, u32 width, u32 height) {
+   u8 *base = gWindowState[0];
+-  u16 *cursor = (u16 *)((y * BG_SCREEN_WIDTH + x) * 2 + (u32)base);
++  u16 *cursor = (u16 *)((y * WINDOW_MAP_WIDTH + x) * 2 + (u32)base);
+   u32 alternateTiles = ((struct WindowState *)base)->extraTextTiles;
+   u32 row;
+ 
++#ifdef NATIVE
++  // The shops' hidden anchor window sits at x = -5: the GBA reads past the
++  // tilemap, unseen.
++  if ((u32)x >= WINDOW_MAP_WIDTH || (u32)y >= DISPLAY_TILE_HEIGHT)
++    return;
++#endif
+   for (row = 0; row < height; row++) {
+     u32 column;
+ 
+@@ -340,7 +346,7 @@ void Window_ClearTextTilesInRect(s32 x, s32 y, u32 width, u32 height) {
+             ~(TEXT_TILE_TAKEN | TEXT_TILE_SHOWN);
+       }
+     }
+-    cursor += BG_SCREEN_WIDTH - width;
++    cursor += WINDOW_MAP_WIDTH - width;
+   }
+ }
+ 
+@@ -355,7 +361,7 @@ void Window_MarkVisibleTextTiles(void) {
+   s32 x;
+ 
+   // BUG: the cursor never skips the two hidden columns that end each row of
+-  // BG_SCREEN_WIDTH entries, so the scan covers the tilemap's first
++  // WINDOW_MAP_WIDTH entries, so the scan covers the tilemap's first
+   // DISPLAY_TILE_WIDTH * DISPLAY_TILE_HEIGHT entries in order, and the text
+   // tiles of the last row and a half are never marked shown: the loop below
+   // frees them while they are still on the screen.
+@@ -372,7 +378,7 @@ void Window_MarkVisibleTextTiles(void) {
+       }
+     }
+ #ifdef BUGFIX
+-    cursor += BG_SCREEN_WIDTH - width;
++    cursor += WINDOW_MAP_WIDTH - width;
+ #endif
+   }
+ 
+@@ -422,7 +428,7 @@ void Window_DrawDividerLine(struct Window *win, u32 x1, u32 y1, u32 x2,
+       y2 = pos;
+     }
+     Window_ClearTextTilesInRect(win->x + x2, win->y + y1, 1, y2 - y1);
+-    cursor = (u16 *)(((win->y + y1) * BG_SCREEN_WIDTH + win->x + x2) * 2 +
++    cursor = (u16 *)(((win->y + y1) * WINDOW_MAP_WIDTH + win->x + x2) * 2 +
+                      (u32)state->tilemap);
+     for (pos = y1; pos <= y2; pos++) {
+       tile = *cursor;
+@@ -485,7 +491,7 @@ void Window_DrawDividerLine(struct Window *win, u32 x1, u32 y1, u32 x2,
+         }
+       }
+       *cursor = tile;
+-      cursor += BG_SCREEN_WIDTH;
++      cursor += WINDOW_MAP_WIDTH;
+     }
+   } else if (y1 == y2) {
+     if (x1 == x2)
+@@ -496,7 +502,7 @@ void Window_DrawDividerLine(struct Window *win, u32 x1, u32 y1, u32 x2,
+       x2 = pos;
+     }
+     Window_ClearTextTilesInRect(win->x + x1, win->y + y1, x2 - x1, 1);
+-    cursor = (u16 *)(((win->y + y1) * BG_SCREEN_WIDTH + win->x + x1) * 2 +
++    cursor = (u16 *)(((win->y + y1) * WINDOW_MAP_WIDTH + win->x + x1) * 2 +
+                      (u32)state->tilemap);
+     for (pos = x1; pos <= x2; pos++) {
+       tile = *cursor;
+@@ -607,9 +613,9 @@ void Text_DrawMessageAsTiles(s32 message, const struct Window *window,
+   state->textBuffer[state->textBufferEnd] = 0;
+   state->textBufferEnd = (state->textBufferEnd + 1) & TEXT_BUFFER_MASK;
+ 
+-  cell = ((window->y + (offsetY >> 3) + 1) << 5) +
++  cell = ((window->y + (offsetY >> 3) + 1) << WINDOW_MAP_ROW_SHIFT) +
+          (window->x + (offsetX >> 3)) + 1;
+-  if (cell < BG_SCREEN_WIDTH * DISPLAY_TILE_HEIGHT) {
++  if (cell < WINDOW_MAP_WIDTH * DISPLAY_TILE_HEIGHT) {
+     // Inside the tilemap.
+     byteOffset = cell * 2;
+     vramAddress = byteOffset + (s32)WINDOW_TILEMAP_VRAM;
+@@ -657,9 +663,9 @@ void Text_DrawStringAtOffset(const u8 *text, const struct Window *window,
+   state = WINDOW_STATE;
+   Text_WidenByteString(text, (u16 *)buffer);
+ 
+-  cell = ((window->y + ((u32)offsetY >> 3) + 1) << 5) +
++  cell = ((window->y + ((u32)offsetY >> 3) + 1) << WINDOW_MAP_ROW_SHIFT) +
+          (window->x + ((u32)offsetX >> 3)) + 1;
+-  if (cell < BG_SCREEN_WIDTH * DISPLAY_TILE_HEIGHT) {
++  if (cell < WINDOW_MAP_WIDTH * DISPLAY_TILE_HEIGHT) {
+     // Inside the tilemap.
+     vram = (s32)WINDOW_TILEMAP_VRAM;
+     cell *= 2;
+@@ -748,9 +754,9 @@ void Text_DrawPrefixedNumberAtOffset(s32 value, const struct Window *window,
+   }
+   output[6] = 0;
+ 
+-  cell = ((window->y + ((u32)offsetY >> 3) + 1) << 5) +
++  cell = ((window->y + ((u32)offsetY >> 3) + 1) << WINDOW_MAP_ROW_SHIFT) +
+          (window->x + ((u32)offsetX >> 3)) + 1;
+-  if (cell < BG_SCREEN_WIDTH * DISPLAY_TILE_HEIGHT) {
++  if (cell < WINDOW_MAP_WIDTH * DISPLAY_TILE_HEIGHT) {
+     // Inside the tilemap.
+     vram = (s32)WINDOW_TILEMAP_VRAM;
+     cell *= 2;
+diff --git a/games/tbs/src/window/window_windows.c b/games/tbs/src/window/window_windows.c
+index 2a470a360c..c32792f348 100644
+--- a/games/tbs/src/window/window_windows.c
++++ b/games/tbs/src/window/window_windows.c
+@@ -11,7 +11,7 @@
+ /// The tilemap uploads in five bands of four tile rows, each a bit of
+ /// WindowState.dirty above bit 0, which asks for them all.
+ #define TILEMAP_BANDS 5
+-#define TILEMAP_BAND_SIZE (4 * BG_SCREEN_WIDTH * sizeof(u16))
++#define TILEMAP_BAND_SIZE (4 * WINDOW_MAP_WIDTH * sizeof(u16))
+ #define TILEMAP_DIRTY_ALL ((1 << (TILEMAP_BANDS + 1)) - 1)
+ 
+ /// Takes the first window sprite from the free list, or returns NULL when every
+@@ -201,7 +201,7 @@ void WindowSystem_UploadTilemap(void) {
+ /// and frees the text tiles it showed.
+ void Window_EraseBorderRect(s32 x, s32 y, u32 width, u32 height) {
+   struct WindowState *state = WINDOW_STATE;
+-  u16 *cursor = (u16 *)((y * BG_SCREEN_WIDTH + x) * 2 + (u32)state->tilemap);
++  u16 *cursor = (u16 *)((y * WINDOW_MAP_WIDTH + x) * 2 + (u32)state->tilemap);
+   s32 tile;
+   u32 bottom;
+   u32 row;
+@@ -220,6 +220,11 @@ void Window_EraseBorderRect(s32 x, s32 y, u32 width, u32 height) {
+   if (height > DISPLAY_TILE_WIDTH)
+     height = DISPLAY_TILE_WIDTH;
+ 
++#ifdef NATIVE
++  // Left of the screen (x negative) the GBA erases past the tilemap, unseen.
++  if ((u32)x >= WINDOW_MAP_WIDTH || (u32)y >= DISPLAY_TILE_HEIGHT)
++    return;
++#endif
+   // Free the text tiles while the tilemap still names them.
+   Window_ClearTextTilesInRect(x, y, width, height);
+ 
+@@ -236,7 +241,7 @@ void Window_EraseBorderRect(s32 x, s32 y, u32 width, u32 height) {
+     for (column = 0; column < width; column++) {
+       *cursor++ = tile;
+     }
+-    cursor += BG_SCREEN_WIDTH - width;
++    cursor += WINDOW_MAP_WIDTH - width;
+   }
+   state->dirty = 1;
+ }
+@@ -447,11 +452,11 @@ void Window_ClearInteriorTiles(const struct Window *window, u32 left, u32 top,
+   width = right - x;
+   height = bottom - y;
+   Window_ClearTextTilesInRect(left, top, width, height);
+-  tiles = state->tilemap + top * BG_SCREEN_WIDTH + left;
++  tiles = state->tilemap + top * WINDOW_MAP_WIDTH + left;
+   for (row = 0; row < height; row++) {
+     for (left = 0; left < width; left++)
+       *tiles++ = WINDOW_TILE_WINDOW_FILL;
+-    tiles += BG_SCREEN_WIDTH - width;
++    tiles += WINDOW_MAP_WIDTH - width;
+   }
+   state->dirty = 1;
+ }
+-- 
+2.43.0
+

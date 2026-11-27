@@ -1,0 +1,392 @@
+From dcc30904b22ba0e0d972ab0fd43a24ecddda8400 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 27 Nov 2026 07:06:37 +0000
+Subject: [PATCH] Native: touch and mouse, first on the icon rows
+
+One pointer for the desktop build, and later the phone builds
+(native/touch.h): the platform reports it (SDL's mouse, which SDL also
+feeds from touch; the headless build's new "touch X Y" script command),
+and native_touch.c turns it into taps: Touch_TappedRect asks whether a
+rectangle was pressed and let go in this frame, Touch_TappedUiRect the
+same in the UI safe area's coordinates. Tap targets are at least
+TOUCH_TARGET_MIN (24) pixels.
+
+The icon rows take taps (IconMenu_Run, arena_icon_menu.c): tap an icon to
+select it, tap it again to choose it. That covers the party manager's
+menu and its choice of shop. Keys and the pad work as before.
+
+The GBA ROM is byte-identical.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8ykfbWFo924wEqysLhg
+---
+ games/tbs/src/window/arena_icon_menu.c   | 21 ++++++++++
+ games/tbs/src/window/screens_icon_menu.c | 17 ++++++++
+ games/tbs/src/window/screens_internal.h  |  4 ++
+ port/README.md                           | 25 ++++++++++--
+ port/include/native/native.h             |  4 ++
+ port/include/native/touch.h              | 24 ++++++++++++
+ port/src/native_platform.c               |  2 +
+ port/src/native_touch.c                  | 50 ++++++++++++++++++++++++
+ port/src/platform_headless.c             | 21 ++++++++++
+ port/src/platform_sdl.c                  | 34 ++++++++++++++++
+ 10 files changed, 199 insertions(+), 3 deletions(-)
+ create mode 100644 port/include/native/touch.h
+ create mode 100644 port/src/native_touch.c
+
+diff --git a/games/tbs/src/window/arena_icon_menu.c b/games/tbs/src/window/arena_icon_menu.c
+index 0d5cdea663..ff00f6ced7 100644
+--- a/games/tbs/src/window/arena_icon_menu.c
++++ b/games/tbs/src/window/arena_icon_menu.c
+@@ -4,6 +4,9 @@
+ 
+ #include "screens_internal.h"
+ #include "arena/arena.h"
++#ifdef NATIVE
++#include "native/touch.h"
++#endif
+ 
+ /// The width, in tiles, of the label window beside the arena menus' icons.
+ #define ARENA_MENU_LABEL_WIDTH 13
+@@ -37,3 +40,21 @@ s32 ArenaMenu_IconChoose(s32 prompt, const u8 *icons, s32 labelBase,
+   Message_CloseFinishedWindows();
+   return result;
+ }
++
++#ifdef NATIVE
++/// Desktop and touch: the icon tapped this frame, or -1. An icon's tap target
++/// is its 32x32 picture with 4 pixels round it (40x40, past TOUCH_TARGET_MIN).
++s32 IconMenu_TouchedIcon(void) {
++  struct IconMenuState *state = gIconMenuState;
++  s32 i;
++
++  for (i = 0; i < state->count; i++) {
++    const struct IconMenuEntry *entry = &state->entries[i];
++
++    if (entry->x != 0 &&
++        Touch_TappedUiRect(entry->x - 4, entry->y - 4, 40, 40))
++      return i;
++  }
++  return -1;
++}
++#endif
+diff --git a/games/tbs/src/window/screens_icon_menu.c b/games/tbs/src/window/screens_icon_menu.c
+index 74db58c736..c3a9776f0e 100644
+--- a/games/tbs/src/window/screens_icon_menu.c
++++ b/games/tbs/src/window/screens_icon_menu.c
+@@ -217,6 +217,23 @@ redraw:
+   Text_DrawMessageAsTiles(resource, state->window, 0, 0);
+   for (;;) {
+     wait(1);
++#ifdef NATIVE
++    // Touch: tapping an icon selects it; tapping the selected one chooses it
++    // (arena_icon_menu.c).
++    {
++      s32 touched = IconMenu_TouchedIcon();
++
++      if (touched >= 0 && touched == state->selection) {
++        Sound_PlayFar(SE_MENU_CONFIRM);
++        return state->selection;
++      }
++      if (touched >= 0) {
++        Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++        state->selection = touched;
++        goto redraw;
++      }
++    }
++#endif
+     if (gKeysPressed & KEY_A) {
+       Sound_PlayFar(SE_MENU_CONFIRM);
+       return state->selection;
+diff --git a/games/tbs/src/window/screens_internal.h b/games/tbs/src/window/screens_internal.h
+index bebb1eeec4..cedfac0ac1 100644
+--- a/games/tbs/src/window/screens_internal.h
++++ b/games/tbs/src/window/screens_internal.h
+@@ -392,4 +392,8 @@ extern const u8 gDjinnMenu_BlinkTile[32];
+ extern const u8 gDjinnMenu_ElementXOffsets[4];
+ extern const u8 gDjinnMenu_ElementYOffsets[4];
+ 
++#ifdef NATIVE
++s32 IconMenu_TouchedIcon(void);
++#endif
++
+ #endif
+diff --git a/port/README.md b/port/README.md
+index 52731cefd8..87d91ce114 100644
+--- a/port/README.md
++++ b/port/README.md
+@@ -35,9 +35,28 @@ screen's width at start-up; 160 lines always. The game reads it as
+   255 as 240, and the display takes a right edge of 240 or more as the
+   screen's edge (the battle backdrop's window had wrapped to 32 pixels).
+ 
+-Not yet: the window layer (menus, messages, the battle HUD) is still 32
+-tiles wide, so at 288 its boxes wrap and the battle command row crashes.
+-256 plays through.
++- The window layer (menus, messages, the battle HUD) is 64 tiles wide too:
++  `WINDOW_MAP_WIDTH` and `WINDOW_MAP_ROW_SHIFT` (`window.h`) stand for the
++  32 and the `<< 5` the window code had, and BG0 reads a wide map.
++- The UI's safe area: outside battle the window, screen, menu and shop code
++  (`window.o`, `screens.o`, `menu.o`, `shop.o`, built with
++  `NATIVE_UI_SPACE`) lays out in 240 pixels centred on the screen, so the
++  GBA's screens keep together. `DISPLAY_WIDTH` there is `gNativeUiWidth`;
++  BG0 scrolls by the offset; the sprites that code queues
++  (`Oam_AddSpriteAtDepth`) and the field sprites it places
++  (`Render_ApplyProjectedPlacementFar`) move by it in the OAM builder. In
++  battle the safe area is the whole screen (`Screen_SetUiSafeArea`, called
++  where the window system starts for the field or for battle).
++
++### Touch and mouse
++
++One pointer (`native/touch.h`, `native_touch.c`): the platform reports it
++(`Platform_ReadPointer`: SDL's mouse, which SDL also feeds from touch; the
++headless build's `touch X Y` script command taps at a screen pixel), and game
++code asks `Touch_TappedRect` / `Touch_TappedUiRect` whether a rectangle was
++tapped this frame. Tap targets are at least `TOUCH_TARGET_MIN` (24) pixels.
++So far the icon rows (`IconMenu_Run`: the manager, the shop choice) take taps:
++tap an icon to select it, tap it again to choose it.
+ 
+ The headless build takes the arena repo's smoke scripts (`scripts/smoke/*.txt`:
+ `wait`, `press`, `tap`, `mash`, `include`, `shot`, `peek`, `poke`) and writes
+diff --git a/port/include/native/native.h b/port/include/native/native.h
+index 55d9ac5ba5..7f146cae66 100644
+--- a/port/include/native/native.h
++++ b/port/include/native/native.h
+@@ -88,6 +88,10 @@ int Platform_Init(int argc, char **argv);
+ void Platform_Present(const u32 *frame);
+ /// The GBA's KEYINPUT bits, pressed = 1 (the game reads them inverted).
+ u16 Platform_ReadKeys(void);
++/// The pointer (mouse or touch): 1 while it is down, and where, in screen
++/// pixels (native_touch.c turns it into taps).
++int Platform_ReadPointer(int *x, int *y);
++void Touch_Update(void);
+ /// Whether the player asked to quit.
+ int Platform_ShouldQuit(void);
+ void Platform_Shutdown(void);
+diff --git a/port/include/native/touch.h b/port/include/native/touch.h
+new file mode 100644
+index 0000000000..5d36c9c83a
+--- /dev/null
++++ b/port/include/native/touch.h
+@@ -0,0 +1,24 @@
++#ifndef NATIVE_TOUCH_H
++#define NATIVE_TOUCH_H
++
++/// @file
++/// Touch and mouse for the desktop build (and later the phone builds): one
++/// pointer, sampled each frame with the keys (native_touch.c). Game code asks
++/// whether a rectangle was tapped this frame: pressed and let go inside it.
++/// A rectangle in the UI's safe area's coordinates (what the window, menu
++/// and shop code lays out in) is moved by the safe area's offset first.
++
++/// The smallest tap target, in screen pixels: about a fingertip on a phone
++/// with the 160-line screen filling its short side.
++#define TOUCH_TARGET_MIN 24
++
++/// 1 when the pointer was let go this frame inside the rectangle (x, y,
++/// width, height, screen pixels) it was pressed in; it is then used up, so
++/// one tap answers one question.
++int Touch_TappedRect(int x, int y, int width, int height);
++/// As Touch_TappedRect, for a rectangle in the safe area's coordinates.
++int Touch_TappedUiRect(int x, int y, int width, int height);
++/// 1 while the pointer is down; its place in screen pixels.
++int Touch_Held(int *x, int *y);
++
++#endif
+diff --git a/port/src/native_platform.c b/port/src/native_platform.c
+index 9dc72bd13e..1e9e979946 100644
+--- a/port/src/native_platform.c
++++ b/port/src/native_platform.c
+@@ -280,6 +280,8 @@ static void Irq_Raise(int irq) {
+ 
+ static void Keys_Update(void) {
+   u16 pressed = Platform_ReadKeys() & 0x3ff;
++
++  Touch_Update();
+   u16 keycnt = IO_REG16(REG_KEYCNT_OFFSET);
+ 
+   IO_REG16(REG_KEYINPUT_OFFSET) = ~pressed & 0x3ff;
+diff --git a/port/src/native_touch.c b/port/src/native_touch.c
+new file mode 100644
+index 0000000000..b9c57cecf6
+--- /dev/null
++++ b/port/src/native_touch.c
+@@ -0,0 +1,50 @@
++// The pointer: the platform reports where it is and whether it is down; each
++// frame this keeps where a press began and whether it ended this frame, so a
++// tap is a press and a release in the same rectangle.
++
++#include "native/native.h"
++#include "native/touch.h"
++
++static int sDown, sX, sY;
++static int sPressX, sPressY;
++static int sReleased; // let go this frame, not yet used up
++
++void Touch_Update(void) {
++  int x, y;
++  int down = Platform_ReadPointer(&x, &y);
++
++  sReleased = 0;
++  if (down && !sDown) {
++    sPressX = x;
++    sPressY = y;
++  }
++  if (!down && sDown)
++    sReleased = 1;
++  sDown = down;
++  if (down) {
++    sX = x;
++    sY = y;
++  }
++}
++
++static int Inside(int px, int py, int x, int y, int width, int height) {
++  return px >= x && px < x + width && py >= y && py < y + height;
++}
++
++int Touch_TappedRect(int x, int y, int width, int height) {
++  if (!sReleased || !Inside(sPressX, sPressY, x, y, width, height) ||
++      !Inside(sX, sY, x, y, width, height))
++    return 0;
++  sReleased = 0;
++  return 1;
++}
++
++int Touch_TappedUiRect(int x, int y, int width, int height) {
++  return Touch_TappedRect(x + gNativeUiOffset, y, width, height);
++}
++
++int Touch_Held(int *x, int *y) {
++  *x = sX;
++  *y = sY;
++  return sDown;
++}
+diff --git a/port/src/platform_headless.c b/port/src/platform_headless.c
+index f038ea54b3..229559b356 100644
+--- a/port/src/platform_headless.c
++++ b/port/src/platform_headless.c
+@@ -140,6 +140,7 @@ enum { CMD_HOLD, CMD_SHOT, CMD_PEEK, CMD_POKE };
+ struct Command {
+   int kind;
+   u16 keys;
++  int touch, touchX, touchY; // a CMD_HOLD with the pointer down there
+   u32 frames;
+   u32 address, size, value;
+   char *path;
+@@ -149,6 +150,7 @@ static struct Command *sCommands;
+ static int sCount, sCapacity, sNext;
+ static u32 sHoldLeft;
+ static u16 sKeys;
++static int sTouch, sTouchX, sTouchY;
+ static int sDone;
+ static const char *sShotDir = "build/native-shots";
+ static int sScale = 3;
+@@ -232,6 +234,15 @@ static void Script_Load(const char *path) {
+     } else if (!strcmp(word, "tap") && n >= 2) {
+       Hold(Keys_Parse(arg1), 4);
+       Hold(0, 20);
++    } else if (!strcmp(word, "touch") && n >= 3) {
++      // A tap at screen pixel (x, y): down for 4 frames, then up.
++      struct Command *c = Command_Add(CMD_HOLD);
++
++      c->frames = 4;
++      c->touch = 1;
++      c->touchX = strtol(arg1, NULL, 0);
++      c->touchY = strtol(arg2, NULL, 0);
++      Hold(0, 20);
+     } else if (!strcmp(word, "mash") && n >= 3) {
+       u32 i, times = strtoul(arg2, NULL, 0);
+       u16 keys = Keys_Parse(arg1);
+@@ -283,6 +294,7 @@ static void Script_Step(void) {
+   if (sHoldLeft && --sHoldLeft)
+     return;
+   sKeys = 0;
++  sTouch = 0;
+   while (sNext < sCount) {
+     struct Command *c = &sCommands[sNext++];
+     volatile u8 *at = (volatile u8 *)(uintptr_t)c->address;
+@@ -292,6 +304,9 @@ static void Script_Step(void) {
+       if (c->frames == 0)
+         continue;
+       sKeys = c->keys;
++      sTouch = c->touch;
++      sTouchX = c->touchX;
++      sTouchY = c->touchY;
+       sHoldLeft = c->frames;
+       return;
+     case CMD_SHOT:
+@@ -359,6 +374,12 @@ void Platform_Present(const u32 *frame) {
+ 
+ u16 Platform_ReadKeys(void) { return sKeys; }
+ 
++int Platform_ReadPointer(int *x, int *y) {
++  *x = sTouchX;
++  *y = sTouchY;
++  return sTouch;
++}
++
+ int Platform_ShouldQuit(void) {
+   if (sScripted)
+     return sDone;
+diff --git a/port/src/platform_sdl.c b/port/src/platform_sdl.c
+index 6a21b9e208..153f908d39 100644
+--- a/port/src/platform_sdl.c
++++ b/port/src/platform_sdl.c
+@@ -19,6 +19,10 @@ static SDL_Renderer *sRenderer;
+ static SDL_Texture *sTexture;
+ static SDL_Gamepad *sGamepad;
+ static int sQuit;
++// The mouse (touch arrives as the mouse too: SDL's default), in screen
++// pixels. A click that goes down and up between two frames still shows as
++// down for one frame (sUpPending).
++static int sPointerX, sPointerY, sPointerDown, sUpPending;
+ static Uint64 sNextFrame;
+ 
+ #define FRAME_NS (SDL_NS_PER_SECOND * 280896ull / 16777216ull) // 59.73 Hz
+@@ -70,6 +74,24 @@ static void Events_Poll(void) {
+       if (event.key.key == SDLK_ESCAPE)
+         sQuit = 1;
+       break;
++    case SDL_EVENT_MOUSE_BUTTON_DOWN:
++    case SDL_EVENT_MOUSE_BUTTON_UP:
++    case SDL_EVENT_MOUSE_MOTION:
++      SDL_ConvertEventToRenderCoordinates(sRenderer, &event);
++      if (event.type == SDL_EVENT_MOUSE_MOTION) {
++        sPointerX = (int)event.motion.x;
++        sPointerY = (int)event.motion.y;
++      } else if (event.button.button == SDL_BUTTON_LEFT) {
++        sPointerX = (int)event.button.x;
++        sPointerY = (int)event.button.y;
++        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
++          sPointerDown = 1;
++          sUpPending = 0;
++        } else if (sPointerDown) {
++          sUpPending = 1;
++        }
++      }
++      break;
+     case SDL_EVENT_GAMEPAD_ADDED:
+       if (!sGamepad)
+         sGamepad = SDL_OpenGamepad(event.gdevice.which);
+@@ -108,6 +130,18 @@ void Platform_Present(const u32 *frame) {
+   }
+ }
+ 
++int Platform_ReadPointer(int *x, int *y) {
++  int down = sPointerDown;
++
++  *x = sPointerX;
++  *y = sPointerY;
++  if (sUpPending) {
++    sPointerDown = 0;
++    sUpPending = 0;
++  }
++  return down;
++}
++
+ u16 Platform_ReadKeys(void) {
+   const bool *k = SDL_GetKeyboardState(NULL);
+   u16 keys = 0;
+-- 
+2.43.0
+
