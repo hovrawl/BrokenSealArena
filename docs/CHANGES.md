@@ -1220,6 +1220,35 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
   (from 60; right-click or Z still go back). The field has no on-screen Start
   or Select yet, so a touch-only player cannot open the Pause or field menu.
 
+## 64. Native: tap the background to go back
+
+Nathan: "clicking outside the menu and the chat ui (the background) should go
+back, like a phone"; in the field menu too.
+
+- A tap no screen used (still unconsumed at the next frame's key update) that
+  lands on the background holds B for one frame (`Touch_BackgroundTapped`,
+  `Keys_Update`). Background means, within 4 pixels of both ends of the press:
+  no open window (`ArenaWindow_Covers` in `arena_icon_menu.c`, from the window
+  slots) and only BG1 to BG3 or the backdrop in front in the last frame drawn
+  (`Ppu_IsBackground`: `ppu.c` keeps each pixel's front layer; BG0 is the
+  window layer, and sprites are icons, cursors and people).
+- Tried first: the layer test alone. It broke the battle Djinn list
+  (`touch_djinn_240`): an affine BG2 is in front of part of the list's window
+  there, so a tap on the list's empty row went back. The window slots fix it.
+- One switch for every screen: the manager's and attendant's icon rows, the
+  field menu, Pause, battle lists (to the command row), shops and so on.
+  A drag is never a tap, so steering never goes back; in the field with
+  nothing open the B is harmless.
+- Only `port/` files and a `NATIVE` block change: the GBA ROM is
+  byte-identical (checked).
+- Verified (headless, `--ui touch --width 240`): `touch_backtap_240.txt`
+  (manager row, field menu and Pause each closed by a floor tap) and
+  `touch_backtap_battle_240.txt` (Psynergy list, a tap on the sand: back to the
+  command row). The 18 touch scripts at 240 and 288 give identical shots to
+  the build before, except `touch_picker_240`'s last shot: its final tap
+  lands on the wall beside the manager's row, which now closes the row (as
+  intended). Not checked: the SDL window itself.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

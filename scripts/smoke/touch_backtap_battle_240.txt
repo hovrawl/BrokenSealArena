@@ -1,0 +1,20 @@
+# Tap the background to go back in battle (run with --ui touch --width 240):
+# Fight, Psynergy (the list), then a tap on the sand at the left: back to the
+# command row.
+include battle.txt
+touch 120 80
+wait 50
+touch 120 80
+wait 50
+touch 120 80
+wait 50
+touch 100 148
+wait 60
+touch 116 148
+wait 10
+touch 116 148
+wait 60
+shot /tmp/shots/c0.png
+touch 30 110
+wait 60
+shot /tmp/shots/c1.png

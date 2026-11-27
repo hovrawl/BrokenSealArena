@@ -1,0 +1,22 @@
+# Tap the background to go back (run with --ui touch --width 240): the
+# manager's icon row, then a tap on the floor away from every window (closed,
+# back in the field); the field menu (Select), the floor (closed); the Pause
+# menu (Start), the floor (closed). Then the manager again, and a tap just off
+# an icon's edge: not background, so the row stays open.
+include to_manager.txt
+shot /tmp/shots/g0.png
+touch 30 100
+wait 60
+shot /tmp/shots/g1.png
+tap S
+wait 90
+shot /tmp/shots/g2.png
+touch 30 100
+wait 60
+shot /tmp/shots/g3.png
+tap T
+wait 90
+shot /tmp/shots/g4.png
+touch 30 100
+wait 60
+shot /tmp/shots/g5.png

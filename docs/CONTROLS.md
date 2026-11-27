@@ -46,6 +46,12 @@ SDL feeds a touch screen to the game as the mouse, so the two work the same:
 - **Back:** the **Back** button at the top right (shops, class viewer,
   mechanics) or beside a battle menu presses B. The **right mouse button** is
   always B.
+- **Tap the background to go back**, like a phone's back gesture: a tap on the
+  room or the battlefield, outside every window, icon and person, presses B.
+  It closes the manager's and attendant's icon rows, the field menu and the
+  Pause menu, and takes a battle list back to the command row. A tap within a
+  few pixels of a window or an icon does nothing, so a near miss never backs
+  out.
 
 A drag never counts as a tap: if your finger slides more than a few pixels, the
 release does nothing, so you can change your mind by sliding off.
