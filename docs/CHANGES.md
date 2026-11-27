@@ -1387,6 +1387,36 @@ tap + hold should simulate this."
   no double tap) is still on the first message at the same point. The 20 touch
   scripts give the same shots as before.
 
+## 70. Native: the intro's logos and title picture at wide widths
+
+Nathan, at `--width 16:9`: the Golden Sun logo had black blocks cut out of
+it and a copy of its edge at the far right.
+
+- Cause: the logos, the sky intro and the title picture are the GBA's 30
+  tiles wide, but their maps were laid out `DISPLAY_TILE_WIDTH` columns (36
+  at 288) plus two padding entries into 32-entry rows, so every row ran into
+  the next and tile numbers ran past the picture (the black blocks). BG2's
+  32-tile map then wrapped at 256 pixels (the copy at the right).
+- The title scene (`scene/title.c`: publisher and Camelot logos, intro,
+  title) now runs at the GBA's width: `Screen_UseGbaWidth(1)` before the
+  logos, `(0)` after its fade-out. The game sees a 240-pixel screen, so all
+  of `title_intro.c` lays out as on the GBA unchanged; the frame keeps the
+  chosen width (`gNativeOutputWidth`, `OUTPUT_WIDTH`) and draws the 240
+  pixels in the middle with black either side (`Display_Line`); the SDL
+  window and headless shots use the output width; the pointer is moved by the
+  margin.
+- The file screen shows the same logo: there it loops 30 columns
+  (`LOGO_TILE_WIDTH`, title.h; the same constant on the GBA) and BG2 scrolls
+  it to the middle (`LOGO_SCROLL_X`); the logo's edges are black, so the map
+  wrapping either side shows black.
+- GBA ROM byte-identical.
+- Verified (headless, with a copy of a save so the title screen shows): at
+  288 and 256 the Nintendo and Camelot logos, the sky intro and the title
+  picture centred with black bars, the logo whole; the file screen's logo
+  whole and centred, its icon row as before. At 240 the intro and the file
+  screen are pixel-identical to before; the 240 and 288 touch scripts
+  (field, shops, manager, battle) give the same shots as before.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

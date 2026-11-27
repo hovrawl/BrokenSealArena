@@ -1,0 +1,246 @@
+From aa62d076b274e924cf2d75ac9831b052e7775926 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sat, 28 Nov 2026 10:07:27 +1100
+Subject: [PATCH] Native: the intro's logos and title picture at wide widths
+
+The title scene's pictures are the GBA's 30 tiles; laid out at a wider
+DISPLAY_TILE_WIDTH their maps overran their rows, which cut black blocks
+out of the logo. The title scene now runs at 240 pixels, drawn in the
+middle of the chosen width with black either side (Screen_UseGbaWidth,
+OUTPUT_WIDTH), and the file screen lays out its logo 30 tiles wide and
+scrolls it to the middle. The GBA ROM is unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/scene/title.h   |  7 +++++++
+ games/tbs/include/system/io_reg.h |  3 +++
+ games/tbs/src/scene/file_screen.c |  5 ++++-
+ games/tbs/src/scene/title.c       |  7 +++++++
+ port/include/native/native.h      |  8 ++++++++
+ port/src/native_platform.c        | 11 +++++++++--
+ port/src/native_screen.c          | 10 ++++++++++
+ port/src/native_touch.c           |  2 ++
+ port/src/platform_headless.c      |  3 ++-
+ port/src/platform_sdl.c           |  8 ++++----
+ 10 files changed, 56 insertions(+), 8 deletions(-)
+
+diff --git a/games/tbs/include/scene/title.h b/games/tbs/include/scene/title.h
+index 682020be4e..19820817a6 100644
+--- a/games/tbs/include/scene/title.h
++++ b/games/tbs/include/scene/title.h
+@@ -29,5 +29,12 @@ extern struct TitleSprite gTitleSprites[];
+ #define LOGO_MAP ((u16 *)BG_SCREEN_BLOCK(6))
+ #define LOGO_FIRST_TILE 416
+ #define LOGO_TILES (BG_CHAR_BLOCK(0) + LOGO_FIRST_TILE * TILE_SIZE_8BPP)
++/// The logo picture's width in tiles: the GBA screen's 30. Arena romhack: on
++/// a wider desktop screen it is scrolled to the middle (its edges are black,
++/// so the 32-tile map wrapping either side shows black).
++#define LOGO_TILE_WIDTH 30
++#ifdef NATIVE
++#define LOGO_SCROLL_X (-(DISPLAY_WIDTH - LOGO_TILE_WIDTH * 8) / 2)
++#endif
+ 
+ #endif
+diff --git a/games/tbs/include/system/io_reg.h b/games/tbs/include/system/io_reg.h
+index 1f0cb98a36..c76426e9c8 100644
+--- a/games/tbs/include/system/io_reg.h
++++ b/games/tbs/include/system/io_reg.h
+@@ -96,6 +96,9 @@ enum DisplayControl {
+ extern int gNativeDisplayWidth;
+ extern int gNativeUiWidth;
+ void Screen_SetUiSafeArea(int on);
++/// The title scene's pictures are the GBA's 30 tiles: while it runs the game
++/// sees a 240-pixel screen, shown centred on a wider one (native_screen.c).
++void Screen_UseGbaWidth(int on);
+ #ifdef NATIVE_UI_SPACE
+ #define DISPLAY_WIDTH gNativeUiWidth
+ #define Oam_AddSpriteAtDepth NativeUi_AddSpriteAtDepth
+diff --git a/games/tbs/src/scene/file_screen.c b/games/tbs/src/scene/file_screen.c
+index c89cd60d86..5999cf6087 100644
+--- a/games/tbs/src/scene/file_screen.c
++++ b/games/tbs/src/scene/file_screen.c
+@@ -256,7 +256,7 @@ static void FileScreen_LoadBackground(void) {
+   tilemap = LOGO_MAP;
+   tile = LOGO_FIRST_TILE;
+   for (y = 0; y < DISPLAY_TILE_HEIGHT; y++) {
+-    for (x = 0; x < DISPLAY_TILE_WIDTH; x++)
++    for (x = 0; x < LOGO_TILE_WIDTH; x++)
+       *tilemap++ = tile++;
+     *tilemap++ = offscreenTile;
+     *tilemap++ = offscreenTile;
+@@ -267,6 +267,9 @@ static void FileScreen_LoadBackground(void) {
+     scroll->x = 0;
+     scroll++;
+   }
++#ifdef NATIVE
++  gBgScroll[2].x = LOGO_SCROLL_X;
++#endif
+   Dma_Set(gBgScroll, REG_BG0HOFS, DMA_COPY_WORDS(4), REG_DMA3);
+   ((struct MapGridScrollState *)gMapGridState[0])->flags =
+       DISPCNT_BG2_ON | DISPCNT_OBJ_ON;
+diff --git a/games/tbs/src/scene/title.c b/games/tbs/src/scene/title.c
+index 92f48c9255..325ab62151 100644
+--- a/games/tbs/src/scene/title.c
++++ b/games/tbs/src/scene/title.c
+@@ -97,6 +97,10 @@ s32 Scene_Initialize(void) {
+   // XXX (no evidence): what the call once did; the stub is empty in every
+   // edition, so only an earlier build of the game would show.
+   Stub_NoOpHook(RESOURCE_TITLE_FAR_CALLS);
++#ifdef NATIVE
++  // Arena romhack: the logos, intro and title picture are 30 tiles wide.
++  Screen_UseGbaWidth(1);
++#endif
+   if (gMainRoutineState.entrance == TITLE_AFTER_RUN) {
+     for (;;) {
+       Sound_Play(MUS_SILENCE);
+@@ -140,6 +144,9 @@ s32 Scene_Initialize(void) {
+   ScreenFade_Wait();
+   Event_Wait(60);
+   Sound_Play(MUS_SILENCE);
++#ifdef NATIVE
++  Screen_UseGbaWidth(0); // faded out: the next scene has the whole width
++#endif
+   return 0;
+ }
+ 
+diff --git a/port/include/native/native.h b/port/include/native/native.h
+index bb08995944..99a6183e73 100644
+--- a/port/include/native/native.h
++++ b/port/include/native/native.h
+@@ -48,6 +48,14 @@ typedef uint64_t u64;
+ #define SCREEN_MAX_WIDTH 288
+ extern int gNativeDisplayWidth;
+ #define SCREEN_WIDTH gNativeDisplayWidth
++/// The frame's and the window's width: the width chosen at start-up. The
++/// game's (SCREEN_WIDTH) is the same, or 240 while the title scene runs
++/// (Screen_UseGbaWidth), drawn in the middle with black either side.
++extern int gNativeOutputWidth;
++#define OUTPUT_WIDTH gNativeOutputWidth
++/// The black margin either side of the game's picture in the frame.
++#define OUTPUT_MARGIN ((OUTPUT_WIDTH - SCREEN_WIDTH) / 2)
++void Screen_UseGbaWidth(int on);
+ #define GBA_HEIGHT 160
+ 
+ /// Takes `--width N` (or 3:2, 16:10, 16:9) from the command line, else
+diff --git a/port/src/native_platform.c b/port/src/native_platform.c
+index b0b0f743c8..6608f1ec2f 100644
+--- a/port/src/native_platform.c
++++ b/port/src/native_platform.c
+@@ -320,8 +320,15 @@ static void Display_Line(int line) {
+     if (IO_REG16(REG_DISPSTAT_OFFSET) & 8)
+       Irq_Raise(0);
+   }
+-  if (line < GBA_HEIGHT)
+-    Ppu_RenderLine(line, sFrame + line * SCREEN_WIDTH);
++  if (line < GBA_HEIGHT) {
++    u32 *row = sFrame + line * OUTPUT_WIDTH;
++    int margin = OUTPUT_MARGIN, x;
++
++    // The title scene at the GBA's width: black either side.
++    for (x = 0; x < margin; x++)
++      row[x] = row[OUTPUT_WIDTH - 1 - x] = 0;
++    Ppu_RenderLine(line, row + margin);
++  }
+   IO_REG16(REG_DISPSTAT_OFFSET) |= 2;
+   if (line < GBA_HEIGHT)
+     Dma_Run(TIMING_HBLANK);
+diff --git a/port/src/native_screen.c b/port/src/native_screen.c
+index 7c3f4f08b1..eae086137f 100644
+--- a/port/src/native_screen.c
++++ b/port/src/native_screen.c
+@@ -9,6 +9,10 @@
+ #include "native/native.h"
+ 
+ int gNativeDisplayWidth = 240;
++// The width chosen at start-up: the frame's and the window's. The game's
++// width (gNativeDisplayWidth) is the same except while Screen_UseGbaWidth
++// has it at 240, drawn centred with black either side.
++int gNativeOutputWidth = 240;
+ 
+ // The UI's safe area: the width the window, menu and shop code lays out in,
+ // and how far right of the screen's left edge it sits. Outside battle it is
+@@ -66,6 +70,7 @@ void Screen_ChooseWidth(int argc, char **argv) {
+   }
+   if (choice && *choice)
+     gNativeDisplayWidth = Width_Parse(choice);
++  gNativeOutputWidth = gNativeDisplayWidth;
+   Screen_SetUiSafeArea(1);
+ }
+ 
+@@ -74,6 +79,11 @@ void Screen_SetUiSafeArea(int on) {
+   gNativeUiOffset = (gNativeDisplayWidth - gNativeUiWidth) / 2;
+ }
+ 
++void Screen_UseGbaWidth(int on) {
++  gNativeDisplayWidth = on ? 240 : gNativeOutputWidth;
++  Screen_SetUiSafeArea(1);
++}
++
+ // --- UI sprites ------------------------------------------------------------------
+ // The UI code queues its sprites through NativeUi_AddSpriteAtDepth; the OAM
+ // builder moves the ones listed here right by gNativeUiOffset, and hides
+diff --git a/port/src/native_touch.c b/port/src/native_touch.c
+index 5f2203ca5f..b4abe2c7ad 100644
+--- a/port/src/native_touch.c
++++ b/port/src/native_touch.c
+@@ -111,6 +111,8 @@ void Touch_Update(void) {
+   int down = Platform_ReadPointer(&x, &y);
+   int pressed = down && !sDown, released = !down && sDown;
+ 
++  x -= OUTPUT_MARGIN; // the title scene, drawn at 240 in the middle
++
+   sFrame++;
+   // sReleased still set: last frame's tap was not used by any screen.
+   sBackgroundTap = sReleased && BackgroundAround(sX, sY) &&
+diff --git a/port/src/platform_headless.c b/port/src/platform_headless.c
+index 0800f9d60b..db2cc7cc60 100644
+--- a/port/src/platform_headless.c
++++ b/port/src/platform_headless.c
+@@ -329,7 +329,8 @@ static void Shot(const char *name) {
+   char path[1024];
+ 
+   snprintf(path, sizeof(path), "%s/%s", sShotDir, name);
+-  if (sLastFrame && Png_Write(path, sLastFrame, SCREEN_WIDTH, GBA_HEIGHT, sScale) == 0)
++  if (sLastFrame &&
++      Png_Write(path, sLastFrame, OUTPUT_WIDTH, GBA_HEIGHT, sScale) == 0)
+     Native_Log("shot %s", path);
+ }
+ 
+diff --git a/port/src/platform_sdl.c b/port/src/platform_sdl.c
+index 940addf52c..0e83087a1c 100644
+--- a/port/src/platform_sdl.c
++++ b/port/src/platform_sdl.c
+@@ -44,7 +44,7 @@ int Platform_Init(int argc, char **argv) {
+     Native_Log("SDL_Init: %s", SDL_GetError());
+     return 1;
+   }
+-  if (!SDL_CreateWindowAndRenderer("Broken Seal Arena", SCREEN_WIDTH * scale,
++  if (!SDL_CreateWindowAndRenderer("Broken Seal Arena", OUTPUT_WIDTH * scale,
+                                    GBA_HEIGHT * scale,
+                                    SDL_WINDOW_RESIZABLE |
+                                        (fullscreen ? SDL_WINDOW_FULLSCREEN : 0),
+@@ -52,10 +52,10 @@ int Platform_Init(int argc, char **argv) {
+     Native_Log("SDL_CreateWindowAndRenderer: %s", SDL_GetError());
+     return 1;
+   }
+-  SDL_SetRenderLogicalPresentation(sRenderer, SCREEN_WIDTH, GBA_HEIGHT,
++  SDL_SetRenderLogicalPresentation(sRenderer, OUTPUT_WIDTH, GBA_HEIGHT,
+                                    SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
+   sTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_XRGB8888,
+-                               SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH,
++                               SDL_TEXTUREACCESS_STREAMING, OUTPUT_WIDTH,
+                                GBA_HEIGHT);
+   if (!sTexture) {
+     Native_Log("SDL_CreateTexture: %s", SDL_GetError());
+@@ -120,7 +120,7 @@ static void Events_Poll(void) {
+ void Platform_Present(const u32 *frame) {
+   const bool *keys;
+ 
+-  SDL_UpdateTexture(sTexture, NULL, frame, SCREEN_WIDTH * 4);
++  SDL_UpdateTexture(sTexture, NULL, frame, OUTPUT_WIDTH * 4);
+   SDL_SetRenderDrawColor(sRenderer, 0, 0, 0, 255);
+   SDL_RenderClear(sRenderer);
+   SDL_RenderTexture(sRenderer, sTexture, NULL, NULL);
+-- 
+2.56.1
+
