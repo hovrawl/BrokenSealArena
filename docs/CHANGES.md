@@ -1306,6 +1306,25 @@ Djinn icon chose Characters.
   selected, and a second tap opens it. The 22 touch scripts give the same shots
   as before.
 
+## 67. Battle: the Back button's text fits
+
+Nathan: the battle Back button's "B Back" ran over its window's right border.
+
+- `BattleTouch_OpenBack` made a 6-tile window, 4 tiles inside, narrower than
+  the B glyph and "Back". Now 7 by 3 with the text 4 pixels in, as the shops'
+  `UiBackButton_Open`; the Back zone matches the window (56 by 24).
+- Placement unchanged: at the command row (0, 14) and beside the lists and
+  targets (0, 9), 7 tiles still end before the command icons (x 80) and the
+  list window (x 72).
+- Found on the way: Nathan's play save (`tbs-native.sav` in the repo root,
+  where the desktop build is run from) was also the headless runs' save, so a
+  smoke script started from his file and the Gauntlet scripts wrote to it.
+  Runs now get a fresh save each (`TBS_SAVE`); see GOTCHAS.
+- Verified (headless, `--ui touch`, fresh saves): `touch_battle_240/288`,
+  `touch_djinn_240`, `touch_lists_240`, `touch_backtap_battle_240`: the button
+  on the command row, the Psynergy list and the targets, text inside the
+  border. GBA ROM byte-identical.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

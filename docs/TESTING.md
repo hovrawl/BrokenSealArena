@@ -64,6 +64,10 @@ out/native-tbs-en-headless/tbs-native --script <repo>/scripts/smoke/fight.txt --
 python3 port/tools/sheet.py build/native-shots
 ```
 
+Give each run a fresh save (`TBS_SAVE=/tmp/run.sav`, deleted after): without
+it the run uses `tbs-native.sav` in the working directory, which is the
+owner's own save when run from the repo root (GOTCHAS, Testing).
+
 The native front end adds commands of its own: `touch X Y` (a tap at a screen pixel: down 4
 frames, up, then 20 frames of nothing), `drag X0 Y0 X1 Y1 N` (down at the first point, slid to the
 second over six frames, held there N frames, let go, then 20 frames), and `screen NAME`. Pass the

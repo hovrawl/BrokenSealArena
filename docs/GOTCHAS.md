@@ -178,6 +178,12 @@
 - A stray A press beside a person starts their talk (or opens the field menu).
   Step with `tap A`, `shot`, and decide from the picture.
 - Auto-battle flag poking (`0x16a`) did not win fights; mashing A does.
+- The desktop build's save is `tbs-native.sav` in the working directory
+  unless `TBS_SAVE` names another file. Run from the repo root, the headless
+  smoke runs and the owner's own play share one file: a script then starts
+  from the owner's save (New Game flows go elsewhere), and scripts that start
+  a series write to it. Give every headless run a fresh `TBS_SAVE` in a
+  scratch folder, and never run them on the owner's save.
 
 ## Layout of upstream modules
 
