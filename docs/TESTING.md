@@ -48,6 +48,21 @@ a C compiler are already there for the build).
 Keys: `A B`, `S` select, `T` start, `U D L R` the D-pad, `l r` the shoulders.
 Combine them: `press AD 3`.
 
+## The native build runs the same scripts
+
+The desktop build (patch 0046, `port/README.md` in the work tree) has a headless front end that
+reads these scripts as they are (`save`, `load` and `reset` are skipped) and writes the shots as
+PNG files, with no emulator:
+
+```sh
+make -f port/Makefile HEADLESS=1          # in the work tree, after make tbs-en
+out/native-tbs-en-headless/tbs-native --script <repo>/scripts/smoke/fight.txt --shots build/native-shots
+python3 port/tools/sheet.py build/native-shots
+```
+
+`fight.txt` fights the Gauntlet's first team to the win (checked natively; on the GBA the frame
+counts should match, not yet checked there).
+
 ## Scripts here
 
 Prefixes (use them with `include`):

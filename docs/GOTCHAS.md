@@ -106,6 +106,23 @@
 - C89: a declaration after a `return` (or any statement) is a parse error in this
   compiler; put the early return after the declarations.
 
+## The native build (port/)
+
+- It needs the GBA build first (`make tbs-en`): it reads `out/tbs-en/objects.mk`, the generated
+  text and graphics, and the GBA ELF's `*CodeSize` symbols.
+- Changing `GAME_CFLAGS` (say, adding a define) does not rebuild the objects: run with `-B`
+  (20 seconds on four cores).
+- The cartridge writes and reads through null pointers in a few places (the BIOS swallows
+  them); natively that is a segfault. Fix each under `UBFIX` (the native build defines it),
+  never by mapping page 0 (other platforms cannot). `gdb --args out/.../tbs-native --script X`
+  gives the line.
+- A routine the game copies to RAM runs there as a 7-byte jump back to the host code, so EWRAM,
+  IWRAM and the stack are mapped executable (`-z execstack`). The native stand-ins for ARM
+  areas the game copies into (e.g. `IwramSoundReverbCode`, 152 bytes a code) must be at
+  least the cartridge's size, or the copy overruns the next global.
+- Building or running downloaded code (SDL3 from source) is blocked in the cloud sessions;
+  the SDL front end is checked there with `-fsyntax-only` against the SDL3 headers only.
+
 ## Flags we claim
 
 - Claimed persistent flags are listed in `arena/arena.h`: so far `FLAG_ARENA_TOURNAMENT`

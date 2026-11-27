@@ -1,6 +1,10 @@
 # Project state (update when it changes)
 
-Now: 45 patches on upstream `a87775874b` (the fully named decomp; moved from `0033cb64ef` on
+Native port: patch 0046 is a working desktop spike (`port/` in the work tree; 32-bit, software
+PPU, headless and SDL3 front ends): boots to the lobby and wins a battle natively. No sound,
+battle effects blank; see `docs/CHANGES.md` 46 and the work tree's `port/README.md`.
+
+Now: 46 patches on upstream `a87775874b` (the fully named decomp; moved from `0033cb64ef` on
 2026-11-27, see `docs/CHANGES.md`, "Upstream moves"). The paragraphs below date from the
 7-patch layered series on `0033cb64ef` (re-sliced from the original 13 chronological patches,
 kept in this repo's history at commit `01a3234`; our code lives in our own files):
