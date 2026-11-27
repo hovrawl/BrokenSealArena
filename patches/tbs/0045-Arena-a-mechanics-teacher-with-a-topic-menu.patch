@@ -1,4 +1,4 @@
-From 4c5fd36affba65e3f38f9d4e36e0bb726c54b4f2 Mon Sep 17 00:00:00 2001
+From bfeb987879aa9c6529b7466bb8306f6006edd8a3 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Mon, 2 Nov 2026 10:08:48 +1100
 Subject: [PATCH] Arena: a mechanics teacher with a topic menu
@@ -20,22 +20,21 @@ gen-cups.py re-run).
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- games/tbs/include/module/arena.h             |   6 +
- games/tbs/include/module/arena_cups.h        |   2 +-
- games/tbs/src/gamepak/far_call/SHOP.S        |   1 +
- games/tbs/src/scene/arena_cup_info.inc       |  82 +++---
- games/tbs/src/scene/arena_menu.c             |  19 ++
- games/tbs/src/scene/battle_arena.c           |  12 +-
- games/tbs/src/scene/import/battle_arena.s    |   1 +
- games/tbs/src/shop/shop/arena_class_viewer.c |  70 +++++
- games/tbs/src/system/overlay/imports.inc     |   1 +
- games/tbs/text/en.po                         | 265 ++++++++++++++-----
- 10 files changed, 355 insertions(+), 104 deletions(-)
+ games/tbs/include/arena/arena.h          |   6 +
+ games/tbs/include/arena/arena_cups.h     |   2 +-
+ games/tbs/src/gamepak/far_call/shop.s    |   1 +
+ games/tbs/src/scene/arena_cup_info.inc   |  82 +++----
+ games/tbs/src/scene/arena_menu.c         |  19 ++
+ games/tbs/src/scene/battle_arena.c       |  12 +-
+ games/tbs/src/shop/arena_class_viewer.c  |  70 ++++++
+ games/tbs/src/system/overlay/imports.inc |   1 +
+ games/tbs/text/en.po                     | 265 +++++++++++++++++------
+ 9 files changed, 354 insertions(+), 104 deletions(-)
 
-diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
-index 2d09a2fa61..e4ce4dc4c8 100644
---- a/games/tbs/include/module/arena.h
-+++ b/games/tbs/include/module/arena.h
+diff --git a/games/tbs/include/arena/arena.h b/games/tbs/include/arena/arena.h
+index e4cc51cca6..25c2463d79 100644
+--- a/games/tbs/include/arena/arena.h
++++ b/games/tbs/include/arena/arena.h
 @@ -63,6 +63,9 @@ s32 ArenaCup_Heals(void);
  s32 BattleArena_PartyManager(s32 actorId);
  /// Talking to the scholar: the class viewer (scene/arena_menu.c).
@@ -55,10 +54,10 @@ index 2d09a2fa61..e4ce4dc4c8 100644
 +s32 MechanicsGuide_Choose(s32 first);
  
  #endif
-diff --git a/games/tbs/include/module/arena_cups.h b/games/tbs/include/module/arena_cups.h
+diff --git a/games/tbs/include/arena/arena_cups.h b/games/tbs/include/arena/arena_cups.h
 index a98cad1723..412a96359b 100644
---- a/games/tbs/include/module/arena_cups.h
-+++ b/games/tbs/include/module/arena_cups.h
+--- a/games/tbs/include/arena/arena_cups.h
++++ b/games/tbs/include/arena/arena_cups.h
 @@ -70,6 +70,6 @@ extern const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT];
  extern const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3];
  extern const u8 gArenaCrossboneRows[3];
@@ -67,10 +66,10 @@ index a98cad1723..412a96359b 100644
 +#define MSG_ARENA_CUP_NAME 10820
  
  #endif
-diff --git a/games/tbs/src/gamepak/far_call/SHOP.S b/games/tbs/src/gamepak/far_call/SHOP.S
-index ce9139dcc3..46134ff408 100644
---- a/games/tbs/src/gamepak/far_call/SHOP.S
-+++ b/games/tbs/src/gamepak/far_call/SHOP.S
+diff --git a/games/tbs/src/gamepak/far_call/shop.s b/games/tbs/src/gamepak/far_call/shop.s
+index 9e4f89bf8f..9e805deecf 100644
+--- a/games/tbs/src/gamepak/far_call/shop.s
++++ b/games/tbs/src/gamepak/far_call/shop.s
 @@ -19,3 +19,4 @@ FarCall_ShopTable:
  	export ItemPicker_ChooseMemberFar, ItemPicker_ChooseMember
  	export ArenaShop_RunFar, ArenaShop_Run
@@ -228,10 +227,10 @@ index bf7722592b..3793d982ad 100644
  
  const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3] = {
 diff --git a/games/tbs/src/scene/arena_menu.c b/games/tbs/src/scene/arena_menu.c
-index 067946293d..ef75508ad6 100644
+index 666574a41f..2f3c1e6755 100644
 --- a/games/tbs/src/scene/arena_menu.c
 +++ b/games/tbs/src/scene/arena_menu.c
-@@ -291,3 +291,22 @@ s32 BattleArena_ClassViewer(s32 actorId) {
+@@ -241,3 +241,22 @@ s32 BattleArena_ClassViewer(s32 actorId) {
    Event_End();
    return 0;
  }
@@ -243,22 +242,22 @@ index 067946293d..ef75508ad6 100644
 +  s32 topic = 0;
 +
 +  Event_Start();
-+  Actor_SetAngleToward(actorId, gMainRoutineWork.leaderActorId, 0);
++  Actor_FaceActor(actorId, gMainRoutineState.leaderActorId, 0);
 +  for (;;) {
 +    topic = MechanicsGuide_Choose(topic);
 +    if (topic < 0)
 +      break;
 +    Event_SetMessageId(MsgArenaMechText0 + topic);
-+    FieldMessage_ShowAtActor(actorId, 0);
++    Event_OpenMessage(actorId, 0);
 +  }
 +  Event_End();
 +  return 0;
 +}
 diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
-index d14c07928a..29466dcf47 100644
+index 87ec082d6a..fa2260988f 100644
 --- a/games/tbs/src/scene/battle_arena.c
 +++ b/games/tbs/src/scene/battle_arena.c
-@@ -216,7 +216,9 @@ enum BattleArenaActorId {
+@@ -195,7 +195,9 @@ enum BattleArenaActorId {
    /// Hints at the side cups, from the third cup on (MsgArenaScout).
    ACTOR_SCOUT,
    /// Arena romhack: the scholar in the upper hall, who opens the class viewer.
@@ -268,28 +267,28 @@ index d14c07928a..29466dcf47 100644
 +  ACTOR_MECHANICS_GUIDE
  };
  
- /// The words of gBattleArena_SlotValues, by slot: the signature, then the state
-@@ -2000,6 +2002,9 @@ struct ActorPlacement gBattleArenaActorPlacements[] = {
+ /// The words of gBattleArena_SlotValues, by slot. They are the signature, then
+@@ -1967,6 +1969,9 @@ struct ActorPlacement gBattleArenaActorPlacements[] = {
      // Arena romhack: the scholar of the class viewer (ACTOR_CLASS_VIEWER).
-     { 0x6f, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
-         PIXELS(56), 0, PIXELS(168), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
+     ACTOR_PLACEMENT(SPRITE_OLD_WOMAN, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
+         56, 0, 168, FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0),
 +    // Arena romhack: the mechanics teacher (ACTOR_MECHANICS_GUIDE).
-+    { 0x66, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
-+        PIXELS(64), 0, PIXELS(208), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
-     { GARET, IF_FLAG_SET(0x1), MOVEMENT_TYPE_STAND,
-         PIXELS(352), 0, PIXELS(108), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
-     { IVAN, IF_FLAG_SET(0x2), MOVEMENT_TYPE_STAND,
-@@ -2095,6 +2100,9 @@ struct ActorPlacement gBattleArenaBattleActorPlacements[] = {
++    ACTOR_PLACEMENT(SPRITE_GIRL_WITH_PIGTAILS, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
++        64, 0, 208, FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0),
+     ACTOR_PLACEMENT(GARET, IF_FLAG_SET(FLAG_IN_PARTY(GARET)), MOVEMENT_TYPE_STAND,
+         352, 0, 108, FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0),
+     ACTOR_PLACEMENT(IVAN, IF_FLAG_SET(FLAG_IN_PARTY(IVAN)), MOVEMENT_TYPE_STAND,
+@@ -2062,6 +2067,9 @@ struct ActorPlacement gBattleArenaBattleActorPlacements[] = {
      // Arena romhack: the scholar of the class viewer (ACTOR_CLASS_VIEWER).
-     { 0x6f, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
-         PIXELS(56), 0, PIXELS(168), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
+     ACTOR_PLACEMENT(SPRITE_OLD_WOMAN, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
+         56, 0, 168, FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0),
 +    // Arena romhack: the mechanics teacher (ACTOR_MECHANICS_GUIDE).
-+    { 0x66, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
-+        PIXELS(64), 0, PIXELS(208), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
-     { GARET, IF_FLAG_SET(0x1), MOVEMENT_TYPE_STAND,
-         PIXELS(104), 0, PIXELS(144), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
-     { IVAN, IF_FLAG_SET(0x2), MOVEMENT_TYPE_STAND,
-@@ -2139,6 +2147,8 @@ struct Trigger gBattleArenaTriggers[] = {
++    ACTOR_PLACEMENT(SPRITE_GIRL_WITH_PIGTAILS, CONDITION_ALWAYS, MOVEMENT_TYPE_STAND,
++        64, 0, 208, FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0),
+     ACTOR_PLACEMENT(GARET, IF_FLAG_SET(FLAG_IN_PARTY(GARET)), MOVEMENT_TYPE_STAND,
+         104, 0, 144, FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0),
+     ACTOR_PLACEMENT(IVAN, IF_FLAG_SET(FLAG_IN_PARTY(IVAN)), MOVEMENT_TYPE_STAND,
+@@ -2106,6 +2114,8 @@ struct Trigger gBattleArenaTriggers[] = {
      {TRIGGER_TALK, ACTOR_SCOUT, CONDITION_ALWAYS, MSGNO(MsgArenaScout)},
      {TRIGGER_TALK, ACTOR_CLASS_VIEWER, CONDITION_ALWAYS,
       EVENT(BattleArena_ClassViewer)},
@@ -298,24 +297,12 @@ index d14c07928a..29466dcf47 100644
  #if ARENA_TRAINING
      {TRIGGER_TALK, ACTOR_LINKED_WINS_TELLER, CONDITION_ALWAYS,
       EVENT(BattleArena_PartyManager)},
-diff --git a/games/tbs/src/scene/import/battle_arena.s b/games/tbs/src/scene/import/battle_arena.s
-index 5c45840660..760f371311 100644
---- a/games/tbs/src/scene/import/battle_arena.s
-+++ b/games/tbs/src/scene/import/battle_arena.s
-@@ -44,6 +44,7 @@
- 	.set import.ItemPicker_ChooseMember, 1
- 	.set import.ArenaShop_Run, 1
- 	.set import.ClassViewer_Run, 1
-+	.set import.MechanicsGuide_Choose, 1
- 	.set import.WindowSprite_CreateFromResource, 1
- 	.set import.Sprite_Create, 1
- 	.set import.Sprite_Destroy, 1
-diff --git a/games/tbs/src/shop/shop/arena_class_viewer.c b/games/tbs/src/shop/shop/arena_class_viewer.c
-index 6d26e5f214..aed96eb31a 100644
---- a/games/tbs/src/shop/shop/arena_class_viewer.c
-+++ b/games/tbs/src/shop/shop/arena_class_viewer.c
+diff --git a/games/tbs/src/shop/arena_class_viewer.c b/games/tbs/src/shop/arena_class_viewer.c
+index 014aa1c654..37a11714e8 100644
+--- a/games/tbs/src/shop/arena_class_viewer.c
++++ b/games/tbs/src/shop/arena_class_viewer.c
 @@ -469,3 +469,73 @@ s32 ClassViewer_Run(s32 unitId) {
-   Shop_ReleaseWork();
+   Shop_ReleaseState();
    return 0;
  }
 +
@@ -327,7 +314,7 @@ index 6d26e5f214..aed96eb31a 100644
 +/// wrap), A returns the row, B returns -1. The window closes before returning,
 +/// so the topic's text can be shown. Far-called from the Battle Arena overlay.
 +s32 MechanicsGuide_Choose(s32 first) {
-+  struct ShopWork *shop;
++  struct ShopState *shop;
 +  struct Window *anchorWindow;
 +  struct Window *list;
 +  struct WindowSprite *anchor;
@@ -340,17 +327,17 @@ index 6d26e5f214..aed96eb31a 100644
 +    wait(1);
 +  // Let a message window that has just closed finish clearing.
 +  wait(30);
-+  Shop_InitializeWork();
-+  shop = gMenuWork;
++  Shop_InitializeState();
++  shop = gMenuState;
 +  anchorWindow = Window_CreateFar(-5, 0, 5, 5, WINDOW_FLAG_INSTANT);
-+  anchor = WindowSprite_CreateFar(shop->cursorIcon, OUTPUT_SIZE_16X16,
++  anchor = WindowSprite_CreateFar(shop->cursorIcon, WINDOW_SPRITE_SIZE_16X16,
 +                                  anchorWindow, 0, 0);
 +  anchor->motion = WINDOW_SPRITE_MOTION_WOBBLE;
 +  anchor->kind = 0;
 +  MenuCursor_SetPositionImmediate(&shop->cursor, -32, 112);
 +  shop->cursor.anchor = anchor;
 +  list = Window_CreateFar(4, 2, 22, 15, WINDOW_FLAG_INSTANT);
-+  shop->mode = 12;
++  shop->cursorFrames = 12;
 +
 +  for (;;) {
 +    if (redraw != 0) {
@@ -385,23 +372,23 @@ index 6d26e5f214..aed96eb31a 100644
 +  Window_CloseFar(list, 2);
 +  Window_CloseFar(anchorWindow, 2);
 +  wait(1);
-+  Shop_ReleaseWork();
++  Shop_ReleaseState();
 +  return result;
 +}
 diff --git a/games/tbs/src/system/overlay/imports.inc b/games/tbs/src/system/overlay/imports.inc
-index 6242a4be36..1f621e0992 100644
+index c8bb95b069..05362bbb62 100644
 --- a/games/tbs/src/system/overlay/imports.inc
 +++ b/games/tbs/src/system/overlay/imports.inc
-@@ -368,6 +368,7 @@
- 	import ItemPicker_ChooseMember, ItemPicker_ChooseMemberFar
- 	import ArenaShop_Run, ArenaShop_RunFar
- 	import ClassViewer_Run, ClassViewer_RunFar
-+	import MechanicsGuide_Choose, MechanicsGuide_ChooseFar
- @ Battle bank (far_call/BATTLE.S)
- 	import DjinnRecovery_CountDownTwenty, DjinnRecovery_CountDownTwentyFar
- 	import DebugParameterSet_Load, DebugParameterSet_LoadFar
+@@ -354,6 +354,7 @@
+ 	export ItemPicker_ChooseMember, ItemPicker_ChooseMemberFar
+ 	export ArenaShop_Run, ArenaShop_RunFar
+ 	export ClassViewer_Run, ClassViewer_RunFar
++	export MechanicsGuide_Choose, MechanicsGuide_ChooseFar
+ @ Battle bank (far_call/battle.s)
+ 	export DjinnRecovery_CountDownTwenty, DjinnRecovery_CountDownTwentyFar
+ 	export DebugParameterSet_Load, DebugParameterSet_LoadFar
 diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
-index c1e62530a3..8e7d77467c 100644
+index 3936d8c0a7..e5eaf29a46 100644
 --- a/games/tbs/text/en.po
 +++ b/games/tbs/text/en.po
 @@ -65409,114 +65409,257 @@ msgctxt "MsgArenaCvLegend"
@@ -1053,5 +1040,5 @@ index c1e62530a3..8e7d77467c 100644
  "Well done!\n"
  "You cleared the\n"
 -- 
-2.53.0
+2.43.0
 

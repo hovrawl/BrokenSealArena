@@ -1,4 +1,4 @@
-From 0b1e8e652b9a3bdfed22b3c8ca03a23bfdd32c19 Mon Sep 17 00:00:00 2001
+From f53938f58764d1922b973e0e62b9568d2a85f7bb Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Sun, 1 Nov 2026 09:16:32 +1100
 Subject: [PATCH] Arena: the Psynergy shop prices from the ability table's PP
@@ -8,13 +8,13 @@ The shop kept its own copy of each spell's PP cost, which the Reloaded data chan
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- games/tbs/src/shop/shop/arena_shop.c | 17 ++++++++---------
+ games/tbs/src/shop/arena_shop.c | 17 ++++++++---------
  1 file changed, 8 insertions(+), 9 deletions(-)
 
-diff --git a/games/tbs/src/shop/shop/arena_shop.c b/games/tbs/src/shop/shop/arena_shop.c
-index e7d4d8fc09..bc2f3b23ec 100644
---- a/games/tbs/src/shop/shop/arena_shop.c
-+++ b/games/tbs/src/shop/shop/arena_shop.c
+diff --git a/games/tbs/src/shop/arena_shop.c b/games/tbs/src/shop/arena_shop.c
+index 685fcb6cbc..14018cd748 100644
+--- a/games/tbs/src/shop/arena_shop.c
++++ b/games/tbs/src/shop/arena_shop.c
 @@ -406,23 +406,22 @@ static void ArenaStat_Add(struct Unit *unit, s32 stat, s32 amount) {
    }
  }
@@ -56,5 +56,5 @@ index e7d4d8fc09..bc2f3b23ec 100644
  
  static s32 ArenaShop_NameMessage(s32 kind, s32 entry) {
 -- 
-2.53.0
+2.43.0
 

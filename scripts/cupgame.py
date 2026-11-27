@@ -45,7 +45,11 @@ def slots(small, ids, counts):
 
 def item_ids():
     """ITEM_* constants of include/item_ids.h -> id."""
+    # The enum numbers only the first id of each kind; the rest follow on.
     ids = {}
-    for m in re.finditer(r"(ITEM_\w+)\s*=\s*(0x[0-9a-fA-F]+|\d+)", read("include/item_ids.h")):
-        ids[m.group(1)] = int(m.group(2), 0)
+    value = -1
+    for m in re.finditer(r"^\s*(ITEM_\w+)\s*(?:=\s*(0x[0-9a-fA-F]+|\d+))?\s*,",
+                         read("include/item_ids.h"), re.M):
+        value = int(m.group(2), 0) if m.group(2) else value + 1
+        ids[m.group(1)] = value
     return ids

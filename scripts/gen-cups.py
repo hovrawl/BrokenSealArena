@@ -2,10 +2,11 @@
 
 Run in WSL:  python3 scripts/gen-cups.py
 Writes (all marked generated; edit cupdata.py, not these):
-  include/module/arena_cups.h          counts, structs, externs
-  src/battle/arena_cups.c              the teams of every cup (its own object: objects.tsv row)
+  include/arena/arena_cups.h           counts, structs, externs
+  src/battle/arena_cups.c              the teams of every cup (its own object: a line in
+                                       ld_script.ld's .rom_tail)
   src/scene/arena_cup_info.inc         per-cup info, rewards, shop rows (arena_menu.c includes it)
-  src/shop/shop/arena_djinn_gate.inc   when the manager sells each Djinni (arena_shop.c)
+  src/shop/arena_djinn_gate.inc        when the manager sells each Djinni (arena_shop.c)
   text/en.po                           the block between the BEGIN and END GENERATED CUPS
                                        comments (messages for the cups), always last in the file
 """
@@ -178,11 +179,11 @@ def main():
          "extern const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3];\n",
          "extern const u8 gArenaCrossboneRows[3];\n\n",
          "#define MSG_ARENA_CUP_NAME %d\n" % msg["MsgArenaCupName0"], "\n#endif\n"]
-    open(os.path.join(game, "include/module/arena_cups.h"), "w", newline="\n").write("".join(h))
+    open(os.path.join(game, "include/arena/arena_cups.h"), "w", newline="\n").write("".join(h))
 
     # ------------------------------------------------------------ arena_cups.c
     c = [HEADER, "// The teams of every cup; arena_ladder.c (part of battle.c) picks the round.\n\n",
-         '#include "module/arena.h"\n\n',
+         '#include "arena/arena.h"\n\n',
          "// clang-format off\n"]
     for i, cup in enumerate(cups):
         c.append("// %d: %s\nstatic const struct ArenaTeam gArenaCup%dRounds[%d] = {\n" % (i, cup.name, i, len(cup.rounds)))
@@ -235,7 +236,7 @@ def main():
     for e in range(4):
         g.append("    " + ", ".join(str(gate[e * 7 + k]) for k in range(7)) + ", // " + D.ELEMENTS[e] + "\n")
     g.append("};\n")
-    open(os.path.join(game, "src/shop/shop/arena_djinn_gate.inc"), "w", newline="\n").write("".join(g))
+    open(os.path.join(game, "src/shop/arena_djinn_gate.inc"), "w", newline="\n").write("".join(g))
     print("generated: %d cups, %d messages (ids %d to %d), %d reward flags" % (
         n, len(blocks), msg["MsgArenaCupName0"], next_id - 1, reward_flag))
 

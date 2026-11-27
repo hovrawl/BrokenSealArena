@@ -1,4 +1,4 @@
-From acb13e58f7d8f6eb5ef3f987c4ec34b7a70c8812 Mon Sep 17 00:00:00 2001
+From 60f95ccdf54ddb741a6cbc9cc0d96c425db98815 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Fri, 30 Oct 2026 14:51:48 +1100
 Subject: [PATCH] Arena: saving through the Pause menu
@@ -12,54 +12,41 @@ and puts the live values back after. Continue loads it.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- games/tbs/src/field/field_sequence/run.c    |  5 ++-
+ games/tbs/src/field/field_sequence_run.c    |  4 ++-
+ games/tbs/src/window/arena_save.c           | 40 +++++++++++++++++++++
  games/tbs/src/window/screens.c              |  1 +
- games/tbs/src/window/screens/arena_save.c   | 40 +++++++++++++++++++++
- games/tbs/src/window/screens/save.c         | 10 ++++++
- games/tbs/src/window/window/settings_menu.c |  8 +++--
- 5 files changed, 61 insertions(+), 3 deletions(-)
- create mode 100644 games/tbs/src/window/screens/arena_save.c
+ games/tbs/src/window/screens_save.c         |  9 +++++
+ games/tbs/src/window/window_settings_menu.c |  7 ++--
+ 5 files changed, 58 insertions(+), 3 deletions(-)
+ create mode 100644 games/tbs/src/window/arena_save.c
 
-diff --git a/games/tbs/src/field/field_sequence/run.c b/games/tbs/src/field/field_sequence/run.c
-index d5103faba0..01e0b397e3 100644
---- a/games/tbs/src/field/field_sequence/run.c
-+++ b/games/tbs/src/field/field_sequence/run.c
-@@ -3,6 +3,8 @@
- /// entrance.
+diff --git a/games/tbs/src/field/field_sequence_run.c b/games/tbs/src/field/field_sequence_run.c
+index f34ac9db2e..65a1280204 100644
+--- a/games/tbs/src/field/field_sequence_run.c
++++ b/games/tbs/src/field/field_sequence_run.c
+@@ -4,6 +4,7 @@
  // Part of field_sequence.c.
  
+ #include "field_sequence_internal.h"
 +#include "arena_config.h"
-+
- #include "../field_sequence_internal.h"
  
- /// The actor system's work (struct ActorSystemWork, gActorSystemWork in
-@@ -332,7 +334,8 @@ s32 FieldSequence_Run(s32 entrance) {
+ /// The hazard count's limit each scene starts with, in steps on hazard cells:
+ /// the hazard deals its damage each time the count reaches it.
+@@ -322,7 +323,8 @@ s32 FieldSequence_Run(s32 entrance) {
              Field_EndBusyAndReveal();
              AreaNameWindow_HideFar();
-             gMainRoutineWork.returnMusic = Sound_GetCurrentBgmFar();
+             gMainRoutineState.returnMusic = Sound_GetCurrentBgmFar();
 -            if (GameFlag_GetFar(FLAG_IN_BATTLE_ARENA) == 0) {
 +            // Arena romhack: the Pause menu (Save your quest) works in the arena.
 +            if (ARENA_PAUSE_MENU || GameFlag_GetFar(FLAG_IN_BATTLE_ARENA) == 0) {
-               // With fewer than 136 of the 512 sprite VRAM blocks (64 bytes
-               // each) free, sprite drawing stays suspended while the menu
+               // With fewer than PAUSE_MENU_VRAM_BLOCKS of the sprite VRAM
+               // blocks free, sprite drawing stays suspended while the menu
                // runs, and a frame passes so that the field's sprites give
-diff --git a/games/tbs/src/window/screens.c b/games/tbs/src/window/screens.c
-index 9f754289ac..7bde7dc0d5 100644
---- a/games/tbs/src/window/screens.c
-+++ b/games/tbs/src/window/screens.c
-@@ -31,6 +31,7 @@
- // The parts, in ROM order (src/README.md, "Objects and parts").
- #include "screens/window_sprites.c"
- #include "screens/party_status.c"
-+#include "screens/arena_save.c"
- #include "screens/save.c"
- #include "screens/name_entry.c"
- #include "screens/joined.c"
-diff --git a/games/tbs/src/window/screens/arena_save.c b/games/tbs/src/window/screens/arena_save.c
+diff --git a/games/tbs/src/window/arena_save.c b/games/tbs/src/window/arena_save.c
 new file mode 100644
-index 0000000000..8b6a2da2cd
+index 0000000000..d5b163955b
 --- /dev/null
-+++ b/games/tbs/src/window/screens/arena_save.c
++++ b/games/tbs/src/window/arena_save.c
 @@ -0,0 +1,40 @@
 +/// @file
 +/// Arena romhack: saving in the arena. A file saved there is written as if the
@@ -68,7 +55,7 @@ index 0000000000..8b6a2da2cd
 +/// (FLAG_MONSTER_BATTLE). The live values are put back after.
 +// Part of screens.c.
 +
-+#include "../screens_internal.h"
++#include "screens_internal.h"
 +#include "scene_ids.h"
 +#include "scene_exits.h"
 +
@@ -80,14 +67,14 @@ index 0000000000..8b6a2da2cd
 +};
 +
 +static void ArenaSave_Begin(struct ArenaSaveState *state) {
-+  state->next = gMainRoutineWork.next;
-+  state->entrance = gMainRoutineWork.entrance;
++  state->next = gMainRoutineState.next;
++  state->entrance = gMainRoutineState.entrance;
 +  state->series = 0;
 +  state->inArena = GameFlag_GetFar(FLAG_IN_BATTLE_ARENA);
 +  if (state->inArena) {
 +    state->series = GameFlag_GetFar(FLAG_MONSTER_BATTLE);
-+    gMainRoutineWork.next = (s32)&SceneId_BattleArena;
-+    gMainRoutineWork.entrance = BATTLE_ARENA_FROM_FILE_SCREEN;
++    gMainRoutineState.next = SCENE_BATTLE_ARENA;
++    gMainRoutineState.entrance = BATTLE_ARENA_FROM_FILE_SCREEN;
 +    if (state->series)
 +      GameFlag_ClearFar(FLAG_MONSTER_BATTLE);
 +  }
@@ -95,29 +82,40 @@ index 0000000000..8b6a2da2cd
 +
 +static void ArenaSave_End(struct ArenaSaveState *state) {
 +  if (state->inArena) {
-+    gMainRoutineWork.next = state->next;
-+    gMainRoutineWork.entrance = state->entrance;
++    gMainRoutineState.next = state->next;
++    gMainRoutineState.entrance = state->entrance;
 +    if (state->series)
 +      GameFlag_SetFar(FLAG_MONSTER_BATTLE);
 +  }
 +}
-diff --git a/games/tbs/src/window/screens/save.c b/games/tbs/src/window/screens/save.c
-index 5f1b70fba3..88a2e431ec 100644
---- a/games/tbs/src/window/screens/save.c
-+++ b/games/tbs/src/window/screens/save.c
-@@ -2,6 +2,8 @@
- /// Save files and the file list.
+diff --git a/games/tbs/src/window/screens.c b/games/tbs/src/window/screens.c
+index a7c01ed497..f80edcd9cf 100644
+--- a/games/tbs/src/window/screens.c
++++ b/games/tbs/src/window/screens.c
+@@ -30,6 +30,7 @@
+ // The parts, in ROM order (src/README.md, "Objects and parts").
+ #include "screens_window_sprites.c"
+ #include "screens_party_status.c"
++#include "arena_save.c"
+ #include "screens_save.c"
+ #include "screens_name_entry.c"
+ #include "screens_joined.c"
+diff --git a/games/tbs/src/window/screens_save.c b/games/tbs/src/window/screens_save.c
+index 60157c58db..f664eef08b 100644
+--- a/games/tbs/src/window/screens_save.c
++++ b/games/tbs/src/window/screens_save.c
+@@ -3,6 +3,7 @@
  // Part of screens.c.
  
+ #include "screens_internal.h"
 +#include "arena_config.h"
-+
- #include "../screens_internal.h"
  
- // The three save files. Each is two 4 KB parts of backup memory: part
-@@ -1190,6 +1192,11 @@ s32 Save_ToChosenFile(void) {
+ /// A file's half in bytes: the first is written to the file's slot, the
+ /// second to the slot SAVE_FILE_COUNT on. Then the file number for no free
+@@ -1150,6 +1151,11 @@ s32 Save_ToChosenFile(void) {
    s32 file;
    s32 error;
-   struct SaveWork *work;
+   struct SaveState *state;
 +#if ARENA_PAUSE_MENU
 +  struct ArenaSaveState arenaSave;
 +
@@ -125,41 +123,40 @@ index 5f1b70fba3..88a2e431ec 100644
 +#endif
  
    result = 0;
-   error = Save_InitializeWork();
-@@ -1241,6 +1248,9 @@ s32 Save_ToChosenFile(void) {
+   error = Save_InitializeState();
+@@ -1201,6 +1207,9 @@ s32 Save_ToChosenFile(void) {
    }
  done:
-   Save_ReleaseWork();
+   Save_ReleaseState();
 +#if ARENA_PAUSE_MENU
 +  ArenaSave_End(&arenaSave);
 +#endif
    return result;
  }
  
-diff --git a/games/tbs/src/window/window/settings_menu.c b/games/tbs/src/window/window/settings_menu.c
-index 9317052650..8693728be3 100644
---- a/games/tbs/src/window/window/settings_menu.c
-+++ b/games/tbs/src/window/window/settings_menu.c
-@@ -2,6 +2,8 @@
- /// Window colours, the settings menu and the Pause menu.
+diff --git a/games/tbs/src/window/window_settings_menu.c b/games/tbs/src/window/window_settings_menu.c
+index 0c00eb2f0d..f8f498dfbe 100644
+--- a/games/tbs/src/window/window_settings_menu.c
++++ b/games/tbs/src/window/window_settings_menu.c
+@@ -3,6 +3,7 @@
  // Part of window.c.
  
+ #include "window_internal.h"
 +#include "arena_config.h"
-+
- #include "../window_internal.h"
  
- /// Nothing calls them.
-@@ -701,7 +703,8 @@ struct Window *PauseMenu_Open(void) {
+ /// The pixels a settings slider's marker runs across, from OPTION_SLIDER_X.
+ #define OPTION_SLIDER_WIDTH 60
+@@ -709,7 +710,8 @@ struct Window *PauseMenu_Open(void) {
  
    rows = PAUSE_MENU_ROWS;
-   work = gOptionMenuWork;
+   state = gOptionMenuState;
 -  settingsOnly = GameFlag_GetFar(FLAG_IN_BATTLE_ARENA);
 +  // Arena romhack: the whole Pause menu, Save your quest included, in the arena.
 +  settingsOnly = ARENA_PAUSE_MENU ? 0 : GameFlag_GetFar(FLAG_IN_BATTLE_ARENA);
    first = 0;
    if (settingsOnly != 0) {
      rows = 1;
-@@ -785,7 +788,8 @@ s32 PauseMenu_Choose(void) {
+@@ -789,7 +791,8 @@ s32 PauseMenu_Choose(void) {
  
    redraw = 1;
    rows = PAUSE_MENU_ROWS;
@@ -168,7 +165,7 @@ index 9317052650..8693728be3 100644
 +  settingsOnly = ARENA_PAUSE_MENU ? 0 : GameFlag_GetFar(FLAG_IN_BATTLE_ARENA);
    first = 0;
    PauseMenu_Initialize();
-   work = gOptionMenuWork;
+   state = gOptionMenuState;
 -- 
-2.53.0
+2.43.0
 

@@ -1,4 +1,4 @@
-From a25f59f0f67f392c40a6c7a4c5b4ccc2d3058983 Mon Sep 17 00:00:00 2001
+From 0c25971057a86feb4ee6a77fdda62e8a57fcd75d Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Sat, 31 Oct 2026 12:45:22 +1100
 Subject: [PATCH] Arena: linked battles are four a side (ARENA_LINK4)
@@ -18,17 +18,17 @@ their pictures; build.ps1 pads the image to match (ROM_END_tbs=0x08805000).
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
  games/tbs/include/arena_config.h          |  7 ++++
- games/tbs/main.ld                         |  2 +-
+ games/tbs/ld_script.ld                    |  2 +-
+ games/tbs/src/battle/arena_link.c         | 45 +++++++++++++++++++++++
  games/tbs/src/battle/battle.c             |  1 +
- games/tbs/src/battle/battle/arena_link.c  | 45 +++++++++++++++++++++++
- games/tbs/src/battle/battle/placement.c   | 16 ++++++++
  games/tbs/src/battle/battle_internal.h    |  5 +++
- games/tbs/src/game/game/units.c           |  5 +++
+ games/tbs/src/battle/battle_placement.c   | 16 ++++++++
+ games/tbs/src/game/game_units.c           |  5 +++
  games/tbs/src/graphics/sprite/layout.tsv  |  4 ++
  games/tbs/src/graphics/sprite/sprites.tsv |  8 ++--
- games/tbs/src/scene/battle_arena.c        | 10 +++--
- 10 files changed, 95 insertions(+), 8 deletions(-)
- create mode 100644 games/tbs/src/battle/battle/arena_link.c
+ games/tbs/src/scene/battle_arena.c        |  6 ++-
+ 10 files changed, 93 insertions(+), 6 deletions(-)
+ create mode 100644 games/tbs/src/battle/arena_link.c
 
 diff --git a/games/tbs/include/arena_config.h b/games/tbs/include/arena_config.h
 index 408172951b..c0220a26aa 100644
@@ -46,42 +46,30 @@ index 408172951b..c0220a26aa 100644
 +#endif
 +
  #endif
-diff --git a/games/tbs/main.ld b/games/tbs/main.ld
-index cd43f9f3c5..95d97e27df 100644
---- a/games/tbs/main.ld
-+++ b/games/tbs/main.ld
-@@ -124,7 +124,7 @@ SECTIONS
-         . = ABSOLUTE(DEFINED(TBS_EDITION_JA)                            ? 0x08317000 :
-                      DEFINED(TBS_EDITION_DE)                            ? 0x0831fe00 :
-                      DEFINED(TBS_EDITION_ES) || DEFINED(TBS_EDITION_FR) ? 0x08321800 :
--                                                                          0x08320000);
-+                                                                          0x08325000);
-         INCLUDE "rom_tail_02.ld"
-     } > ROM
-     IwramResident_Rom = LOADADDR(.iwram_resident);
-diff --git a/games/tbs/src/battle/battle.c b/games/tbs/src/battle/battle.c
-index dfad8ec900..7eb9a96ded 100644
---- a/games/tbs/src/battle/battle.c
-+++ b/games/tbs/src/battle/battle.c
-@@ -23,6 +23,7 @@
- #include "battle/link.c"
- #include "battle/run.c"
- #include "battle/sprite_slots.c"
-+#include "battle/arena_link.c"
- #include "battle/placement.c"
- #include "battle/objects.c"
- #include "battle/motion.c"
-diff --git a/games/tbs/src/battle/battle/arena_link.c b/games/tbs/src/battle/battle/arena_link.c
+diff --git a/games/tbs/ld_script.ld b/games/tbs/ld_script.ld
+index 952ebcdaaa..ca0f9abd02 100644
+--- a/games/tbs/ld_script.ld
++++ b/games/tbs/ld_script.ld
+@@ -90,7 +90,7 @@
+ #define LUCKY_WHEELS_BANK_START   0x080f6000
+ #define SOUND_BANK_START          0x080f9000
+ #define SPRITE_BANK_START         0x08185000
+-#define RESOURCE_DIRECTORY_START  0x08320000
++#define RESOURCE_DIRECTORY_START  0x08325000
+ #endif
+ 
+ #ifdef OVERLAY
+diff --git a/games/tbs/src/battle/arena_link.c b/games/tbs/src/battle/arena_link.c
 new file mode 100644
-index 0000000000..598f1dfea3
+index 0000000000..2b1767e391
 --- /dev/null
-+++ b/games/tbs/src/battle/battle/arena_link.c
++++ b/games/tbs/src/battle/arena_link.c
 @@ -0,0 +1,45 @@
 +/// @file
 +/// Arena romhack: four a side in a linked battle (ARENA_LINK4).
 +// Part of battle.c.
 +
-+#include "../battle_internal.h"
++#include "battle_internal.h"
 +#include "arena_config.h"
 +
 +#if ARENA_LINK4
@@ -98,7 +86,7 @@ index 0000000000..598f1dfea3
 +                                     s32 *zPositions) {
 +  s32 index;
 +
-+  if (gBattleWork->isLink == 0 || count != 4)
++  if (gBattleState->isLink == 0 || count != 4)
 +    return 0;
 +  for (index = 0; index < 4; index++) {
 +    xPositions[index] = -80;
@@ -117,41 +105,70 @@ index 0000000000..598f1dfea3
 +/// Returns the sprite an opponent character is drawn with: the half-size
 +/// sheet for a character's own battle sprite (300 to 303), else sprite itself.
 +static s32 ArenaLink_OpponentSprite(s32 sprite) {
-+  if (sprite < BATTLE_CHARACTER(ISAAC) || sprite > BATTLE_CHARACTER(MIA))
++  if (sprite < SPRITE_BATTLE_ISAAC || sprite > SPRITE_BATTLE_MIA)
 +    return sprite;
-+  return sArenaLink_SmallSprites[sprite - BATTLE_CHARACTER(ISAAC)];
++  return sArenaLink_SmallSprites[sprite - SPRITE_BATTLE_ISAAC];
 +}
 +#endif
-diff --git a/games/tbs/src/battle/battle/placement.c b/games/tbs/src/battle/battle/placement.c
-index 221365030a..1269a9029c 100644
---- a/games/tbs/src/battle/battle/placement.c
-+++ b/games/tbs/src/battle/battle/placement.c
+diff --git a/games/tbs/src/battle/battle.c b/games/tbs/src/battle/battle.c
+index 49a7ff6f2e..2a1dbbcd76 100644
+--- a/games/tbs/src/battle/battle.c
++++ b/games/tbs/src/battle/battle.c
+@@ -17,6 +17,7 @@
+ #include "battle_link.c"
+ #include "battle_run.c"
+ #include "battle_sprite_slots.c"
++#include "arena_link.c"
+ #include "battle_placement.c"
+ #include "battle_objects.c"
+ #include "battle_motion.c"
+diff --git a/games/tbs/src/battle/battle_internal.h b/games/tbs/src/battle/battle_internal.h
+index 0c68ace9d9..06e73c4e9e 100644
+--- a/games/tbs/src/battle/battle_internal.h
++++ b/games/tbs/src/battle/battle_internal.h
+@@ -110,7 +110,12 @@
+ /// In a link battle each console sends LINK_PARTY_SIZE places, at most three
+ /// party members (LinkBattle_SendParty), and the opponent's take the first
+ /// three enemy ids from FIRST_ENEMY_UNIT.
++#include "arena_config.h"
++#if ARENA_LINK4
++#define LINK_PARTY_SIZE 4
++#else
+ #define LINK_PARTY_SIZE 3
++#endif
+ 
+ /// BattleState.objectIndex of a unit with no place on the battlefield:
+ /// BattleUnit_RefreshPlacement fills the list with it, and BattleObject_Get
+diff --git a/games/tbs/src/battle/battle_placement.c b/games/tbs/src/battle/battle_placement.c
+index 1c5e8e8208..efb425109b 100644
+--- a/games/tbs/src/battle/battle_placement.c
++++ b/games/tbs/src/battle/battle_placement.c
 @@ -3,6 +3,7 @@
  // Part of battle.c.
  
- #include "../battle_internal.h"
+ #include "battle_internal.h"
 +#include "arena_config.h"
  
- /// Isaac and Garet hold a Machete with sprites of their own.
- #define SPRITE_ISAAC_MACHETE 480
-@@ -258,6 +259,16 @@ void BattleObject_Make(struct BattleObject *actor, s32 unitId, s32 x, s32 y) {
-     actor->overlay = 0;
+ /// The Actor_Create kind a battle object's actor is made with: one that makes
+ /// no sprite, its battle sprites being attached afterwards.
+@@ -235,6 +236,16 @@ void BattleObject_Make(struct BattleObject *battleObject, s32 unitId, s32 x,
+     battleObject->overlay = 0;
    }
  
 +#if ARENA_LINK4
 +  // A character on the enemy side of a link battle is drawn from a half-size
 +  // sheet with no weapon layer (the weapon pictures are full size).
-+  if (gBattleWork->isLink && unit->classId != CLASS_NONE &&
++  if (gBattleState->isLink && unit->classId != CLASS_NONE &&
 +      (unitId < 0 || unitId > ALLY_MAX)) {
-+    actor->resource = ArenaLink_OpponentSprite(actor->resource);
-+    actor->overlay = 0;
++    battleObject->resource = ArenaLink_OpponentSprite(battleObject->resource);
++    battleObject->overlay = 0;
 +  }
 +#endif
 +
-   // Face the centre of the battlefield (0x8000 is half a turn, so the
-   // angle points back along the line to the origin); enemies are drawn at
-   // 1.3 times their size. ACTOR_FALLS lets the actor fall.
-@@ -304,6 +315,11 @@ void BattlePlacement_LayoutEnemies(u16 *actorIds, s32 count, s32 *xPositions,
+   // Face the centre of the battlefield; enemies are drawn at 1.3 times their
+   // size.
+   facingAngle = Trig_Atan(y / 8, x) + DEGtoANG(180);
+@@ -282,6 +293,11 @@ void BattlePlacement_LayoutEnemies(u16 *unitIds, s32 count, s32 *xPositions,
    s32 z = ((count - 1) * totalSpacing) / 2;
    s32 index;
  
@@ -163,122 +180,87 @@ index 221365030a..1269a9029c 100644
    // z starts half a line's estimated length up and steps down by half of
    // each enemy's spacing before it (none for the first) and half after it.
    for (index = 0; index != count; index++) {
-diff --git a/games/tbs/src/battle/battle_internal.h b/games/tbs/src/battle/battle_internal.h
-index c2f8c915e3..0a0ad30575 100644
---- a/games/tbs/src/battle/battle_internal.h
-+++ b/games/tbs/src/battle/battle_internal.h
-@@ -114,7 +114,12 @@
- /// In a link battle each console sends LINK_PARTY_SIZE places, at most three
- /// party members (LinkBattle_SendParty), and the opponent's take the first
- /// three enemy ids from FIRST_ENEMY_UNIT.
-+#include "arena_config.h"
-+#if ARENA_LINK4
-+#define LINK_PARTY_SIZE 4
-+#else
- #define LINK_PARTY_SIZE 3
-+#endif
- 
- /// The party fights four at a time, three in a link battle; six enemies at
- /// most, three in a link battle.
-diff --git a/games/tbs/src/game/game/units.c b/games/tbs/src/game/game/units.c
-index 582dc931e0..704bcc37ad 100644
---- a/games/tbs/src/game/game/units.c
-+++ b/games/tbs/src/game/game/units.c
+diff --git a/games/tbs/src/game/game_units.c b/games/tbs/src/game/game_units.c
+index 4856bf340b..c6766a9e24 100644
+--- a/games/tbs/src/game/game_units.c
++++ b/games/tbs/src/game/game_units.c
 @@ -3,6 +3,7 @@
  // Part of game.c.
  
- #include "../game_internal.h"
+ #include "game_internal.h"
 +#include "arena_config.h"
+ #include "window/message_speed.h"
+ #include "window/window.h"
  
- /// The running totals Unit_Calculate builds a unit's stats in. Each call takes
- /// a block from EWRAM first (Heap_AllocEwram) and frees it
-@@ -43,7 +44,11 @@ void Game_RestartQuest(void) {
- /// (DjinnRecovery_CountDown, BattleSummon_UpdateAvailability, the link battle).
- void *Djinn_GetRecoveryTable(s32 enemySide) {
-   if (enemySide != 0) {
-+    #if ARENA_LINK4
-+    return Unit_Get(FIRST_ENEMY_UNIT + 4);
+@@ -58,7 +59,11 @@ void Game_RestartQuest(void) {
+ /// record.
+ struct DjinnRecoveryTable *Djinn_GetRecoveryTable(s32 enemySide) {
+   if (enemySide != 0)
++#if ARENA_LINK4
++    return (struct DjinnRecoveryTable *)Unit_Get(FIRST_ENEMY_UNIT + 4);
 +#else
-     return Unit_Get(FIRST_ENEMY_UNIT + 3);
+     return (struct DjinnRecoveryTable *)Unit_Get(OPPONENT_RECOVERY_UNIT);
 +#endif
-   }
-   return &gMainRoutineWork.summonMask;
+   return (struct DjinnRecoveryTable *)&gMainRoutineState.holdings;
  }
+ 
 diff --git a/games/tbs/src/graphics/sprite/layout.tsv b/games/tbs/src/graphics/sprite/layout.tsv
-index 6e8e518359..9337d826b2 100644
+index 11069b2972..73b5293e78 100644
 --- a/games/tbs/src/graphics/sprite/layout.tsv
 +++ b/games/tbs/src/graphics/sprite/layout.tsv
-@@ -364,3 +364,7 @@ SPR_351
- SPR_352
- SPR_353
- SPR_415
-+SPR_304
-+SPR_306
-+SPR_307
-+SPR_308
+@@ -363,3 +363,7 @@ STATUS_GRIM_REAPER_5	b
+ STATUS_GRIM_REAPER_6	b
+ STATUS_GRIM_REAPER_7	b
+ BATTLE_DEADBEARD	b
++SPR_304	b
++SPR_306	b
++SPR_307	b
++SPR_308	b
 diff --git a/games/tbs/src/graphics/sprite/sprites.tsv b/games/tbs/src/graphics/sprite/sprites.tsv
-index 0e124ae8b9..ec5aba1dac 100644
+index d2f0d56e90..4b429d63d3 100644
 --- a/games/tbs/src/graphics/sprite/sprites.tsv
 +++ b/games/tbs/src/graphics/sprite/sprites.tsv
-@@ -303,11 +303,11 @@ SPR_300	64	64	0xc0	22	0	2	48	32	0	SPR_300	SPR_300
- SPR_301	64	64	0xd9	2	0	2	48	32	0	SPR_301	SPR_301
- SPR_302	64	64	0xc0	2	0	2	48	32	0	SPR_302	SPR_302
- SPR_303	64	64	0xc0	2	0	2	48	32	0	SPR_303	SPR_303
--SPR_304	0	0	0x0	0	0	0	0	0	0	-	-
-+SPR_304	32	32	0x180	22	0	2	48	32	3	SPR_304	SPR_300
- SPR_305	64	64	0xc0	2	0	2	48	32	0	SPR_305	SPR_305
--SPR_306	0	0	0x0	0	0	0	0	0	0	-	-
--SPR_307	0	0	0x0	0	0	0	0	0	0	-	-
--SPR_308	0	0	0x0	0	0	0	0	0	0	-	-
-+SPR_306	32	32	0x1b2	2	0	2	48	32	3	SPR_306	SPR_301
-+SPR_307	32	32	0x180	2	0	2	48	32	3	SPR_307	SPR_302
-+SPR_308	32	32	0x180	2	0	2	48	32	3	SPR_308	SPR_303
- SPR_309	0	0	0x0	0	0	0	0	0	0	-	-
- SPR_310	0	0	0x0	0	0	0	0	0	0	-	-
- SPR_311	0	0	0x0	0	0	0	0	0	0	-	-
+@@ -303,11 +303,11 @@ BATTLE_ISAAC	64	64	192	22	0	2	48	32	0	BATTLE_ISAAC	BATTLE_ISAAC
+ BATTLE_GARET	64	64	217	2	0	2	48	32	0	BATTLE_GARET	BATTLE_GARET
+ BATTLE_IVAN	64	64	192	2	0	2	48	32	0	BATTLE_IVAN	BATTLE_IVAN
+ BATTLE_MIA	64	64	192	2	0	2	48	32	0	BATTLE_MIA	BATTLE_MIA
+-SPR_304	0	0	0	0	0	0	0	0	0
++SPR_304	32	32	384	22	0	2	48	32	3	SPR_304	BATTLE_ISAAC
+ BATTLE_JENNA	64	64	192	2	0	2	48	32	0	BATTLE_JENNA	BATTLE_JENNA
+-SPR_306	0	0	0	0	0	0	0	0	0
+-SPR_307	0	0	0	0	0	0	0	0	0
+-SPR_308	0	0	0	0	0	0	0	0	0
++SPR_306	32	32	434	2	0	2	48	32	3	SPR_306	BATTLE_GARET
++SPR_307	32	32	384	2	0	2	48	32	3	SPR_307	BATTLE_IVAN
++SPR_308	32	32	384	2	0	2	48	32	3	SPR_308	BATTLE_MIA
+ SPR_309	0	0	0	0	0	0	0	0	0
+ SPR_310	0	0	0	0	0	0	0	0	0
+ SPR_311	0	0	0	0	0	0	0	0	0
 diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
-index 5e8494d232..d0f26bf162 100644
+index f1db2e514d..64ec8cd9bd 100644
 --- a/games/tbs/src/scene/battle_arena.c
 +++ b/games/tbs/src/scene/battle_arena.c
-@@ -114,7 +114,11 @@
- #define LOBBY_RECOVERY_RECORD_BYTES 0x140
- /// The party members a linked battle takes; a smaller party sends absent
+@@ -111,7 +111,11 @@ enum { LEVEL_BONUS_MAX = 90 };
+ #define BATTLE_ARENA_RECOVERY_RECORD_BYTES (16 * 20)
+ /// The party members a linked battle takes. A smaller party sends absent
  /// records.
 +#if ARENA_LINK4
-+#define LOBBY_UNIT_RECORD_COUNT 4
++#define BATTLE_ARENA_UNIT_RECORD_COUNT 4
 +#else
- #define LOBBY_UNIT_RECORD_COUNT 3
+ #define BATTLE_ARENA_UNIT_RECORD_COUNT 3
 +#endif
- /// gLinkStatus bits 0 and 1: both consoles were heard this frame, as the
- /// battle code's LINK_BOTH_CONNECTED.
- #define LOBBY_LINK_READY_MASK 3
-@@ -623,7 +627,7 @@ testRecord:
-   record[14] = 0;
-   slot++;
- next:
--  if (slot > 2) {
-+  if (slot >= LOBBY_UNIT_RECORD_COUNT) {
-     goto second;
-   }
-   // The partner's party members become this battle's enemies 0x80 to 0x82.
-@@ -789,7 +793,7 @@ test:
-   i++;
- next:
-   // Pad to three records with the last copy marked absent (side 0).
--  if (i <= 2) {
-+  if (i < LOBBY_UNIT_RECORD_COUNT) {
-     heap[0x12a] = tries = 0;
-     if ((transferResult = Serial_StartSend(heap, size)) != -1) {
-       goto test;
-@@ -1328,7 +1332,7 @@ static s32 BattleArena_PartyContains(s32 memberId) {
+ /// gLinkStatus bits 0 and 1. Both consoles were heard this frame, as the battle
+ /// code's LINK_BOTH_CONNECTED.
+ #define BATTLE_ARENA_LINK_READY_MASK 3
+@@ -1281,7 +1285,7 @@ static s32 BattleArena_PartyContains(s32 memberId) {
    s32 i;
  
    count = Party_CountMembers();
 -  memberLimit = 3;
-+  memberLimit = LOBBY_UNIT_RECORD_COUNT;
++  memberLimit = BATTLE_ARENA_UNIT_RECORD_COUNT;
    if (GameFlag_Get(FLAG_LINK_BATTLE_ARRANGED) == 0) {
      memberLimit = 4;
    }
 -- 
-2.53.0
+2.43.0
 

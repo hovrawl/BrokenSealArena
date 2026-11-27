@@ -1,4 +1,4 @@
-From d5a83fa3802fe446c643f2acf16b16b6600d037b Mon Sep 17 00:00:00 2001
+From eae6e2dffdd665edeacfddacf09e76f17a43fdee Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Fri, 30 Oct 2026 14:51:23 +1100
 Subject: [PATCH] Arena: the messages for the arena's menus
@@ -14,7 +14,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
  1 file changed, 186 insertions(+)
 
 diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
-index c526e31e13..bc3563a919 100644
+index 0804194304..1439ca92f9 100644
 --- a/games/tbs/text/en.po
 +++ b/games/tbs/text/en.po
 @@ -64995,3 +64995,189 @@ msgstr ""
@@ -208,5 +208,5 @@ index c526e31e13..bc3563a919 100644
 +msgid "10766"
 +msgstr "Raises Luck by {argument_signed_number}. Now {argument_signed_number}."
 -- 
-2.53.0
+2.43.0
 

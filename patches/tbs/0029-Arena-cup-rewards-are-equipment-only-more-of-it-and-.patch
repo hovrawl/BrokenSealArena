@@ -1,4 +1,4 @@
-From 4236332c2c1f982d2a1d18efb6ca70634843766a Mon Sep 17 00:00:00 2001
+From 8a6e716952d311f2a08ae8732338631329291d39 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Sun, 1 Nov 2026 15:25:04 +1100
 Subject: [PATCH] Arena: cup rewards are equipment only, more of it, and the
@@ -15,16 +15,16 @@ heals.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- games/tbs/include/module/arena.h       |  2 +
+ games/tbs/include/arena/arena.h        |  2 +
  games/tbs/src/scene/arena_cup_info.inc | 65 ++++++++++++++------------
  games/tbs/src/scene/arena_menu.c       | 32 ++++++++++++-
  games/tbs/src/scene/battle_arena.c     |  4 ++
  4 files changed, 72 insertions(+), 31 deletions(-)
 
-diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
-index de55bf6825..6a7aaedb88 100644
---- a/games/tbs/include/module/arena.h
-+++ b/games/tbs/include/module/arena.h
+diff --git a/games/tbs/include/arena/arena.h b/games/tbs/include/arena/arena.h
+index 9243294ec3..ffcf16370c 100644
+--- a/games/tbs/include/arena/arena.h
++++ b/games/tbs/include/arena/arena.h
 @@ -38,6 +38,8 @@ s32 ArenaMenu_AttendantMode(void);
  /// The coins a battle won, said by `actorId`; the party is healed if the
  /// cup heals.
@@ -143,10 +143,10 @@ index 3d1a1fcdc9..cfde28eb2c 100644
      {6, 1, 7, 0, 0, {0}, 0, 10826, 10827, 10828, 0},
      // Crossbone Isle
 diff --git a/games/tbs/src/scene/arena_menu.c b/games/tbs/src/scene/arena_menu.c
-index cc997dbcb7..1c87085b1f 100644
+index eb86f35ef3..7869668644 100644
 --- a/games/tbs/src/scene/arena_menu.c
 +++ b/games/tbs/src/scene/arena_menu.c
-@@ -197,13 +197,43 @@ s32 ArenaMenu_AttendantMode(void) {
+@@ -147,13 +147,43 @@ s32 ArenaMenu_AttendantMode(void) {
    }
  }
  
@@ -164,8 +164,8 @@ index cc997dbcb7..1c87085b1f 100644
 +
 +  table->list.count = 0;
 +  for (i = 0; i < count; i++) {
-+    s32 unitId = gMainRoutineWork.party[i];
-+    struct Unit *unit = &gMainRoutineWork.units[unitId];
++    s32 unitId = gMainRoutineState.party[i];
++    struct Unit *unit = &gCharacterUnits[unitId];
 +
 +    for (element = 0; element < 4; element++) {
 +      for (index = 0; index < 7; index++) {
@@ -186,17 +186,17 @@ index cc997dbcb7..1c87085b1f 100644
    MessageArgument_ClearAll();
    MessageArgument_Push(reward, MESSAGE_ARGUMENT_NUMBER);
    Event_SetMessageId(MsgArenaVictory);
-   FieldMessage_ShowAtActor(actorId, 0);
+   Event_OpenMessage(actorId, 0);
 +  ArenaMenu_RestoreDjinn();
    if (ArenaCup_Heals())
      Party_RestoreHpPp(1);
  }
 diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
-index 8e48f2375b..6bbaa9ce5e 100644
+index 82fa7ee3e4..83092ec03e 100644
 --- a/games/tbs/src/scene/battle_arena.c
 +++ b/games/tbs/src/scene/battle_arena.c
-@@ -1862,7 +1862,11 @@ s32 BattleArena_RunRoundResult(void) {
-   if (gMainRoutineWork.entrance != BATTLE_ARENA_AFTER_MONSTER_WIN ||
+@@ -1828,7 +1828,11 @@ s32 Scene_Initialize(void) {
+   if (gMainRoutineState.entrance != BATTLE_ARENA_AFTER_MONSTER_WIN ||
        !GameFlag_Get(FLAG_MONSTER_BATTLE)) {
      Party_RestoreHpPp(1);
 +#if ARENA_TRAINING
@@ -208,5 +208,5 @@ index 8e48f2375b..6bbaa9ce5e 100644
    return 0;
  }
 -- 
-2.53.0
+2.43.0
 

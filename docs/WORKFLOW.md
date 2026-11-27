@@ -83,9 +83,20 @@ scripts\update-upstream.ps1 -Finish    # after resolving a conflict
 `-Apply` rebases in WSL, then points the submodule at the new upstream commit and
 re-exports the patches. Build, run the smoke scripts, review, commit the pin,
 `patches/`, and `CHANGES.md`. Conflicts are most likely in
-`battle/battle/formation.c`, `scene/battle_arena.c`, the overlay import lists
-(`system/overlay/imports.inc`, `scene/import/battle_arena.s`), `text/en.po` and
-`main.ld` (bank starts).
+`battle/battle_formation.c`, `scene/battle_arena.c` (the actor placement tables),
+`system/overlay/imports.inc`, `graphics/sprite/sprites.tsv`, `text/en.po` and
+`ld_script.ld` (bank starts).
+
+When upstream renames and moves files wholesale (as `0033cb64ef` to `a87775874b`
+did; `CHANGES.md`, "Upstream moves"), a rebase does not get far. What worked:
+rewrite each patch's paths to the new layout and apply them one by one with
+`git am -3`, resolving each conflict on upstream's side with our hook re-added in
+the new names; regenerate whole tables from the previous build's bytes rather than
+merging them; build, then fix the remaining old names and fold each fix into the
+patch that last touched those lines (a fixup commit per patch, then
+`git rebase -i --autosquash`); finally compare the new ROM with the previous one
+symbol by symbol (`arm-none-eabi-nm -S` on `out/tbs-en/symbols.elf` and each
+overlay's `.elf`) so that only addresses differ.
 
 ## Starting from scratch
 

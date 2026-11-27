@@ -15,7 +15,8 @@ case's foot and one pixel in front of it, so the cup sits inside the glass.
 Usage: gen-trophy-sprites.py SPRITE_DIR   (games/tbs/src/graphics/sprite)
 
 The sheets are indexed colour in the field sprites' palette (the colour numbers
-below are indexes into it: the PNG carries that palette, copied from spr_106).
+below are indexes into it: the PNG carries that palette, copied from
+woman_with_fair_hair, sprite 106).
 Colour 0 is clear. The output is written beside the sources and is not
 committed (the build runs this script, as it does for the opponent sheets).
 """
@@ -291,9 +292,18 @@ def build_art(tier):
     return mask
 
 
+def write_animations(path):
+    """Six animations, each holding picture 0 (upstream's animation table
+    format: a row per command)."""
+    with open(path, "w", newline="\n") as f:
+        f.write("animation\tcommand\tvalue\tframes\n")
+        for n in range(6):
+            f.write("%d\tpicture\t0\t4\n%d\thold\n" % (n, n))
+
+
 def main():
     directory = sys.argv[1]
-    palette = Image.open("%s/spr_106.png" % directory).getpalette()
+    palette = Image.open("%s/woman_with_fair_hair.png" % directory).getpalette()
     for tier in [309] + sorted(ART):
         image = Image.new("P", (W, H), 0)
         image.putpalette(palette)
@@ -302,9 +312,7 @@ def main():
         for (x, y), c in picture.items():
             px[x, y] = c
         image.save("%s/spr_%03d.png" % (directory, tier))
-        with open("%s/spr_%03d.tsv" % (directory, tier), "w", newline="\n") as f:
-            for _ in range(6):
-                f.write("anim\tpicture 0 4, hold\n")
+        write_animations("%s/spr_%03d.tsv" % (directory, tier))
         print("spr_%03d" % tier)
     image = Image.new("P", (W, 32), 0)
     image.putpalette(palette)
@@ -312,9 +320,7 @@ def main():
     for (x, y), c in build_case().items():
         px[x, y] = c
     image.save("%s/spr_314.png" % directory)
-    with open("%s/spr_314.tsv" % directory, "w", newline="\n") as f:
-        for _ in range(6):
-            f.write("anim\tpicture 0 4, hold\n")
+    write_animations("%s/spr_314.tsv" % directory)
     print("spr_314")
 
 

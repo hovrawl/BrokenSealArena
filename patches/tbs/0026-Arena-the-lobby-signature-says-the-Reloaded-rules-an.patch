@@ -1,4 +1,4 @@
-From 213fa50b43e8858e707615fd1e8777c20d2eee42 Mon Sep 17 00:00:00 2001
+From bcca83bb3f221a045e90293054cfc901a92242d0 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Sun, 1 Nov 2026 09:18:41 +1100
 Subject: [PATCH] Arena: the lobby signature says the Reloaded rules and data
@@ -12,10 +12,10 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
  1 file changed, 7 insertions(+)
 
 diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
-index f5d9dbd956..0596795399 100644
+index f8fc15e399..f0acd8c2ce 100644
 --- a/games/tbs/src/scene/battle_arena.c
 +++ b/games/tbs/src/scene/battle_arena.c
-@@ -249,7 +249,14 @@ enum LinkTally {
+@@ -229,7 +229,14 @@ enum LinkTally {
  /// understand, so its signature word differs (and so does that of any other
  /// build). A console that publishes another word is not offered as an opponent
  /// by the stock lobby; here BattleArena_PollPeerReady reports it to the player.
@@ -31,5 +31,5 @@ index f5d9dbd956..0596795399 100644
  #define LOBBY_SIGNATURE PEER_TAG('S', 'G', 'M', 'C')
  #endif
 -- 
-2.53.0
+2.43.0
 

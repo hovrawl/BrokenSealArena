@@ -23,8 +23,8 @@
 # (Only The Lost Age would want a dump, as roms/tla-en.gba.)
 set -euo pipefail
 
-# The one place the ROM's end address is set. main.ld moves the last region on
-# by 0x5000 to make room for the added data, and the image is padded to match.
+# The one place the ROM's end address is set. ld_script.ld moves the last region
+# on by 0x5000 to make room for the added data, and the image is padded to match.
 ROM_END=0x08806000
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

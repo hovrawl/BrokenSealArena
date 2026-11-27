@@ -1,4 +1,4 @@
-From da2aaf84281bfa3e1eb644a8a6627d67de3873c7 Mon Sep 17 00:00:00 2001
+From e9c0e928758a0ddb24e812ef29aa4df6e2a39738 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Sat, 31 Oct 2026 13:45:58 +1100
 Subject: [PATCH] Arena: say so when the linked opponent is another version of
@@ -13,16 +13,16 @@ different version of the game!" and stop waiting. The stock game cannot say it.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- games/tbs/src/scene/battle_arena.c | 66 +++++++++++++++++++++++++++++-
- games/tbs/text/en.po               |  7 ++++
- 2 files changed, 71 insertions(+), 2 deletions(-)
+ games/tbs/src/scene/battle_arena.c | 69 +++++++++++++++++++++++++++++-
+ games/tbs/text/en.po               |  7 +++
+ 2 files changed, 74 insertions(+), 2 deletions(-)
 
 diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
-index d0f26bf162..f5d9dbd956 100644
+index 64ec8cd9bd..f8fc15e399 100644
 --- a/games/tbs/src/scene/battle_arena.c
 +++ b/games/tbs/src/scene/battle_arena.c
-@@ -244,6 +244,16 @@ enum LinkTally {
- 
+@@ -224,6 +224,16 @@ enum LinkTally {
+ /// Four letters as one word, the first in its low byte.
  #define PEER_TAG(a, b, c, d) ((a) | ((b) << 8) | ((c) << 16) | ((d) << 24))
  
 +#if ARENA_LINK4
@@ -36,12 +36,12 @@ index d0f26bf162..f5d9dbd956 100644
 +#endif
 +
  // clang-format off
- /// The words the Battle Arena publishes in its link payload, by slot; the
- /// partner compares them with its own (BattleArena_PeerSlotMatches), by enum
-@@ -273,18 +283,19 @@ const s32 gBattleArena_SlotValues[] = {
+ /// The words the Battle Arena publishes in its link payload, by slot.
+ ///
+@@ -257,18 +267,19 @@ const s32 gBattleArena_SlotValues[] = {
      PEER_TAG('E', 'F', 'G', '3'), PEER_TAG('C', 'I', 'G', 'S')
  #else
- #if (LANGUAGE != LANGUAGE_JAPANESE)
+ #if LANGUAGE != LANGUAGE_JAPANESE
 -    PEER_TAG('S', 'G', 'M', 'C'),
 +    LOBBY_SIGNATURE,
  #else
@@ -59,8 +59,8 @@ index d0f26bf162..f5d9dbd956 100644
 +#undef LOBBY_SIGNATURE
  
  /// A console's link payload as the Battle Arena reads it from
- /// gLinkPeerSignatures: values[0] is its signature word and values[1] its state
-@@ -386,6 +397,32 @@ static s32 BattleArena_PeerSlotMatches(s32 slot) {
+ /// gSerialPeerPayloads. values[0] is its signature word and values[1] its state
+@@ -360,6 +371,35 @@ static s32 BattleArena_PeerSlotMatches(s32 slot) {
    return 0;
  }
  
@@ -70,7 +70,7 @@ index d0f26bf162..f5d9dbd956 100644
 +static s32 sBattleArenaOtherGameFrames;
 +
 +/// Arena romhack: set when the link was dropped because the partner runs
-+/// another build, so that the attendant says so (BattleArena_ReportDisconnection).
++/// another build, so that the attendant says so (BattleArena_ReportLinkDisconnected).
 +static s32 sBattleArenaOtherGame;
 +
 +/// Arena romhack: returns 1 when the link is up and the partner has published a
@@ -81,20 +81,23 @@ index d0f26bf162..f5d9dbd956 100644
 +  struct LinkPeerPayload *peer;
 +  s32 word;
 +
-+  if ((gLinkStatus & LOBBY_LINK_READY_MASK) != LOBBY_LINK_READY_MASK)
++  if ((gLinkStatus & BATTLE_ARENA_LINK_READY_MASK) !=
++      BATTLE_ARENA_LINK_READY_MASK)
 +    return 0;
-+  serialPlayerId = (REG_SIOCNT << 26) >> 30;
-+  peer = (struct LinkPeerPayload *)gLinkPeerSignatures[(serialPlayerId != 0) ^ 1];
-+  word = peer->values[gBattleArena_SlotColumns[LOBBY_SLOT_SIGNATURE]];
-+  return word != 0 && word != gBattleArena_SlotValues[LOBBY_SLOT_SIGNATURE];
++  serialPlayerId = SIO_ID_OF(REG_SIOCNT);
++  peer = (struct LinkPeerPayload *)gSerialPeerPayloads[(serialPlayerId != 0) ^ 1]
++             .payload;
++  word = peer->values[gBattleArena_SlotColumns[BATTLE_ARENA_SLOT_SIGNATURE]];
++  return word != 0 &&
++         word != gBattleArena_SlotValues[BATTLE_ARENA_SLOT_SIGNATURE];
 +}
 +#endif
 +
  /// Publishes slot's word in its column of this console's link payload, where
- /// the partner's BattleArena_PeerSlotMatches reads it.
+ /// the opponent's BattleArena_PeerSlotMatches reads it.
  static void BattleArena_WriteSlotValue(s32 slot) {
-@@ -458,6 +495,25 @@ static s32 BattleArena_PollPeerReady(void) {
-       work->raisedTrigger = LOBBY_EVENT_PROMPT;
+@@ -419,6 +459,25 @@ static UNREAD_RESULT BattleArena_WatchOpponent(void) {
+       state->raisedTrigger = BATTLE_ARENA_EVENT_ASK_TO_PARTICIPATE;
      }
    }
 +#if ARENA_LINK4
@@ -105,24 +108,24 @@ index d0f26bf162..f5d9dbd956 100644
 +    if (++sBattleArenaOtherGameFrames >= 60) {
 +      sBattleArenaOtherGameFrames = 0;
 +      sBattleArenaOtherGame = 1;
-+      work->raisedTrigger = LOBBY_EVENT_DISCONNECTED;
-+      GameFlag_Set(FLAG_BATTLE_ARENA_LINK_LOST_UNREPORTED);
-+      GameFlag_Clear(FLAG_BATTLE_ARENA_PARTNER_ASKED);
-+      GameFlag_Clear(FLAG_BATTLE_ARENA_PLAYER_AGREED);
++      state->raisedTrigger = BATTLE_ARENA_EVENT_DISCONNECTED;
++      GameFlag_Set(FLAG_BATTLE_ARENA_LINK_DISCONNECTED);
++      GameFlag_Clear(FLAG_BATTLE_ARENA_OPPONENT_ASKED);
++      GameFlag_Clear(FLAG_BATTLE_ARENA_PLAYER_APPLIED);
 +      GameFlag_Clear(FLAG_LINK_BATTLE);
-+      BattleArena_WriteSlotValue(LOBBY_SLOT_IDLE);
++      BattleArena_WriteSlotValue(BATTLE_ARENA_SLOT_IDLE);
 +    }
 +  } else {
 +    sBattleArenaOtherGameFrames = 0;
 +  }
 +#endif
-   // The 25th frame without a link while a linked battle is being arranged:
-   // report the link lost.
-   if ((Event_GetFlag(FLAG_BATTLE_ARENA_PARTNER_ASKED) ||
-@@ -530,7 +586,13 @@ static s32 BattleArena_ReportDisconnection(void) {
+   // BATTLE_ARENA_PEER_WAIT_FRAMES frames without a link while a linked battle
+   // is being arranged: report the link lost.
+   if ((Event_GetFlag(FLAG_BATTLE_ARENA_OPPONENT_ASKED) ||
+@@ -495,7 +554,13 @@ static s32 BattleArena_ReportLinkDisconnected(void) {
    GameFlag_Clear(FLAG_BATTLE_ARENA_ENTERING_BATTLE);
    Event_Start();
-   work->raisedTrigger = LOBBY_EVENT_NONE;
+   state->raisedTrigger = BATTLE_ARENA_EVENT_NONE;
 +#if ARENA_LINK4
 +  Event_SetMessageId(sBattleArenaOtherGame ? MsgArenaLinkOtherGame
 +                                           : MsgLobbyLinkDisconnected);
@@ -130,11 +133,11 @@ index d0f26bf162..f5d9dbd956 100644
 +#else
    Event_SetMessageId(MsgLobbyLinkDisconnected);
 +#endif
-   FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
-   GameFlag_Clear(FLAG_BATTLE_ARENA_LINK_LOST_UNREPORTED);
-   Event_End();
+   // "The link was disconnected."
+   Event_OpenMessage(ACTOR_ATTENDANT, 0);
+   GameFlag_Clear(FLAG_BATTLE_ARENA_LINK_DISCONNECTED);
 diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
-index e243c8417c..f75d66189b 100644
+index b102ee810f..fb58de2fc3 100644
 --- a/games/tbs/text/en.po
 +++ b/games/tbs/text/en.po
 @@ -65238,3 +65238,10 @@ msgid "10775"
@@ -149,5 +152,5 @@ index e243c8417c..f75d66189b 100644
 +"different version of\n"
 +"the game!{end_wait}"
 -- 
-2.53.0
+2.43.0
 

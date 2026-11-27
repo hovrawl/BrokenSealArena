@@ -1,4 +1,4 @@
-From b4062c1971ec1c457a4c1d45cefae7f1cd44102d Mon Sep 17 00:00:00 2001
+From a5dd471089a15cbd2cb0739d60e23a9a3c55f199 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Mon, 2 Nov 2026 09:24:28 +1100
 Subject: [PATCH] Arena: stat boosts won by rounds replace the coin stat shop
@@ -23,38 +23,23 @@ real stats. Messages above the generated block; gen-cups.py re-run.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
+ games/tbs/include/arena/arena.h           |   9 +
+ games/tbs/include/arena/arena_cups.h      |   4 +-
+ games/tbs/include/game/game.h             |   1 +
  games/tbs/include/gamepak/far_call/game.h |   4 +
- games/tbs/include/module/arena.h          |   9 +
- games/tbs/include/module/arena_cups.h     |   4 +-
- games/tbs/include/module/game/game.h      |   1 +
- games/tbs/src/game/game/levels.c          |  41 +++++
- games/tbs/src/gamepak/far_call/GAME.S     |   1 +
+ games/tbs/src/game/game_levels.c          |  41 +++++
+ games/tbs/src/gamepak/far_call/game.s     |   1 +
  games/tbs/src/scene/arena_cup_info.inc    |  60 ++++---
  games/tbs/src/scene/arena_series.c        |  17 +-
- games/tbs/src/shop/shop/arena_shop.c      | 192 +++++++++++++++++-----
+ games/tbs/src/shop/arena_shop.c           | 192 +++++++++++++++++-----
  games/tbs/src/system/overlay/imports.inc  |   1 +
  games/tbs/text/en.po                      | 176 +++++++++++++-------
  11 files changed, 383 insertions(+), 123 deletions(-)
 
-diff --git a/games/tbs/include/gamepak/far_call/game.h b/games/tbs/include/gamepak/far_call/game.h
-index fdd6baa038..ae60983de5 100644
---- a/games/tbs/include/gamepak/far_call/game.h
-+++ b/games/tbs/include/gamepak/far_call/game.h
-@@ -161,6 +161,10 @@ const struct SummonDefinition *SummonDefinition_Get(u32 summon_id);
- s32 Djinn_GetAbilityIdFar(u32 group, u32 index);
- /// Raises a character a level at a time up to `lv`, then recomputes its stats.
- void Unit_LevelUpToFar(s32 unit, s32 lv);
-+/// Arena romhack: the base stats from levelling alone at `level`, six s32 in
-+/// `out` (HP, PP, Attack, Defense, Agility, Luck). The stat counter's boosts
-+/// are what a unit's base stats hold above this.
-+void Unit_GetLevelBaseFar(s32 unit, s32 level, s32 *out);
- /// Returns the unit's whole element level in one element, 0 for ELEMENT_NONE;
- /// the Status screens show it.
- s32 Unit_GetElementLevelFar(s32 owner, s32 index);
-diff --git a/games/tbs/include/module/arena.h b/games/tbs/include/module/arena.h
-index 62b5b82be6..847f65ce1d 100644
---- a/games/tbs/include/module/arena.h
-+++ b/games/tbs/include/module/arena.h
+diff --git a/games/tbs/include/arena/arena.h b/games/tbs/include/arena/arena.h
+index 2b2c163386..4cd54f25b5 100644
+--- a/games/tbs/include/arena/arena.h
++++ b/games/tbs/include/arena/arena.h
 @@ -27,6 +27,15 @@
  //                                 (ARENA_REWARD_FLAG_FIRST in arena_cups.h)
  //   0x790 to 0x79f                trophy of cup n (n 0 to 15) stands in the lobby,
@@ -71,10 +56,10 @@ index 62b5b82be6..847f65ce1d 100644
  #define FLAG_ARENA_TROPHY_FIRST 0x790
  #define FLAG_ARENA_TOURNAMENT 0x7f8
  #define FLAG_ARENA_PROGRESS 0x7f0
-diff --git a/games/tbs/include/module/arena_cups.h b/games/tbs/include/module/arena_cups.h
+diff --git a/games/tbs/include/arena/arena_cups.h b/games/tbs/include/arena/arena_cups.h
 index da34204815..34fd23386f 100644
---- a/games/tbs/include/module/arena_cups.h
-+++ b/games/tbs/include/module/arena_cups.h
+--- a/games/tbs/include/arena/arena_cups.h
++++ b/games/tbs/include/arena/arena_cups.h
 @@ -20,6 +20,8 @@
  #define ARENA_CUP_HEALS 0x02 /* the party is healed after each win */
  #define ARENA_REWARD_ITEM 0
@@ -92,11 +77,11 @@ index da34204815..34fd23386f 100644
 +#define MSG_ARENA_CUP_NAME 10789
  
  #endif
-diff --git a/games/tbs/include/module/game/game.h b/games/tbs/include/module/game/game.h
-index 1a52bebc4e..30d39f6097 100644
---- a/games/tbs/include/module/game/game.h
-+++ b/games/tbs/include/module/game/game.h
-@@ -79,6 +79,7 @@ u32 Unit_GetExperienceForLevel(s32 unitId, s32 level);
+diff --git a/games/tbs/include/game/game.h b/games/tbs/include/game/game.h
+index f09e4a49bf..ae11c709ec 100644
+--- a/games/tbs/include/game/game.h
++++ b/games/tbs/include/game/game.h
+@@ -177,6 +177,7 @@ u32 Unit_GetExperienceForLevel(s32 unitId, s32 level);
  struct LevelUpResult *Unit_LevelUp(s32 unitId, struct LevelUpResult *gains);
  struct LevelUpResult *Unit_TryLevelUp(s32 unitId, struct LevelUpResult *gains);
  void Unit_LevelUpTo(s32 unitId, s32 targetLevel);
@@ -104,11 +89,26 @@ index 1a52bebc4e..30d39f6097 100644
  
  s32 GameFlag_Get(s32 flag);
  s32 GameFlag_Set(s32 flag);
-diff --git a/games/tbs/src/game/game/levels.c b/games/tbs/src/game/game/levels.c
-index 0b67ecadeb..48674471bb 100644
---- a/games/tbs/src/game/game/levels.c
-+++ b/games/tbs/src/game/game/levels.c
-@@ -423,6 +423,47 @@ struct LevelUpResult *Unit_LevelUp(s32 unitId, struct LevelUpResult *gains) {
+diff --git a/games/tbs/include/gamepak/far_call/game.h b/games/tbs/include/gamepak/far_call/game.h
+index 0bf6478f64..26b447dda3 100644
+--- a/games/tbs/include/gamepak/far_call/game.h
++++ b/games/tbs/include/gamepak/far_call/game.h
+@@ -76,6 +76,10 @@ s32 Summon_ListLearnedFar(u8 *output);
+ const struct SummonDefinition *SummonDefinition_Get(u32 summonId);
+ s32 Djinn_GetAbilityIdFar(u32 element, u32 djinni);
+ void Unit_LevelUpToFar(s32 unitId, s32 targetLevel);
++/// Arena romhack: the base stats from levelling alone at `level`, six s32 in
++/// `out` (HP, PP, Attack, Defense, Agility, Luck). The stat counter's boosts
++/// are what a unit's base stats hold above this.
++void Unit_GetLevelBaseFar(s32 unitId, s32 level, s32 *out);
+ s32 Unit_GetElementLevelFar(s32 unitId, s32 element);
+ u32 Djinn_IsSetFar(s32 unitId, s32 element, s32 djinnIndex);
+ s32 Djinn_CanSetFar(s32 unitId, s32 element, s32 djinnIndex);
+diff --git a/games/tbs/src/game/game_levels.c b/games/tbs/src/game/game_levels.c
+index 3294aa009a..34ebb6f859 100644
+--- a/games/tbs/src/game/game_levels.c
++++ b/games/tbs/src/game/game_levels.c
+@@ -400,6 +400,47 @@ struct LevelUpResult *Unit_LevelUp(s32 unitId, struct LevelUpResult *gains) {
    return gains;
  }
  
@@ -120,7 +120,7 @@ index 0b67ecadeb..48674471bb 100644
 +/// takes boosts applied = (base now - this) / the boost's amount, and Reset sets
 +/// the base back to this.
 +void Unit_GetLevelBase(s32 unitId, s32 level, s32 *out) {
-+  struct CharacterDefinition *growth = Character_GetDefinition(unitId);
++  const struct CharacterDefinition *growth = Character_GetDefinition(unitId);
 +  s32 l;
 +  s32 band;
 +  s32 span;
@@ -131,9 +131,9 @@ index 0b67ecadeb..48674471bb 100644
 +    if (l == 1) {
 +      out[0] += growth->hp[0];
 +      out[1] += growth->pp[0];
-+      out[2] += growth->atk[0];
-+      out[3] += growth->def[0];
-+      out[4] += growth->agi[0];
++      out[2] += growth->attack[0];
++      out[3] += growth->defense[0];
++      out[4] += growth->agility[0];
 +      out[5] += growth->luck[0];
 +    }
 +    band = l / 20;
@@ -144,22 +144,22 @@ index 0b67ecadeb..48674471bb 100644
 +            (l - 1) * (growth->stat[band + 1] - growth->stat[band]) / span
 +    ARENA_BASE_GAIN(hp, 0);
 +    ARENA_BASE_GAIN(pp, 1);
-+    ARENA_BASE_GAIN(atk, 2);
-+    ARENA_BASE_GAIN(def, 3);
-+    ARENA_BASE_GAIN(agi, 4);
++    ARENA_BASE_GAIN(attack, 2);
++    ARENA_BASE_GAIN(defense, 3);
++    ARENA_BASE_GAIN(agility, 4);
 +    ARENA_BASE_GAIN(luck, 5);
 +#undef ARENA_BASE_GAIN
 +  }
 +}
 +#endif
 +
- /// Levels the character up once if its experience reaches the next level.
- /// Returns `gains` filled with the gains, or NULL. Called after a battle by
- /// Battle_AwardSpoils, once for each level a party member reaches. At level 99
-diff --git a/games/tbs/src/gamepak/far_call/GAME.S b/games/tbs/src/gamepak/far_call/GAME.S
-index 9119065c9f..178090fb86 100644
---- a/games/tbs/src/gamepak/far_call/GAME.S
-+++ b/games/tbs/src/gamepak/far_call/GAME.S
+ /// Levels the character up once if its experience reaches the next level, and
+ /// returns gains, or NULL.
+ struct LevelUpResult *Unit_TryLevelUp(s32 unitId, struct LevelUpResult *gains) {
+diff --git a/games/tbs/src/gamepak/far_call/game.s b/games/tbs/src/gamepak/far_call/game.s
+index d87406f64b..cbfac2370c 100644
+--- a/games/tbs/src/gamepak/far_call/game.s
++++ b/games/tbs/src/gamepak/far_call/game.s
 @@ -102,3 +102,4 @@ FarCall_GameTable:
  	export PartyInventory_CountFreeSlotsFar, PartyInventory_CountFreeSlots
  	export InventorySnapshot_SaveFar, InventorySnapshot_Save
@@ -295,7 +295,7 @@ index 4338148605..57e08e1c5d 100644
  
  const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3] = {
 diff --git a/games/tbs/src/scene/arena_series.c b/games/tbs/src/scene/arena_series.c
-index 2001b836f7..0a42a45c7a 100644
+index fca8cd66cd..5b7a719241 100644
 --- a/games/tbs/src/scene/arena_series.c
 +++ b/games/tbs/src/scene/arena_series.c
 @@ -89,10 +89,21 @@ static void ArenaSeries_GiveRewards(const struct ArenaCupInfo *info, s32 won) {
@@ -318,15 +318,15 @@ index 2001b836f7..0a42a45c7a 100644
 +      GameFlag_Set(flagBase + reward->flag);
 +      FieldGameFlag_SetByte(byteFlag, FieldGameFlag_GetByte(byteFlag) + 1);
 +      Event_SetMessageId(reward->message);
-+      FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
++      Event_OpenMessage(ACTOR_ATTENDANT, 0);
 +    } else if (reward->kind == ARENA_REWARD_ITEM) {
        GameFlag_Set(ARENA_REWARD_FLAG_FIRST + reward->flag);
        Event_SetMessageId(MsgArenaGearReward);
-       FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
-diff --git a/games/tbs/src/shop/shop/arena_shop.c b/games/tbs/src/shop/shop/arena_shop.c
-index 14c054f3c2..4786b144d0 100644
---- a/games/tbs/src/shop/shop/arena_shop.c
-+++ b/games/tbs/src/shop/shop/arena_shop.c
+       Event_OpenMessage(ACTOR_ATTENDANT, 0);
+diff --git a/games/tbs/src/shop/arena_shop.c b/games/tbs/src/shop/arena_shop.c
+index bfe8a32fbf..0f61baad5b 100644
+--- a/games/tbs/src/shop/arena_shop.c
++++ b/games/tbs/src/shop/arena_shop.c
 @@ -301,7 +301,13 @@ enum ArenaShopKind {
  #define ARENA_SHOP_DJINN_COUNT 28
  #define ARENA_SHOP_DJINN_PRICE 500
@@ -443,7 +443,7 @@ index 14c054f3c2..4786b144d0 100644
 +
 +/// The boosts of a stat applied across the party.
 +static s32 ArenaBoost_Used(s32 stat) {
-+  struct ShopWork *shop = gMenuWork;
++  struct ShopState *shop = gMenuState;
 +  s32 used = 0;
 +  s32 i;
 +
@@ -462,7 +462,7 @@ index 14c054f3c2..4786b144d0 100644
 +/// Takes every boost back: each base stat of the party goes to the stat from
 +/// levelling alone.
 +static void ArenaBoost_Reset(void) {
-+  struct ShopWork *shop = gMenuWork;
++  struct ShopState *shop = gMenuState;
 +  s32 base[6];
 +  s32 i;
 +  s32 stat;
@@ -546,7 +546,7 @@ index 14c054f3c2..4786b144d0 100644
 +  }
    if (ArenaShop_Owned(kind, unitId, entry))
      return 0;
-   if (price > gMainRoutineWork.coins)
+   if (price > gMainRoutineState.holdings.coins)
      return MsgArenaNoCoins;
 -  if (kind == ARENA_SHOP_STATS) {
 -    ArenaStat_Add(Unit_GetFar(unitId), entry, ArenaStat_Step(entry));
@@ -562,7 +562,7 @@ index 14c054f3c2..4786b144d0 100644
 +/// The window at the right: the coins, or at the stat counter the boosts the
 +/// party has left of the stat chosen (of every stat for Reset).
 +static void ArenaShop_DrawMoney(s32 kind, s32 entry) {
-+  struct ShopWork *shop = gMenuWork;
++  struct ShopState *shop = gMenuState;
 +  s32 left = 0;
 +  s32 stat;
 +
@@ -620,7 +620,7 @@ index 14c054f3c2..4786b144d0 100644
 @@ -630,7 +733,6 @@ s32 ArenaShop_Run(s32 kind, s32 unitId) {
    shop->itemWindow = 0;
    shop->moneyWindow = Window_CreateFar(
-       30 - SHOP_MONEY_WIDTH, 7, SHOP_MONEY_WIDTH, 4, WINDOW_FLAG_INSTANT);
+       30 - SHOP_MONEY_WINDOW_WIDTH, 7, SHOP_MONEY_WINDOW_WIDTH, 4, WINDOW_FLAG_INSTANT);
 -  Shop_DrawMoney();
    priceWindow =
        Window_CreateFar(0, 8, SHOP_PRICE_WIDTH, 4, WINDOW_FLAG_INSTANT);
@@ -628,7 +628,7 @@ index 14c054f3c2..4786b144d0 100644
 @@ -662,6 +764,7 @@ s32 ArenaShop_Run(s32 kind, s32 unitId) {
        MenuCursor_Place(stockWindow, selected % SHOP_STOCK_PAGE_ITEMS * 32 - 8,
                         8);
-       shop->mode = 4;
+       shop->cursorFrames = 4;
 +      ArenaShop_DrawMoney(kind, shop->stockItemIds[selected]);
        ArenaShop_DrawStock(stockWindow, kind, unitId, selected, figures);
        Shop_DrawMessage(
@@ -645,19 +645,19 @@ index 14c054f3c2..4786b144d0 100644
      }
      if ((gKeysPressed & KEY_B) != 0) {
 diff --git a/games/tbs/src/system/overlay/imports.inc b/games/tbs/src/system/overlay/imports.inc
-index 69fbf3cfd1..489761293a 100644
+index 9637a8d27b..1338a83616 100644
 --- a/games/tbs/src/system/overlay/imports.inc
 +++ b/games/tbs/src/system/overlay/imports.inc
-@@ -218,6 +218,7 @@
- 	import PartyInventory_CountFreeSlots, PartyInventory_CountFreeSlotsFar
- 	import InventorySnapshot_Save, InventorySnapshot_SaveFar
- 	import InventorySnapshot_Restore, InventorySnapshot_RestoreFar
-+	import Unit_GetLevelBase, Unit_GetLevelBaseFar
- @ Field sequence bank (far_call/FIELD_SEQUENCE.S)
- 	import Event_Wait, Event_WaitFar
- 	import Event_Start, Event_StartFar
+@@ -204,6 +204,7 @@
+ 	export PartyInventory_CountFreeSlots, PartyInventory_CountFreeSlotsFar
+ 	export InventorySnapshot_Save, InventorySnapshot_SaveFar
+ 	export InventorySnapshot_Restore, InventorySnapshot_RestoreFar
++	export Unit_GetLevelBase, Unit_GetLevelBaseFar
+ @ Field sequence bank (far_call/field_sequence.s)
+ 	export Event_Wait, Event_WaitFar
+ 	export Event_Start, Event_StartFar
 diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
-index d28ec88c48..dc6a7919f8 100644
+index d5325b3c8c..3906cada2b 100644
 --- a/games/tbs/text/en.po
 +++ b/games/tbs/text/en.po
 @@ -65309,129 +65309,195 @@ msgstr ""
@@ -1184,5 +1184,5 @@ index d28ec88c48..dc6a7919f8 100644
  "Well done!\n"
  "You cleared the\n"
 -- 
-2.53.0
+2.43.0
 

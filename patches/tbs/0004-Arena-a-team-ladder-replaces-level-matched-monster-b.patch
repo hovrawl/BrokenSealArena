@@ -1,4 +1,4 @@
-From c99a1b627c67a50cd93c9da516b5f04e911b1513 Mon Sep 17 00:00:00 2001
+From 97dab1e13761de0bf3ed3585425286224e62a1d5 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Fri, 30 Oct 2026 14:51:36 +1100
 Subject: [PATCH] Arena: a team ladder replaces level-matched monster battles
@@ -13,36 +13,24 @@ A formation has six sprite slots: a small enemy takes one, any other two.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- games/tbs/src/battle/battle.c              |  1 +
- games/tbs/src/battle/battle/arena_ladder.c | 87 ++++++++++++++++++++++
- games/tbs/src/battle/battle/formation.c    |  7 ++
+ games/tbs/src/battle/arena_ladder.c     | 87 +++++++++++++++++++++++++
+ games/tbs/src/battle/battle.c           |  1 +
+ games/tbs/src/battle/battle_formation.c |  7 ++
  3 files changed, 95 insertions(+)
- create mode 100644 games/tbs/src/battle/battle/arena_ladder.c
+ create mode 100644 games/tbs/src/battle/arena_ladder.c
 
-diff --git a/games/tbs/src/battle/battle.c b/games/tbs/src/battle/battle.c
-index 5b964da09d..dfad8ec900 100644
---- a/games/tbs/src/battle/battle.c
-+++ b/games/tbs/src/battle/battle.c
-@@ -39,6 +39,7 @@
- #include "battle/transition.c"
- #include "battle/background.c"
- #include "battle/element_glow.c"
-+#include "battle/arena_ladder.c"
- #include "battle/formation.c"
- #include "battle/battle_sprite.c"
- #include "battle/spoils.c"
-diff --git a/games/tbs/src/battle/battle/arena_ladder.c b/games/tbs/src/battle/battle/arena_ladder.c
+diff --git a/games/tbs/src/battle/arena_ladder.c b/games/tbs/src/battle/arena_ladder.c
 new file mode 100644
-index 0000000000..0c100c537a
+index 0000000000..4433e4f8ea
 --- /dev/null
-+++ b/games/tbs/src/battle/battle/arena_ladder.c
++++ b/games/tbs/src/battle/arena_ladder.c
 @@ -0,0 +1,87 @@
 +/// @file
 +/// Arena romhack: the team ladder. In a monster series, the enemies come from
 +/// gArenaLadder, a rung for each win, instead of from level-matched formations.
 +// Part of battle.c.
 +
-+#include "../battle_internal.h"
++#include "battle_internal.h"
 +#include "arena_config.h"
 +
 +/// Arena romhack: one rung of the team ladder. In a monster series, win number
@@ -94,7 +82,7 @@ index 0000000000..0c100c537a
 +/// stronger for each win. outMargin is the levels each enemy gains to reach the
 +/// rung's level from the average of its members.
 +static const struct Formation *ArenaLadder_Select(s32 *outMargin) {
-+  s32 streak = gMainRoutineWork.linkTallies[3];
++  s32 streak = gMainRoutineState.linkTallies[3];
 +  s32 rung = streak;
 +  s32 target;
 +  s32 levelTotal = 0;
@@ -124,36 +112,48 @@ index 0000000000..0c100c537a
 +  return &team->formation;
 +}
 +#endif
-diff --git a/games/tbs/src/battle/battle/formation.c b/games/tbs/src/battle/battle/formation.c
-index d56e52646e..45c6927af4 100644
---- a/games/tbs/src/battle/battle/formation.c
-+++ b/games/tbs/src/battle/battle/formation.c
+diff --git a/games/tbs/src/battle/battle.c b/games/tbs/src/battle/battle.c
+index 3b61557fc4..49a7ff6f2e 100644
+--- a/games/tbs/src/battle/battle.c
++++ b/games/tbs/src/battle/battle.c
+@@ -33,6 +33,7 @@
+ #include "battle_transition.c"
+ #include "battle_background.c"
+ #include "battle_element_glow.c"
++#include "arena_ladder.c"
+ #include "battle_formation.c"
+ #include "battle_sprite.c"
+ #include "battle_spoils.c"
+diff --git a/games/tbs/src/battle/battle_formation.c b/games/tbs/src/battle/battle_formation.c
+index 095133afa5..791712a34f 100644
+--- a/games/tbs/src/battle/battle_formation.c
++++ b/games/tbs/src/battle/battle_formation.c
 @@ -3,6 +3,7 @@
  // Part of battle.c.
  
- #include "../battle_internal.h"
+ #include "battle_internal.h"
 +#include "arena_config.h"
  
- // Declared here without const, as Camelot's code read it: with const,
- // alchemy-gcc compiles BattleFormation_SelectLevelMatchedCandidate differently.
-@@ -488,11 +489,17 @@ s32 BattleFormation_BuildEnemyList(s32 recordId) {
+ /// How many name letters tell the enemies of one kind apart: 26 in Japanese,
+ /// 9 in the localizations.
+@@ -395,11 +396,17 @@ s32 BattleFormation_BuildEnemyList(s32 formationId) {
    levelAdjustment = 0;
    battle->enemyKindCount = 0;
    enemyKinds = listBuffer;
 +#if !ARENA_LADDER
    if (GameFlag_GetFar(FLAG_MONSTER_BATTLE))
-     recordId = BattleFormation_SelectLevelMatchedCandidate(&levelAdjustment);
+     formationId = BattleFormation_SelectLevelMatchedCandidate(&levelAdjustment);
 +#endif
-   if (recordId < 0 || recordId >= FORMATION_COUNT)
-     recordId = 1;
-   record = (struct Formation *)&gFormations[recordId];
+   if (formationId < 0 || formationId >= FORMATION_COUNT)
+     formationId = FORMATION_FALLBACK;
+   formation = &gFormations[formationId];
 +#if ARENA_LADDER
 +  if (GameFlag_GetFar(FLAG_MONSTER_BATTLE))
-+    record = (struct Formation *)ArenaLadder_Select(&levelAdjustment);
++    formation = (struct Formation *)ArenaLadder_Select(&levelAdjustment);
 +#endif
-   for (memberIndex = 0;
-        memberIndex <= 4 && record->minimumCounts[memberIndex] == 0;
+   for (memberIndex = 0; memberIndex < FORMATION_MEMBERS &&
+                         formation->minimumCounts[memberIndex] == 0;
         memberIndex++)
 -- 
-2.53.0
+2.43.0
 

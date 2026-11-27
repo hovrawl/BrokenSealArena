@@ -1,4 +1,4 @@
-From 2a5c99b0cbcca522099180583f2af1b2167e16ec Mon Sep 17 00:00:00 2001
+From 1655a842fc40d0f0e5f39b6d463d98a046e44ffb Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Mon, 2 Nov 2026 08:59:54 +1100
 Subject: [PATCH] Arena: the scout and the champion stand in the south strip of
@@ -15,33 +15,33 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
  1 file changed, 4 insertions(+), 4 deletions(-)
 
 diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
-index 8d6bbe3f85..17b6c858d8 100644
+index 413f4b429f..63e8dceb70 100644
 --- a/games/tbs/src/scene/battle_arena.c
 +++ b/games/tbs/src/scene/battle_arena.c
-@@ -1992,9 +1992,9 @@ struct ActorPlacement gBattleArenaActorPlacements[] = {
+@@ -1959,9 +1959,9 @@ struct ActorPlacement gBattleArenaActorPlacements[] = {
      // Arena romhack: two visitors who come once cups are cleared: the champion
      // after the last main cup, the scout after the third.
-     { 0x71, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 6), MOVEMENT_TYPE_STAND,
--        PIXELS(198), 0, PIXELS(186), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
-+        PIXELS(272), 0, PIXELS(268), FACING_WEST, TALK_FACING_PARTY_AND_BACK, 0 },
-     { 0x87, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 2), MOVEMENT_TYPE_STAND,
--        PIXELS(234), 0, PIXELS(190), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
-+        PIXELS(160), 0, PIXELS(268), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
-     { GARET, IF_FLAG_SET(0x1), MOVEMENT_TYPE_STAND,
-         PIXELS(352), 0, PIXELS(108), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
-     { IVAN, IF_FLAG_SET(0x2), MOVEMENT_TYPE_STAND,
-@@ -2084,9 +2084,9 @@ struct ActorPlacement gBattleArenaBattleActorPlacements[] = {
+     ACTOR_PLACEMENT(SPRITE_MAN_WITH_GLASSES, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 6), MOVEMENT_TYPE_STAND,
+-        198, 0, 186, FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0),
++        272, 0, 268, FACING_WEST, TALK_FACING_PARTY_AND_BACK, 0),
+     ACTOR_PLACEMENT(SPRITE_MAN_WITH_PICKAXE, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 2), MOVEMENT_TYPE_STAND,
+-        234, 0, 190, FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0),
++        160, 0, 268, FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0),
+     ACTOR_PLACEMENT(GARET, IF_FLAG_SET(FLAG_IN_PARTY(GARET)), MOVEMENT_TYPE_STAND,
+         352, 0, 108, FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0),
+     ACTOR_PLACEMENT(IVAN, IF_FLAG_SET(FLAG_IN_PARTY(IVAN)), MOVEMENT_TYPE_STAND,
+@@ -2051,9 +2051,9 @@ struct ActorPlacement gBattleArenaBattleActorPlacements[] = {
      // Arena romhack: two visitors who come once cups are cleared: the champion
      // after the last main cup, the scout after the third.
-     { 0x71, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 6), MOVEMENT_TYPE_STAND,
--        PIXELS(198), 0, PIXELS(186), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
-+        PIXELS(272), 0, PIXELS(268), FACING_WEST, TALK_FACING_PARTY_AND_BACK, 0 },
-     { 0x87, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 2), MOVEMENT_TYPE_STAND,
--        PIXELS(234), 0, PIXELS(190), FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0 },
-+        PIXELS(160), 0, PIXELS(268), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
-     { GARET, IF_FLAG_SET(0x1), MOVEMENT_TYPE_STAND,
-         PIXELS(104), 0, PIXELS(144), FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0 },
-     { IVAN, IF_FLAG_SET(0x2), MOVEMENT_TYPE_STAND,
+     ACTOR_PLACEMENT(SPRITE_MAN_WITH_GLASSES, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 6), MOVEMENT_TYPE_STAND,
+-        198, 0, 186, FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0),
++        272, 0, 268, FACING_WEST, TALK_FACING_PARTY_AND_BACK, 0),
+     ACTOR_PLACEMENT(SPRITE_MAN_WITH_PICKAXE, IF_FLAG_SET(FLAG_ARENA_TROPHY_FIRST + 2), MOVEMENT_TYPE_STAND,
+-        234, 0, 190, FACING_SOUTH, TALK_FACING_PARTY_AND_BACK, 0),
++        160, 0, 268, FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0),
+     ACTOR_PLACEMENT(GARET, IF_FLAG_SET(FLAG_IN_PARTY(GARET)), MOVEMENT_TYPE_STAND,
+         104, 0, 144, FACING_EAST, TALK_FACING_PARTY_AND_BACK, 0),
+     ACTOR_PLACEMENT(IVAN, IF_FLAG_SET(FLAG_IN_PARTY(IVAN)), MOVEMENT_TYPE_STAND,
 -- 
-2.53.0
+2.43.0
 

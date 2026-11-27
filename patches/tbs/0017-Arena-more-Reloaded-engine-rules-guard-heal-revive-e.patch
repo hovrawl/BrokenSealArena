@@ -1,4 +1,4 @@
-From 2d04cb44bb267f4531ef20487dd77d5c085c2515 Mon Sep 17 00:00:00 2001
+From ab868fe69d7400446e4103ffc4e27139892d4607 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Sun, 1 Nov 2026 08:53:04 +1100
 Subject: [PATCH] Arena: more Reloaded engine rules (guard, heal, revive,
@@ -30,17 +30,18 @@ each behind its own ARENA_RULES_* switch (on by default, stock code kept for 0):
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- games/tbs/include/arena_config.h             |  62 +++++++++++
- games/tbs/include/battle/battle_work.h       |   4 +-
- games/tbs/src/battle/battle/ability.c        | 105 +++++++++++++++++--
- games/tbs/src/battle/battle/action.c         |   4 +-
- games/tbs/src/battle/battle/setup.c          |  26 +++++
- games/tbs/src/battle/battle/turn_end.c       |  47 +++++++--
- games/tbs/src/game/game/battle_arithmetic.c  |  13 +++
- games/tbs/src/game/game/units.c              |  62 ++++++++---
- games/tbs/src/menu/menu/use.c                |  23 +++-
- games/tbs/src/window/screens/battle_status.c |   5 +
- 10 files changed, 317 insertions(+), 34 deletions(-)
+ games/tbs/include/arena_config.h            | 62 ++++++++++++++
+ games/tbs/include/battle/battle_state.h     |  4 +-
+ games/tbs/include/battle/battle_unit.h      |  5 ++
+ games/tbs/src/battle/battle_ability.c       | 94 +++++++++++++++++++--
+ games/tbs/src/battle/battle_action.c        |  3 +-
+ games/tbs/src/battle/battle_internal.h      |  4 +
+ games/tbs/src/battle/battle_setup.c         | 26 ++++++
+ games/tbs/src/battle/battle_turn_end.c      | 26 ++++--
+ games/tbs/src/game/game_battle_arithmetic.c | 14 +++
+ games/tbs/src/game/game_units.c             | 57 ++++++++++---
+ games/tbs/src/menu/menu_use.c               | 22 ++++-
+ 11 files changed, 285 insertions(+), 32 deletions(-)
 
 diff --git a/games/tbs/include/arena_config.h b/games/tbs/include/arena_config.h
 index fd018d95bb..2a739b49d2 100644
@@ -115,40 +116,45 @@ index fd018d95bb..2a739b49d2 100644
  
  #ifndef ARENA_LINK4
  #define ARENA_LINK4 1
-diff --git a/games/tbs/include/battle/battle_work.h b/games/tbs/include/battle/battle_work.h
-index b85f8a59d0..082e0e9fd1 100644
---- a/games/tbs/include/battle/battle_work.h
-+++ b/games/tbs/include/battle/battle_work.h
-@@ -110,7 +110,9 @@ struct BattleWork {
-   u8 firstStrike; ///< BATTLE_ENCOUNTER_: who strikes first
+diff --git a/games/tbs/include/battle/battle_state.h b/games/tbs/include/battle/battle_state.h
+index 1df1170180..aad2e56e53 100644
+--- a/games/tbs/include/battle/battle_state.h
++++ b/games/tbs/include/battle/battle_state.h
+@@ -136,7 +136,9 @@ struct BattleState {
+   u8 firstStrike; ///< enum BattleFirstStrike: who strikes first
    /// Failed attempts to run; each adds 2000 to the base chance of 5000.
    u8 fleeFailures;
--  u8 unusedAfterEscapes; ///< no code names it
+-  u8 unusedAfterFleeFailures; ///< no code names it
 +  /// Arena romhack (ARENA_RULES_SUMMON_TURNS): the turns this battle has
 +  /// finished, from 0, counted by Battle_ProcessTurnEnd (stock: no code names it).
 +  u8 arenaTurn;
    /// For each party unit, its slot as a link opponent's enemy, minus
    /// FIRST_ENEMY_UNIT; 0xff for none.
    u8 opponentSlots[8];
-diff --git a/games/tbs/src/battle/battle/ability.c b/games/tbs/src/battle/battle/ability.c
-index 0ef59213f5..3e69fb6bfd 100644
---- a/games/tbs/src/battle/battle/ability.c
-+++ b/games/tbs/src/battle/battle/ability.c
-@@ -32,7 +32,13 @@ s32 Ability_EffectAppliesToDowned(s32 effect) {
- #define AGILITY_STAGE_DOUBLED 8
- /// A Resistance stage adds 20 to the resistance to every element
+diff --git a/games/tbs/include/battle/battle_unit.h b/games/tbs/include/battle/battle_unit.h
+index b6a9b4c26b..678c55e3cf 100644
+--- a/games/tbs/include/battle/battle_unit.h
++++ b/games/tbs/include/battle/battle_unit.h
+@@ -273,9 +273,14 @@ enum AbilityUse {
+ /// The bits of Unit.baseActionCount that count the unit's actions a turn.
+ #define UNIT_ACTION_COUNT_MASK 0xf
+ 
++#include "arena_config.h"
+ /// What a Resistance stage adds to the resistance to every element
  /// (Unit_Calculate).
-+/// (15 with ARENA_RULES_STAGES, as the Golden Sun Reloaded rebalance, forum
-+/// topic 2779, has it.)
 +#if ARENA_RULES_STAGES
-+#define RESISTANCE_PER_STAGE 15
++#define RESISTANCE_PER_STAGE 15 ///< Arena romhack: Golden Sun Reloaded's 15
 +#else
  #define RESISTANCE_PER_STAGE 20
 +#endif
  
- // The turns a stat change or a status lasts. A status, or a lowered stat but
- // never a raised one or Agility, may end sooner at the rolls the end of every
-@@ -41,13 +47,60 @@ s32 Ability_EffectAppliesToDowned(s32 effect) {
+ /// Unit.poison: the poison takes a tenth of the maximum HP at the end of
+ /// each of the unit's actions, deadly poison a fifth.
+diff --git a/games/tbs/src/battle/battle_ability.c b/games/tbs/src/battle/battle_ability.c
+index 33398a4422..bd32edd87e 100644
+--- a/games/tbs/src/battle/battle_ability.c
++++ b/games/tbs/src/battle/battle_ability.c
+@@ -31,7 +31,49 @@ s32 Ability_EffectAppliesToDowned(s32 effect) {
  #define AGILITY_CHANGE_TURNS 5
  #define STATUS_TURNS 7
  /// The Grim Reaper's countdown.
@@ -160,17 +166,6 @@ index 0ef59213f5..3e69fb6bfd 100644
 +#else
  #define CURSE_TURNS 7
 +#define STAT_RAISE_2_TURNS STAT_CHANGE_TURNS
-+#endif
- 
- /// Unit.psySeal: Bind's seal counts its seven turns in the low three
- /// bits, and may end sooner; Luff's counts down 8 a turn, two turns that never
- /// end early (Battle_AdvanceCounterAndCheckChance).
- #define PSY_SEAL_BIND 7
-+#if ARENA_RULES_DURATIONS
-+/// Reloaded: Luff seals as long as Bind does.
-+#define PSY_SEAL_LUFF PSY_SEAL_BIND
-+#else
- #define PSY_SEAL_LUFF 16
 +#endif
 +
 +#if ARENA_RULES_EFFECT_IDS
@@ -191,9 +186,9 @@ index 0ef59213f5..3e69fb6bfd 100644
 +  case 21: return ABILITY_EFFECT_DELUSION;
 +  case 22: return ABILITY_EFFECT_STUN;
 +  case 30: return ABILITY_EFFECT_HAUNT;
-+  case 36: return ABILITY_EFFECT_ATTACK_DOWN_2;
-+  case 37: return ABILITY_EFFECT_DEFENSE_DOWN_2;
-+  case 38: return ABILITY_EFFECT_RESISTANCE_DOWN_2;
++  case 36: return ABILITY_EFFECT_ATTACK_DOWN_SHARPLY;
++  case 37: return ABILITY_EFFECT_DEFENSE_DOWN_SHARPLY;
++  case 38: return ABILITY_EFFECT_RESISTANCE_DOWN_SHARPLY;
 +  case 39: return ABILITY_EFFECT_POISON;
 +  case 40: return ABILITY_EFFECT_VENOM;
 +  case 41: return ABILITY_EFFECT_STUN;
@@ -209,7 +204,7 @@ index 0ef59213f5..3e69fb6bfd 100644
  
  /// The rate Battle_CalculatePsynergyPowerFar and Battle_CalculateRecoveryFar
  /// scale by: 256 is 1.
-@@ -91,7 +144,23 @@ static const u8 sArenaSummonHpPercent[] = {2, 4, 6, 8, 0, 0, 2, 4, 6, 8, 0,
+@@ -81,7 +123,23 @@ static const u8 sArenaSummonHpPercent[] = {2, 4, 6, 8, 0, 0, 2, 4, 6, 8, 0,
        PUSH_MESSAGE(enemyMessage);                                              \
    }
  
@@ -234,7 +229,7 @@ index 0ef59213f5..3e69fb6bfd 100644
  #define REDUCE_BY_GUARD(damage, unit)                                          \
    {                                                                            \
      s32 guard = (unit)->defendLevel;                                           \
-@@ -100,7 +169,7 @@ static const u8 sArenaSummonHpPercent[] = {2, 4, 6, 8, 0, 0, 2, 4, 6, 8, 0,
+@@ -90,7 +148,7 @@ static const u8 sArenaSummonHpPercent[] = {2, 4, 6, 8, 0, 0, 2, 4, 6, 8, 0,
        if (guard == DEFEND_NORMAL)                                              \
          (damage) /= 2;                                                         \
        else                                                                     \
@@ -243,7 +238,7 @@ index 0ef59213f5..3e69fb6bfd 100644
      }                                                                          \
    }
  
-@@ -736,6 +805,14 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+@@ -666,6 +724,14 @@ UNREAD_RESULT BattleAbility_ApplyToTarget(struct BattleActionRun *plan,
        if (hit != 0) {
          if (ability->power == 0)
            break;
@@ -252,22 +247,22 @@ index 0ef59213f5..3e69fb6bfd 100644
 +        // damage.
 +        if (ability->effect == ABILITY_EFFECT_REVIVE ||
 +            ability->effect == ABILITY_EFFECT_REVIVE_HALF ||
-+            ability->effect == ABILITY_EFFECT_REVIVE_80)
++            ability->effect == ABILITY_EFFECT_DEW)
 +          break;
 +#endif
          newHp = target->hp;
          if (element != ELEMENT_NONE)
            elementBonus = elementPower - target->element[element].resistance;
-@@ -781,7 +858,7 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+@@ -705,7 +771,7 @@ UNREAD_RESULT BattleAbility_ApplyToTarget(struct BattleActionRun *plan,
    if ((Battle_IsReviveEffectFar(ability->effect) != 0 || target->hp != 0 ||
         Ability_EffectAppliesToDowned(ability->effect) != 0) &&
        hit != 0) {
 -    switch (ability->effect) {
 +    switch (ARENA_EFFECT_SWITCH(ability->effect)) {
      // Tonic leaves confusion and charm, and ends sleep without a message.
-     // Most of its messages push the name for the next after them; Restore
-     // below clears the arguments and pushes the name before each instead.
-@@ -906,7 +983,11 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+     case ABILITY_EFFECT_CURE_ALL:
+       if (target->delusion != 0) {
+@@ -828,7 +894,11 @@ UNREAD_RESULT BattleAbility_ApplyToTarget(struct BattleActionRun *plan,
        newPp = target->pp;
        ppMax = target->ppMax;
        oldPp = newPp;
@@ -279,25 +274,25 @@ index 0ef59213f5..3e69fb6bfd 100644
        if (newPp > ppMax)
          newPp = ppMax;
        restored = newPp - oldPp;
-@@ -976,7 +1057,7 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
-       Unit_CalculateFar(targetId);
-       BattlePlayback_Push(PLAYBACK_NUMBER, target->atk - savedTarget->atk);
+@@ -902,7 +972,7 @@ UNREAD_RESULT BattleAbility_ApplyToTarget(struct BattleActionRun *plan,
+       BattlePlayback_Push(PLAYBACK_NUMBER,
+                           target->attack - savedTarget->attack);
        PUSH_MESSAGE(MsgAtkUp);
 -      target->attackTurns = STAT_CHANGE_TURNS;
 +      target->attackTurns = STAT_RAISE_2_TURNS;
        break;
  
      case ABILITY_EFFECT_DEFENSE_DOWN:
-@@ -1012,7 +1093,7 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
-       Unit_CalculateFar(targetId);
-       BattlePlayback_Push(PLAYBACK_NUMBER, target->def - savedTarget->def);
+@@ -942,7 +1012,7 @@ UNREAD_RESULT BattleAbility_ApplyToTarget(struct BattleActionRun *plan,
+       BattlePlayback_Push(PLAYBACK_NUMBER,
+                           target->defense - savedTarget->defense);
        PUSH_MESSAGE(MsgDefUp);
 -      target->defenseTurns = STAT_CHANGE_TURNS;
 +      target->defenseTurns = STAT_RAISE_2_TURNS;
        break;
  
      // The revivals bring back a downed target with all, half or 80% of its
-@@ -1021,7 +1102,7 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+@@ -951,7 +1021,7 @@ UNREAD_RESULT BattleAbility_ApplyToTarget(struct BattleActionRun *plan,
        if (target->hp != 0)
          break;
        PUSH_MESSAGE(MsgRevived);
@@ -306,7 +301,7 @@ index 0ef59213f5..3e69fb6bfd 100644
        Unit_RecalculateGaugesFar(targetId);
        break;
  
-@@ -1029,7 +1110,7 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+@@ -959,7 +1029,7 @@ UNREAD_RESULT BattleAbility_ApplyToTarget(struct BattleActionRun *plan,
        if (target->hp != 0)
          break;
        PUSH_MESSAGE(MsgRevived);
@@ -315,7 +310,7 @@ index 0ef59213f5..3e69fb6bfd 100644
        Unit_RecalculateGaugesFar(targetId);
        break;
  
-@@ -1037,7 +1118,7 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+@@ -967,7 +1037,7 @@ UNREAD_RESULT BattleAbility_ApplyToTarget(struct BattleActionRun *plan,
        if (target->hp != 0)
          break;
        PUSH_MESSAGE(MsgRevived);
@@ -324,7 +319,7 @@ index 0ef59213f5..3e69fb6bfd 100644
        Unit_RecalculateGaugesFar(targetId);
        break;
  
-@@ -1086,7 +1167,7 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
+@@ -1016,7 +1086,7 @@ UNREAD_RESULT BattleAbility_ApplyToTarget(struct BattleActionRun *plan,
                                              savedTarget->resistanceStage) *
                                                 RESISTANCE_PER_STAGE);
        PUSH_MESSAGE(MsgResUp);
@@ -333,10 +328,10 @@ index 0ef59213f5..3e69fb6bfd 100644
        break;
  
      // Poison does nothing to a poisoned target, deadly poison nothing to one
-@@ -1349,7 +1430,13 @@ s32 BattleAbility_ApplyToTarget(struct BattleActionRun *plan, s32 slot) {
-   // A haunted unit pays, one time in four, for each target it took HP or PP
-   // from: a quarter of that (at least 1), gathered in hauntDamage and taken
-   // from its own HP at the end of its action (BattleUnit_ProcessActionEnd).
+@@ -1275,7 +1345,13 @@ UNREAD_RESULT BattleAbility_ApplyToTarget(struct BattleActionRun *plan,
+     BattlePlayback_Push(PLAYBACK_REFRESH_UNIT, targetId);
+   // A haunted user takes, one time in four, a quarter of the HP or PP it took
+   // from the target (at least 1), at the end of its action.
 +#if ARENA_RULES_STATUS
 +  // Reloaded: 103 in 256 (about 40 percent) in place of one in four.
 +  if (actor->haunt != 0 && (Battle_RandomFar() & 255) <= 102 &&
@@ -347,41 +342,55 @@ index 0ef59213f5..3e69fb6bfd 100644
      s32 share;
  
      share = damageDealt >> 2;
-diff --git a/games/tbs/src/battle/battle/action.c b/games/tbs/src/battle/battle/action.c
-index 2062b068ae..bc7086ef90 100644
---- a/games/tbs/src/battle/battle/action.c
-+++ b/games/tbs/src/battle/battle/action.c
+diff --git a/games/tbs/src/battle/battle_action.c b/games/tbs/src/battle/battle_action.c
+index 122231e162..f3e6c60f2e 100644
+--- a/games/tbs/src/battle/battle_action.c
++++ b/games/tbs/src/battle/battle_action.c
 @@ -3,6 +3,7 @@
  // Part of battle.c.
  
- #include "../battle_internal.h"
+ #include "battle_internal.h"
 +#include "arena_config.h"
  
- /// Returns 1 when the unit is in its side's list of units in the battle
- /// (BattleUnit_ListIds), 0 otherwise.
-@@ -648,7 +649,8 @@ s32 BattleActionRun_Build(struct BattleAction *request,
-       if (target->hp == 0 || target->sleep != 0 || target->stun != 0 ||
+ /// The chances, out of 256, an action rolls against the battle's random byte.
+ enum ActionChance {
+@@ -604,7 +605,7 @@ s32 BattleActionRun_Build(struct BattleAction *request,
            target->immobile != 0 || target->charm != 0)
          break;
--      if (actor->delusion != 0 && (Battle_RandomFar() & 255) <= 152)
-+      if (actor->delusion != 0 &&
+       if (actor->delusion != 0 &&
+-          (Battle_RandomFar() & 255) < CHANCE_DELUDED_MISS)
 +          (Battle_RandomFar() & 255) <= ARENA_DELUSION_MISS)
          plan->targetMultiplier[0] = 0;
        if ((Battle_RandomFar() & 31) == 0)
          plan->targetMultiplier[0] = 0;
-diff --git a/games/tbs/src/battle/battle/setup.c b/games/tbs/src/battle/battle/setup.c
-index 89d40a70c1..9589b8333d 100644
---- a/games/tbs/src/battle/battle/setup.c
-+++ b/games/tbs/src/battle/battle/setup.c
+diff --git a/games/tbs/src/battle/battle_internal.h b/games/tbs/src/battle/battle_internal.h
+index 06e73c4e9e..2157d9cb25 100644
+--- a/games/tbs/src/battle/battle_internal.h
++++ b/games/tbs/src/battle/battle_internal.h
+@@ -226,6 +226,10 @@ enum BattleCastKind {
+ /// Unit.psySeal as a seal starts: Bind's lasts seven turns and may end sooner;
+ /// Luff's lasts two and never ends early.
+ #define PSY_SEAL_BIND 7
++#if ARENA_RULES_DURATIONS
++#define PSY_SEAL_LUFF PSY_SEAL_BIND ///< Arena romhack: Reloaded's Luff seals as long as Bind
++#else
+ #define PSY_SEAL_LUFF (2 * PSY_SEAL_LUFF_TURN)
++#endif
+ 
+ #endif
+diff --git a/games/tbs/src/battle/battle_setup.c b/games/tbs/src/battle/battle_setup.c
+index 3d9fb8d60f..60503315d2 100644
+--- a/games/tbs/src/battle/battle_setup.c
++++ b/games/tbs/src/battle/battle_setup.c
 @@ -4,6 +4,7 @@
  // Part of battle.c.
  
- #include "../battle_internal.h"
+ #include "battle_internal.h"
 +#include "arena_config.h"
  
- /// Runs each frame of a battle. In a link battle it first checks the link:
- /// a connection lost for more than LINK_MAX_MISSED_FRAMES frames, or a
-@@ -131,6 +132,25 @@ void BattleIntro_AnnounceEncounter(s32 enemyCount) {
+ /// Each frame of a turn the camera closes this share of the gap to its target
+ /// yaw, one sixteenth, so it slows as it nears it.
+@@ -104,6 +105,25 @@ void BattleIntro_AnnounceEncounter(s32 enemyCount) {
    }
  }
  
@@ -404,61 +413,64 @@ index 89d40a70c1..9589b8333d 100644
 +}
 +#endif
 +
- /// Fills the battle's two unit lists, each ended by BATTLE_UNIT_LIST_END:
- /// the party members in their order, and the enemies, left to right for a
- /// random formation or, for a fixed one, alternating out from the centre
-@@ -145,6 +165,9 @@ void BattleUnit_Collect(void) {
+ /// Fills the battle's two unit lists: the party in its order, and the enemies
+ /// left to right, or for a fixed formation out from the centre.
+ void BattleUnit_Collect(void) {
+@@ -114,6 +134,9 @@ void BattleUnit_Collect(void) {
    s32 position;
    s32 formation;
  
 +#if ARENA_RULES_SUMMON_TURNS
-+  gBattleWork->arenaTurn = 0;
++  gBattleState->arenaTurn = 0;
 +#endif
-   battle = gBattleWork;
+   battle = gBattleState;
    count = BattleParty_PrepareMembers(unitIds);
    for (i = 0; i < count; i++)
-@@ -405,6 +428,9 @@ struct BattleSummonState *BattleSummon_UpdateAvailability(void) {
+@@ -322,6 +345,9 @@ struct DjinnRecoveryTable *BattleSummon_UpdateAvailability(void) {
    {
-     struct BattleSummonState *state =
+     struct DjinnRecoveryTable *table =
          Djinn_GetRecoveryTableFar(DJINN_RECOVERY_PARTY);
 +#if ARENA_RULES_SUMMON_TURNS
-+    availableMask &= ArenaRules_SummonTierMask(gBattleWork->arenaTurn);
++    availableMask &= ArenaRules_SummonTierMask(gBattleState->arenaTurn);
 +#endif
-     state->availableMask = availableMask;
-     return state;
+     table->summonMask = availableMask;
+     return table;
    }
-diff --git a/games/tbs/src/battle/battle/turn_end.c b/games/tbs/src/battle/battle/turn_end.c
-index e55db95f54..cb445f6700 100644
---- a/games/tbs/src/battle/battle/turn_end.c
-+++ b/games/tbs/src/battle/battle/turn_end.c
-@@ -4,6 +4,26 @@
+diff --git a/games/tbs/src/battle/battle_turn_end.c b/games/tbs/src/battle/battle_turn_end.c
+index 34b9abf05a..cff624beb1 100644
+--- a/games/tbs/src/battle/battle_turn_end.c
++++ b/games/tbs/src/battle/battle_turn_end.c
+@@ -4,19 +4,22 @@
  // Part of battle.c.
  
- #include "../battle_internal.h"
+ #include "battle_internal.h"
 +#include "arena_config.h"
-+
-+#if ARENA_RULES_RECOVERY
-+// Reloaded (Golden Sun Reloaded, forum topic 2779) lowers the base chances to
-+// shake off a debuff or a status early, and counts luck once and the unit's
-+// level over two against it (BattleUnit_RollCounterEarlyEnd).
-+#define RECOVER_BIAS_ATTACK 10
-+#define RECOVER_BIAS_DEFENSE 5
-+#define RECOVER_BIAS_RESISTANCE 5
-+#define RECOVER_BIAS_STUN 50
-+#define RECOVER_BIAS_SLEEP 40
-+#define RECOVER_BIAS_SEAL 40
-+#else
-+#define RECOVER_BIAS_ATTACK 30
-+#define RECOVER_BIAS_DEFENSE 20
-+#define RECOVER_BIAS_RESISTANCE 20
-+#define RECOVER_BIAS_STUN 40
-+#define RECOVER_BIAS_SLEEP 50
-+#define RECOVER_BIAS_SEAL 30
-+#endif
+ 
+ /// How much likelier, in percent, each lowered stat and status is to end early
+-/// (BattleUnit_RollCounterEarlyEnd's bias).
++/// (BattleUnit_RollCounterEarlyEnd's bias). Arena romhack: ARENA_RULES_RECOVERY gives Golden Sun Reloaded's lower biases
++/// (forum topic 2779) for the lowered stats, stun, sleep and Bind.
+ enum EarlyEndBias {
+-  EARLY_END_ATTACK_DOWN = 30,
+-  EARLY_END_DEFENSE_DOWN = 20,
+-  EARLY_END_RESISTANCE_DOWN = 20,
++  EARLY_END_ATTACK_DOWN = ARENA_RULES_RECOVERY ? 10 : 30,
++  EARLY_END_DEFENSE_DOWN = ARENA_RULES_RECOVERY ? 5 : 20,
++  EARLY_END_RESISTANCE_DOWN = ARENA_RULES_RECOVERY ? 5 : 20,
+   EARLY_END_DELUSION = 30,
+   EARLY_END_CONFUSION = 60,
+   EARLY_END_CHARM = 70,
+-  EARLY_END_STUN = 40,
+-  EARLY_END_SLEEP = 50,
+-  EARLY_END_BIND = 30 ///< Bind's seal, once Luff's is gone
++  EARLY_END_STUN = ARENA_RULES_RECOVERY ? 50 : 40,
++  EARLY_END_SLEEP = ARENA_RULES_RECOVERY ? 40 : 50,
++  /// Bind's seal, once Luff's is gone
++  EARLY_END_BIND = ARENA_RULES_RECOVERY ? 40 : 30
+ };
  
  /// Rolls whether a stat change or status with five turns or fewer left ends
- /// early, and returns 1 when it does.
-@@ -16,7 +36,12 @@ s32 BattleUnit_RollCounterEarlyEnd(s32 unitId, s32 turns, s32 bias) {
+@@ -27,7 +30,12 @@ s32 BattleUnit_RollCounterEarlyEnd(s32 unitId, s32 turns, s32 bias) {
    if (turns <= 5) {
      // 65536 / 100, rounded down, scales the percentage to the 16-bit random
      // range.
@@ -471,87 +483,22 @@ index e55db95f54..cb445f6700 100644
      if (threshold >= (Battle_RandomFar() & 0xffff))
        return 1;
    }
-@@ -39,7 +64,8 @@ s32 BattleUnit_CountDownAttackStage(s32 unitId) {
-       return 1;
-     }
-     if (unit->attackStage < 0) {
--      if (BattleUnit_RollCounterEarlyEnd(unitId, unit->attackTurns, 30) != 0) {
-+      if (BattleUnit_RollCounterEarlyEnd(unitId, unit->attackTurns,
-+                                         RECOVER_BIAS_ATTACK) != 0) {
-         unit->attackStage = cleared;
-         unit->attackTurns = cleared;
-         return 1;
-@@ -53,7 +79,7 @@ s32 BattleUnit_CountDownAttackStage(s32 unitId) {
- /// BattleUnit_CountDownAttackStage is with bias 20: clears `level` and returns
- /// 1 when `counter` runs out, or clears both when a lowered stat recovers
- /// early.
--#define DEFINE_COUNT_DOWN_MODIFIER(name, counter, level)                       \
-+#define DEFINE_COUNT_DOWN_MODIFIER(name, counter, level, bias)                       \
-   s32 name(s32 unitId) {                                                       \
-     struct Unit *state = Unit_GetFar(unitId);                                  \
-                                                                                \
-@@ -64,7 +90,7 @@ s32 BattleUnit_CountDownAttackStage(s32 unitId) {
-         return 1;                                                              \
-       }                                                                        \
-       if (state->level < 0 &&                                                  \
--          BattleUnit_RollCounterEarlyEnd(unitId, state->counter, 20) != 0) {   \
-+          BattleUnit_RollCounterEarlyEnd(unitId, state->counter, bias) != 0) {   \
-         state->level = 0;                                                      \
-         state->counter = 0;                                                    \
-         return 1;                                                              \
-@@ -76,11 +102,11 @@ s32 BattleUnit_CountDownAttackStage(s32 unitId) {
- /// Counts down a Defense change; Battle_ProcessTurnEnd shows `MsgDefNormal`
- /// when it returns 1.
- DEFINE_COUNT_DOWN_MODIFIER(BattleUnit_CountDownDefenseStage, defenseTurns,
--                           defenseStage)
-+                           defenseStage, RECOVER_BIAS_DEFENSE)
- /// Counts down a Resistance change; Battle_ProcessTurnEnd shows
- /// `MsgResNormal` when it returns 1.
- DEFINE_COUNT_DOWN_MODIFIER(BattleUnit_CountDownResistanceStage, resistanceTurns,
--                           resistanceStage)
-+                           resistanceStage, RECOVER_BIAS_RESISTANCE)
- 
- /// Defines a status's turn-end countdown: returns 1 when `counter` runs out, or
- /// clears it and returns 1 when the status ends early at `bias`.
-@@ -128,10 +154,10 @@ s32 BattleUnit_CountDownConfusion(s32 unitId) {
- DEFINE_COUNT_DOWN_STATUS(BattleUnit_CountDownCharm, charm, 70)
- /// Counts down stun, which may end early at bias 40; Battle_ProcessTurnEnd
- /// shows `MsgCureStun` when it returns 1.
--DEFINE_COUNT_DOWN_STATUS(BattleUnit_CountDownStun, stun, 40)
-+DEFINE_COUNT_DOWN_STATUS(BattleUnit_CountDownStun, stun, RECOVER_BIAS_STUN)
- /// Counts down sleep, which may end early at bias 50; Battle_ProcessTurnEnd
- /// shows `MsgWakes` when it returns 1.
--DEFINE_COUNT_DOWN_STATUS(BattleUnit_CountDownSleep, sleep, 50)
-+DEFINE_COUNT_DOWN_STATUS(BattleUnit_CountDownSleep, sleep, RECOVER_BIAS_SLEEP)
- 
- /// Counts down both seals packed in Unit.psySeal and returns 1 when the
- /// last ends.
-@@ -165,7 +191,8 @@ s32 Battle_AdvanceCounterAndCheckChance(s32 unitId) {
-     if (remaining == 0)
-       return 1;
-     if (remaining <= 7U &&
--        BattleUnit_RollCounterEarlyEnd(unitId, unit->psySeal, 30) != 0) {
-+        BattleUnit_RollCounterEarlyEnd(unitId, unit->psySeal,
-+                                         RECOVER_BIAS_SEAL) != 0) {
-       unit->psySeal = 0U;
-       return 1;
-     }
-@@ -313,6 +340,10 @@ s32 Battle_ProcessTurnEnd(void) {
-   struct DjinnRecoveryEntry *timedEntry;
-   struct DjinnRecoveryEntry *expiredEntry;
+@@ -245,6 +253,10 @@ UNREAD_RESULT Battle_ProcessTurnEnd(void) {
+   s32 i;
+   struct DjinnRecoveryList *list;
  
 +#if ARENA_RULES_SUMMON_TURNS
-+  if (gBattleWork->arenaTurn < 255)
-+    gBattleWork->arenaTurn++;
++  if (gBattleState->arenaTurn < 255)
++    gBattleState->arenaTurn++;
 +#endif
    // Djinn recovery: the party's list, and in a link battle the opponent's
    // too. Only a Djinni whose unit is on the field with HP counts down.
-   battle = gBattleWork;
-diff --git a/games/tbs/src/game/game/battle_arithmetic.c b/games/tbs/src/game/game/battle_arithmetic.c
-index bbf234daef..1f41130759 100644
---- a/games/tbs/src/game/game/battle_arithmetic.c
-+++ b/games/tbs/src/game/game/battle_arithmetic.c
-@@ -115,8 +115,15 @@ s32 Battle_CalculateRecovery(s32 power, s32 elementPower, s32 powerMultiplier) {
+   battle = gBattleState;
+diff --git a/games/tbs/src/game/game_battle_arithmetic.c b/games/tbs/src/game/game_battle_arithmetic.c
+index 2b386db848..a31c4028db 100644
+--- a/games/tbs/src/game/game_battle_arithmetic.c
++++ b/games/tbs/src/game/game_battle_arithmetic.c
+@@ -98,9 +98,17 @@ s32 Battle_CalculateRecovery(s32 power, s32 elementPower, s32 powerMultiplier) {
    s32 signedProduct;
    u32 scaledRecovery;
  
@@ -559,17 +506,19 @@ index bbf234daef..1f41130759 100644
 +  // Reloaded (Golden Sun Reloaded, forum topic 2779): the healer's element
 +  // power counts half as much as it did.
 +  scaledRecovery =
-+      Battle_GetElementMultiplier(elementPower * 2 - 200, 1) * power;
++      Battle_GetElementMultiplier((elementPower - HEALING_BASE_POWER) * 2, 1) *
++      power;
 +#else
    scaledRecovery =
-       Battle_GetElementMultiplier(elementPower * 2 - 200, 0) * power;
+       Battle_GetElementMultiplier((elementPower - HEALING_BASE_POWER) * 2, 0) *
+       power;
 +#endif
    scaledRecovery = powerMultiplier * scaledRecovery;
    signedProduct = scaledRecovery;
-   if (signedProduct < 0)
-@@ -182,6 +189,12 @@ s32 RollWeaponUnleash(struct Unit *unit) {
-   if (item->unleashAbility == 0) {
-     return 1;
+   return signedProduct / (BATTLE_MULTIPLIER_ONE * BATTLE_MULTIPLIER_ONE);
+@@ -160,6 +168,12 @@ s32 Equipment_RollUnleash(struct Unit *unit) {
+   if (item->unleashAbility == ABILITY_NONE) {
+     return ABILITY_ATTACK;
    }
 +#if ARENA_RULES_STATUS
 +  // Reloaded: a deluded unit never unleashes.
@@ -577,32 +526,30 @@ index bbf234daef..1f41130759 100644
 +    return 1;
 +  }
 +#endif
-   rate = ((Equipment_GetUnleashRateBonus(unit) + (item->unleashChance * 5))
-           << 16) /
-          100;
-diff --git a/games/tbs/src/game/game/units.c b/games/tbs/src/game/game/units.c
-index 704bcc37ad..511bf4dfb1 100644
---- a/games/tbs/src/game/game/units.c
-+++ b/games/tbs/src/game/game/units.c
-@@ -27,6 +27,31 @@ struct StatWork {
-   s32 unusedAfterItem;         ///< never written
- };
- 
+   rate = FIXED_ONE *
+          (Equipment_GetUnleashRateBonus(unit) + item->unleashChance * 5) / 100;
+   if (rate > (Battle_Random() & 0xffff)) {
+diff --git a/games/tbs/src/game/game_units.c b/games/tbs/src/game/game_units.c
+index c6766a9e24..40a7c868c1 100644
+--- a/games/tbs/src/game/game_units.c
++++ b/games/tbs/src/game/game_units.c
+@@ -42,6 +42,28 @@ struct StatState {
+ /// "Window brightness" one step brighter than the hue's own colour.
+ #define NEW_GAME_SPEECH 1
+ #define NEW_GAME_WINDOW_BRIGHTNESS (WINDOW_BRIGHTNESS_NEUTRAL + 1)
 +#if ARENA_RULES_CLASS20
 +#define CLASS_MULTIPLIER_ONE 20
 +#else
-+#define CLASS_MULTIPLIER_ONE 10
++#define CLASS_MULTIPLIER_ONE STAT_SCALE_ONE
 +#endif
 +#if ARENA_RULES_STAGES
-+/// Reloaded: a Defense stage is 3/16 of the stat (stock: 1/8), and a Resistance
-+/// stage 15 (stock: 20).
++/// Reloaded: a Defense stage is 3/16 of the stat (stock: 1/8); a Resistance
++/// stage's 15 (stock: 20) is RESISTANCE_PER_STAGE (battle_unit.h).
 +#define DEFENSE_STAGE_SCALE(stage) ((stage) * 3 + 16)
 +#define DEFENSE_STAGE_ONE 16
-+#define RESISTANCE_STAGE_STEP 15
 +#else
 +#define DEFENSE_STAGE_SCALE(stage) ((stage) + 8)
 +#define DEFENSE_STAGE_ONE 8
-+#define RESISTANCE_STAGE_STEP 20
 +#endif
 +#if ARENA_RULES_CAPS
 +/// Reloaded: element power and resistance, and PP regeneration, reach 255.
@@ -612,13 +559,12 @@ index 704bcc37ad..511bf4dfb1 100644
 +#define UNIT_CALC_ELEMENT_MAX UNIT_ELEMENT_MAX
 +#define UNIT_CALC_PP_REGEN_MAX UNIT_PP_REGEN_MAX
 +#endif
-+
+ 
  /// The distance between `a` and `b`, |a - b|.
  #define UNIT_STAT_DIFF(a, b) ((a) - (b) < 0 ? (b) - (a) : (a) - (b))
- 
-@@ -169,6 +194,10 @@ void Unit_Calculate(s32 unitId) {
+@@ -166,6 +188,10 @@ void Unit_Calculate(s32 unitId) {
    // Start with the unit's base stats and elemental power/resistance.
-   stats = Heap_AllocEwram(sizeof(struct StatWork));
+   stats = Heap_AllocEwram(sizeof(struct StatState));
    unit = Unit_Get(unitId);
 +#if ARENA_RULES_AILMENTS
 +  // The Ailment attribute is summed from the equipment below.
@@ -626,11 +572,11 @@ index 704bcc37ad..511bf4dfb1 100644
 +#endif
    stats->hp = unit->baseHp;
    stats->pp = unit->basePp;
-   stats->atk = unit->baseAttack;
-@@ -277,7 +306,13 @@ void Unit_Calculate(s32 unitId) {
+   stats->attack = unit->baseAttack;
+@@ -267,7 +293,13 @@ void Unit_Calculate(s32 unitId) {
            unit->equipBonus[0] += stats->amount;
            break;
-         case EQUIP_EFFECT_24:
+         case EQUIP_EFFECT_ADD_COUNTERSTRIKE_RATE:
 +#if ARENA_RULES_AILMENTS
 +          // Reloaded: this effect (stock sums it into a byte nothing reads) is
 +          // the Ailment attribute.
@@ -641,81 +587,74 @@ index 704bcc37ad..511bf4dfb1 100644
            break;
          case EQUIP_EFFECT_CURSE_REMOVABLE:
            unit->curse |= CURSE_REMOVABLE;
-@@ -310,17 +345,19 @@ void Unit_Calculate(s32 unitId) {
+@@ -300,19 +332,21 @@ void Unit_Calculate(s32 unitId) {
        }
      }
  
--    // The class's multipliers are in tenths: 10 keeps a stat as it is
-+    // The class's multipliers are in tenths: 10 keeps a stat as it is (twentieths
-+    // with ARENA_RULES_CLASS20, as in the Golden Sun Reloaded rebalance, forum
-+    // topic 2779: 20 keeps it)
+-    // The class's multipliers are in tenths (STAT_SCALE_ONE keeps a stat).
++    // The class's multipliers are in tenths (STAT_SCALE_ONE keeps a stat), or
++    // twentieths with ARENA_RULES_CLASS20, as in the Golden Sun Reloaded
++    // rebalance, forum topic 2779 (CLASS_MULTIPLIER_ONE keeps it).
      {
        struct ClassDefinition *classDefinition =
            Class_GetDefinition(unit->classId);
  
--      stats->hp = stats->hp * classDefinition->hp / 10;
--      stats->pp = stats->pp * classDefinition->pp / 10;
--      stats->atk = stats->atk * classDefinition->atk / 10;
--      stats->def = stats->def * classDefinition->def / 10;
--      stats->agi = stats->agi * classDefinition->agi / 10;
--      stats->luck = stats->luck * classDefinition->luck / 10;
+-      stats->hp = stats->hp * classDefinition->hp / STAT_SCALE_ONE;
+-      stats->pp = stats->pp * classDefinition->pp / STAT_SCALE_ONE;
+-      stats->attack = stats->attack * classDefinition->attack / STAT_SCALE_ONE;
 +      stats->hp = stats->hp * classDefinition->hp / CLASS_MULTIPLIER_ONE;
 +      stats->pp = stats->pp * classDefinition->pp / CLASS_MULTIPLIER_ONE;
-+      stats->atk = stats->atk * classDefinition->atk / CLASS_MULTIPLIER_ONE;
-+      stats->def = stats->def * classDefinition->def / CLASS_MULTIPLIER_ONE;
-+      stats->agi = stats->agi * classDefinition->agi / CLASS_MULTIPLIER_ONE;
++      stats->attack = stats->attack * classDefinition->attack / CLASS_MULTIPLIER_ONE;
+       stats->defense =
+-          stats->defense * classDefinition->defense / STAT_SCALE_ONE;
++          stats->defense * classDefinition->defense / CLASS_MULTIPLIER_ONE;
+       stats->agility =
+-          stats->agility * classDefinition->agility / STAT_SCALE_ONE;
+-      stats->luck = stats->luck * classDefinition->luck / STAT_SCALE_ONE;
++          stats->agility * classDefinition->agility / CLASS_MULTIPLIER_ONE;
 +      stats->luck = stats->luck * classDefinition->luck / CLASS_MULTIPLIER_ONE;
      }
  
      // Then the equipment's multiplying effects, EQUIP_EFFECT_SCALE_HP to
-@@ -370,7 +407,8 @@ void Unit_Calculate(s32 unitId) {
+@@ -360,7 +394,8 @@ void Unit_Calculate(s32 unitId) {
    // Then the battle's changes apply: the Attack, Defense and Agility stages,
    // a summon's boost to each element's power, and the Resistance stage.
-   stats->atk = stats->atk * (unit->attackStage + 8) / 8;
--  stats->def = stats->def * (unit->defenseStage + 8) / 8;
-+  stats->def =
-+      stats->def * DEFENSE_STAGE_SCALE(unit->defenseStage) / DEFENSE_STAGE_ONE;
-   stats->agi = stats->agi * (unit->agilityStage + 8) / 8;
+   stats->attack = stats->attack * (unit->attackStage + 8) / 8;
+-  stats->defense = stats->defense * (unit->defenseStage + 8) / 8;
++  stats->defense = stats->defense * DEFENSE_STAGE_SCALE(unit->defenseStage) /
++                   DEFENSE_STAGE_ONE;
+   stats->agility = stats->agility * (unit->agilityStage + 8) / 8;
    for (index = 0; index < ELEMENT_COUNT; index++)
-     stats->element[index][0] +=
-@@ -378,7 +416,7 @@ void Unit_Calculate(s32 unitId) {
-          unit->summonBoost[index]) *
-         5;
-   for (index = 0; index < ELEMENT_COUNT; index++)
--    stats->element[index][1] += unit->resistanceStage * 20;
-+    stats->element[index][1] += unit->resistanceStage * RESISTANCE_STAGE_STEP;
- 
-   if (unit->classId != CLASS_NONE) {
-     lighthouseLit = 0;
-@@ -410,10 +448,10 @@ void Unit_Calculate(s32 unitId) {
+     stats->element[index].power +=
+@@ -401,10 +436,10 @@ void Unit_Calculate(s32 unitId) {
    CLAMP(stats->luck, 0, UNIT_LUCK_MAX);
    CLAMP(stats->actionCount, 0, 2);
    CLAMP(stats->hpRegen, 0, UNIT_HP_REGEN_MAX);
 -  CLAMP(stats->ppRegen, 0, UNIT_PP_REGEN_MAX);
 +  CLAMP(stats->ppRegen, 0, UNIT_CALC_PP_REGEN_MAX);
    for (index = 0; index < ELEMENT_COUNT; index++) {
--    CLAMP(stats->element[index][0], 0, UNIT_ELEMENT_MAX);
--    CLAMP(stats->element[index][1], 0, UNIT_ELEMENT_MAX);
-+    CLAMP(stats->element[index][0], 0, UNIT_CALC_ELEMENT_MAX);
-+    CLAMP(stats->element[index][1], 0, UNIT_CALC_ELEMENT_MAX);
+-    CLAMP(stats->element[index].power, 0, UNIT_ELEMENT_MAX);
+-    CLAMP(stats->element[index].resistance, 0, UNIT_ELEMENT_MAX);
++    CLAMP(stats->element[index].power, 0, UNIT_CALC_ELEMENT_MAX);
++    CLAMP(stats->element[index].resistance, 0, UNIT_CALC_ELEMENT_MAX);
    }
  
-   unit->atk = stats->atk;
-diff --git a/games/tbs/src/menu/menu/use.c b/games/tbs/src/menu/menu/use.c
-index 714a2dfa6f..6edcd881f1 100644
---- a/games/tbs/src/menu/menu/use.c
-+++ b/games/tbs/src/menu/menu/use.c
+   unit->attack = stats->attack;
+diff --git a/games/tbs/src/menu/menu_use.c b/games/tbs/src/menu/menu_use.c
+index 62acdc5e9d..cdb6ed3785 100644
+--- a/games/tbs/src/menu/menu_use.c
++++ b/games/tbs/src/menu/menu_use.c
 @@ -4,6 +4,7 @@
  // Part of menu.c.
  
- #include "../menu_internal.h"
+ #include "menu_internal.h"
 +#include "arena_config.h"
  
- /// Copies the first sprite palette into background palette 14 and makes a
- /// highlight palette in palette 13. Nothing calls it.
-@@ -55,6 +56,15 @@ s32 Item_Use(s32 slot, s32 memberId, s32 targetId) {
- /// Nothing calls it.
- s32 Item_ReturnOne(void) { return 1; }
+ /// Lends HIGHLIGHT_PALETTE to the item icons and makes the highlight in the
+ /// palette below it instead. Nothing calls it.
+@@ -50,6 +51,15 @@ s32 Item_Use(s32 slot, s32 memberId, s32 targetId) {
+ /// Unused: returns 1.
+ UNUSED s32 Item_UseReturnTrue(void) { return 1; }
  
 +#if ARENA_RULES_REVIVE
 +/// The HP a revival restores: with ARENA_RULES_REVIVE the ability's power in
@@ -728,29 +667,28 @@ index 714a2dfa6f..6edcd881f1 100644
 +
  /// Applies the healing, curing, revival or lasting stat rise of action
  /// effectId, used by party member sourceId, to targetId, or to every party
- /// member when the action's range is ABILITY_RANGE_ALL. Item_Use passes
-@@ -150,6 +160,12 @@ s32 Ability_ApplyToTargets(s32 effectId, s32 sourceId, s32 targetId,
-     // and plus one a quarter of the time (a roll of 0 to 3: 0 gives -1, 1 gives
-     // +1, 2 and 3 give 0); Luck rises by power alone.
+ /// member when the action's range is ABILITY_RANGE_ALL.
+@@ -133,6 +143,11 @@ s32 Ability_ApplyToTargets(s32 effectId, s32 sourceId, s32 targetId,
+ 
+     // The stat items.
      case ABILITY_FORMULA_NO_POWER:
 +#if ARENA_RULES_ITEMS
 +      // Reloaded ("Item Stat-boost Randomness Removal"): the stat rises by
 +      // exactly its power.
 +      randomAdjust = 0;
-+      randomDifference = 0;
 +#else
-       randomAdjust = (Random16() * 4) >> 16;
-       if (randomAdjust == 0) {
-         randomAdjust = -1;
-@@ -158,6 +174,7 @@ s32 Ability_ApplyToTargets(s32 effectId, s32 sourceId, s32 targetId,
-         randomAdjust = (u32)((-randomDifference) | randomDifference) >> 31;
-         randomAdjust = 1 - randomAdjust;
-       }
+       // The rise varies by -1, 0 (half the time) or 1.
+       randomAdjust = Random16_Below(4);
+       if (randomAdjust == 0)
+@@ -141,6 +156,7 @@ s32 Ability_ApplyToTargets(s32 effectId, s32 sourceId, s32 targetId,
+         randomAdjust = 1;
+       else
+         randomAdjust = 0;
 +#endif
  
        switch (effectId & PSYNERGY_ABILITY_MASK) {
        case ABILITY_POWER_BREAD:
-@@ -270,7 +287,7 @@ s32 Ability_ApplyToTargets(s32 effectId, s32 sourceId, s32 targetId,
+@@ -254,7 +270,7 @@ s32 Ability_ApplyToTargets(s32 effectId, s32 sourceId, s32 targetId,
  
      case ABILITY_EFFECT_REVIVE:
        if (target->hp == 0) {
@@ -759,7 +697,7 @@ index 714a2dfa6f..6edcd881f1 100644
          Unit_RecalculateGaugesFar(targetId);
          changed = 1;
          if (partyResultShown == 0)
-@@ -285,7 +302,7 @@ s32 Ability_ApplyToTargets(s32 effectId, s32 sourceId, s32 targetId,
+@@ -269,7 +285,7 @@ s32 Ability_ApplyToTargets(s32 effectId, s32 sourceId, s32 targetId,
      // is used from the menus. Dew gives 7/10 of maximum HP here.
      case ABILITY_EFFECT_REVIVE_HALF:
        if (target->hp == 0) {
@@ -768,39 +706,15 @@ index 714a2dfa6f..6edcd881f1 100644
          Unit_RecalculateGaugesFar(targetId);
          if (partyResultShown == 0)
            messageOffset = ITEM_USE_RESULT_REVIVED;
-@@ -296,7 +313,7 @@ s32 Ability_ApplyToTargets(s32 effectId, s32 sourceId, s32 targetId,
+@@ -280,7 +296,7 @@ s32 Ability_ApplyToTargets(s32 effectId, s32 sourceId, s32 targetId,
  
-     case ABILITY_EFFECT_REVIVE_80:
+     case ABILITY_EFFECT_DEW:
        if (target->hp == 0) {
 -        target->hp = target->hpMax * 7 / 10;
 +        target->hp = MENU_REVIVE_HP(target->hpMax * 7 / 10);
          Unit_RecalculateGaugesFar(targetId);
          if (partyResultShown == 0)
            messageOffset = ITEM_USE_RESULT_REVIVED;
-diff --git a/games/tbs/src/window/screens/battle_status.c b/games/tbs/src/window/screens/battle_status.c
-index c0db325de9..a556e1070e 100644
---- a/games/tbs/src/window/screens/battle_status.c
-+++ b/games/tbs/src/window/screens/battle_status.c
-@@ -3,6 +3,7 @@
- // Part of screens.c.
- 
- #include "../screens_internal.h"
-+#include "arena_config.h"
- 
- #if LANGUAGE != LANGUAGE_JAPANESE
- #define OWNER_STATUS_TEXT_MAX 128
-@@ -719,7 +720,11 @@ s32 BattleStatusScreen_Run(u16 *list, s32 listCount, s32 member) {
-           break;
-         case OWNER_CONDITION_RESISTANCE_UP:
-         case OWNER_CONDITION_RESISTANCE_DOWN:
-+          #if ARENA_RULES_STAGES
-+          helpValue = unit->resistanceStage * 15; // Reloaded, as Unit_Calculate
-+#else
-           helpValue = unit->resistanceStage * 20;
-+#endif
- #if TBS_PATCH_4
-           if (helpValue < 0) {
-             helpValue = -helpValue;
 -- 
-2.53.0
+2.43.0
 

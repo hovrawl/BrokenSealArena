@@ -1,4 +1,4 @@
-From 1dd514d08cf5b03e02c5d39337a19e5bea9c05d6 Mon Sep 17 00:00:00 2001
+From c221c2fd49904ccddc276824dae989bc411723e9 Mon Sep 17 00:00:00 2001
 From: Nathan Singh <nathan.singh@hotmail.com>
 Date: Fri, 30 Oct 2026 14:51:40 +1100
 Subject: [PATCH] Arena: the attendant's and the party manager's menus
@@ -14,86 +14,22 @@ ARENA_TRAINING.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- games/tbs/objects.tsv                     |   1 +
- games/tbs/src/scene/arena_menu.c          | 142 ++++++++++++++++++++++
- games/tbs/src/scene/battle_arena.c        |  40 ++++++
- games/tbs/src/scene/import/battle_arena.s |  19 +++
- games/tbs/src/system/overlay/imports.inc  |   9 ++
- 5 files changed, 211 insertions(+)
+ games/tbs/src/scene/arena_menu.c         | 92 ++++++++++++++++++++++++
+ games/tbs/src/scene/battle_arena.c       | 40 +++++++++++
+ games/tbs/src/system/overlay/imports.inc |  9 +++
+ 3 files changed, 141 insertions(+)
  create mode 100644 games/tbs/src/scene/arena_menu.c
 
-diff --git a/games/tbs/objects.tsv b/games/tbs/objects.tsv
-index ac61056b73..fda6256374 100644
---- a/games/tbs/objects.tsv
-+++ b/games/tbs/objects.tsv
-@@ -995,6 +995,7 @@ main	rom_tail_02	games/tbs/src/system/overlay/overlays
- 3ca	bss	games/tbs/src/scene/lemurian_ship	.bss
- 3cb	text	games/tbs/src/scene/entry/battle_arena
- 3cb	text	games/tbs/src/scene/battle_arena
-+3cb	text	games/tbs/src/scene/arena_menu
- 3cb	text	games/tbs/src/scene/import/battle_arena
- 3cb	text	libgcc.a:_call_via_rX
- 3cb	bss	games/tbs/src/scene/battle_arena	.bss
 diff --git a/games/tbs/src/scene/arena_menu.c b/games/tbs/src/scene/arena_menu.c
 new file mode 100644
-index 0000000000..99372baaa9
+index 0000000000..971da48968
 --- /dev/null
 +++ b/games/tbs/src/scene/arena_menu.c
-@@ -0,0 +1,142 @@
+@@ -0,0 +1,92 @@
 +/// @file
 +/// Arena romhack: the attendant and party manager menus (ARENA_TRAINING).
 +
-+#include "arena_config.h"
-+#include "module/arena.h"
-+#include "module/import.h"
-+#include "djinn_ids.h"
-+#include "module/shop/shop.h"
-+#include "render_input.h"
-+#include "sprite.h"
-+#include "module/scene/battle_arena.h"
-+#include "module/field/field_sequence.h"
-+#include "module/field/event_commands.h"
-+#include "module/battle/battle.h"
-+#include "module/field/field.h"
-+#include "module/game/game.h"
-+#include "module/window/window.h"
-+#include "module/window/screens.h"
-+#include "module/system/system.h"
-+#include "battle.h"
-+#include "input.h"
-+#include "debug.h"
-+#include "field.h"
-+#include "game.h"
-+#include "graphics.h"
-+#include "menu.h"
-+#include "types.h"
-+#include "edition.h"
-+#include "far_call.h"
-+#include "sound.h"
-+#include "system.h"
-+#include "edition.h"
-+#include "types.h"
-+#include "event.h"
-+#include "event_inline.h"
-+#include "io_reg.h"
-+#include "serial.h"
-+#include "iwram_call.h"
-+#include "character.h"
-+#include "heap_release.h"
-+#include "tbs_edition.h"
-+#include "text/msg_ids.h"
-+#include "task.h"
-+#include "scene_ids.h"
-+#include "main_routine_work.h"
-+#include "battle_side.h"
-+#include "irq_lock.h"
-+#include "sound_driver_symbols.h"
-+#include "scene_tables.h"
-+#include "frame.h"
-+#include "flags.h"
-+#include "heap_slots.h"
-+#include "sounds.h"
-+#include "heap.h"
++// Part of battle_arena.c (included at its end), which has the includes.
 +
 +// Arena romhack: the arena's own menus. The attendant asks Solo or Multiplayer
 +// and, for Solo, which tournament. The party manager (the man at the counter's
@@ -144,7 +80,7 @@ index 0000000000..99372baaa9
 +  MessageArgument_ClearAll();
 +  MessageArgument_Push(reward, MESSAGE_ARGUMENT_NUMBER);
 +  Event_SetMessageId(MsgArenaVictory);
-+  FieldMessage_ShowAtActor(actorId, 0);
++  Event_OpenMessage(actorId, 0);
 +  Party_RestoreHpPp(1);
 +}
 +
@@ -156,7 +92,7 @@ index 0000000000..99372baaa9
 +  s32 member;
 +
 +  Event_Start();
-+  Actor_SetAngleToward(actorId, gMainRoutineWork.leaderActorId, 0);
++  Actor_FaceActor(actorId, gMainRoutineState.leaderActorId, 0);
 +  for (;;) {
 +    choice = ArenaMenu_IconChoose(MsgArenaManagerPrompt,
 +                                  gArenaMenu_ManagerIcons, MsgArenaCharacters,
@@ -183,30 +119,19 @@ index 0000000000..99372baaa9
 +  return 0;
 +}
 diff --git a/games/tbs/src/scene/battle_arena.c b/games/tbs/src/scene/battle_arena.c
-index c5acee0b29..2b47d4b4f9 100644
+index 4eb10dee6b..00efa6fef7 100644
 --- a/games/tbs/src/scene/battle_arena.c
 +++ b/games/tbs/src/scene/battle_arena.c
-@@ -2,8 +2,11 @@
- /// The Battle Arena overlay: starting linked and monster battles, the exchange
- /// of the two parties, the attendant and the records of wins.
+@@ -15,6 +15,8 @@
+ /// Most of the code is the link: the two consoles publish where each player
+ /// stands in the arranging, and trade their parties before the battle.
  
 +#include "arena_config.h"
-+
- #include "module/import.h"
- #include "module/scene/battle_arena.h"
-+#include "module/arena.h"
- #include "module/field/field_sequence.h"
- #include "module/field/event_commands.h"
- #include "module/battle/battle.h"
-@@ -1061,6 +1064,7 @@ static s32 BattleArena_EnterBattle(void) {
- #endif
- }
- 
-+
- /// Talking to ACTOR_ATTENDANT, who arranges a battle. With no partner, offers
- /// a monster battle. With one, calls off a monster battle in waiting, then asks
- /// the player to apply or to accept the partner's request; a yes is published
-@@ -1073,6 +1077,9 @@ static s32 BattleArena_ChooseBattleMode(void) {
++#include "arena/arena.h"
+ #include "flags.h"
+ #include "stddef.h"
+ #include "types.h"
+@@ -1012,12 +1014,24 @@ static s32 BattleArena_ChooseBattleMode(void) {
    s32 answer;
    s32 messageBase;
    s32 messageId;
@@ -214,12 +139,11 @@ index c5acee0b29..2b47d4b4f9 100644
 +  s32 mode;
 +#endif
  
-   // The attendant's lines from MsgLobbyPleaseSpeakWhen: +1 asks the player to
-   // apply, +2 to accept the partner's request, +3 and +7 send the player to
-@@ -1081,6 +1088,15 @@ static s32 BattleArena_ChooseBattleMode(void) {
+   // The attendant's lines follow "Please speak to me when you want to fight in
+   // a battle." (MsgLobbyPleaseSpeakWhen), as quoted where each is chosen.
    messageBase = MsgLobbyPleaseSpeakWhen;
    Event_Start();
-   Actor_SetAngleToward(ACTOR_ATTENDANT, gMainRoutineWork.leaderActorId, 0);
+   Actor_FaceActor(ACTOR_ATTENDANT, gMainRoutineState.leaderActorId, 0);
 +#if ARENA_TRAINING
 +  // Solo or Multiplayer, unless a series is already under way.
 +  mode = 2;
@@ -229,25 +153,26 @@ index c5acee0b29..2b47d4b4f9 100644
 +      goto leave;
 +  }
 +#endif
-   // Look for the partner's signature twice, a frame apart.
-   if (BattleArena_PeerSlotMatches(LOBBY_SLOT_SIGNATURE) == 0) {
+   if (BattleArena_PeerSlotMatches(BATTLE_ARENA_SLOT_SIGNATURE) == 0) {
      wait(1);
-@@ -1089,9 +1105,14 @@ static s32 BattleArena_ChooseBattleMode(void) {
-     BattleArena_WriteSlotValue(LOBBY_SLOT_ALONE);
-     BattleArena_InitializeSerial();
+   }
+@@ -1025,10 +1039,15 @@ static s32 BattleArena_ChooseBattleMode(void) {
+     BattleArena_WriteSlotValue(BATTLE_ARENA_SLOT_ALONE);
+     BattleArena_RestartLink();
      if (!Event_GetFlag(FLAG_MONSTER_BATTLE)) {
 +#if ARENA_TRAINING
 +      // The menu has asked: Solo starts a series, Multiplayer waits for a link.
 +      answer = (mode == 1) ? YES : NO;
 +#else
        Event_SetMessageId(messageBase + 5);
-       FieldMessage_ShowAtActor(ACTOR_ATTENDANT, 0);
+       // "You do not have an opponent. Would you like to battle a monster?"
+       Event_OpenMessage(ACTOR_ATTENDANT, 0);
        answer = Event_AskYesNoWithActorAnimation(0, 0);
 +#endif
        // Yes starts a monster series: FLAG_AREA_TEMP_E8's byte and
        // LINK_TALLY_MONSTER_STREAK start at 0.
        if (answer == YES) {
-@@ -1168,6 +1189,9 @@ static s32 BattleArena_ChooseBattleMode(void) {
+@@ -1113,6 +1132,9 @@ static s32 BattleArena_ChooseBattleMode(void) {
        }
      }
    }
@@ -257,7 +182,7 @@ index c5acee0b29..2b47d4b4f9 100644
    Event_End();
  #ifdef UBFIX
    return 0;
-@@ -1574,6 +1598,9 @@ s32 BattleArena_RunRoundResult(void) {
+@@ -1536,6 +1558,9 @@ s32 Scene_Initialize(void) {
      s32 wins;
      s32 messageOffset;
      s32 v;
@@ -267,22 +192,22 @@ index c5acee0b29..2b47d4b4f9 100644
  
      Event_Start();
      Event_StartScreenTransition();
-@@ -1581,6 +1608,14 @@ s32 BattleArena_RunRoundResult(void) {
-     BattleArena_WriteSlotValue(LOBBY_SLOT_ALONE);
-     gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_WINS]++;
-     gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK]++;
+@@ -1543,6 +1568,14 @@ s32 Scene_Initialize(void) {
+     BattleArena_WriteSlotValue(BATTLE_ARENA_SLOT_ALONE);
+     gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_WINS]++;
+     gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_STREAK]++;
 +#if ARENA_TRAINING
 +    // A win pays 200 coins, and 100 more for each win before it in the series.
-+    reward = 200 + 100 * (gMainRoutineWork.linkTallies[LINK_TALLY_MONSTER_STREAK] - 1);
-+    gMainRoutineWork.coins += reward;
-+    if (gMainRoutineWork.coins > 999999)
-+      gMainRoutineWork.coins = 999999;
++    reward = 200 + 100 * (gMainRoutineState.linkTallies[LINK_TALLY_MONSTER_STREAK] - 1);
++    gMainRoutineState.holdings.coins += reward;
++    if (gMainRoutineState.holdings.coins > COIN_MAX)
++      gMainRoutineState.holdings.coins = COIN_MAX;
 +    ArenaMenu_ShowWin(ACTOR_ATTENDANT, reward);
 +#endif
      // The offer has two lines a level (FLAG_MONSTER_BATTLE_WINS, -1 when a
-     // series starts), the even line capped at 14. FLAG_AREA_TEMP_E8's byte
-     // counts the victories 0 to 2; the third raises the level and takes the
-@@ -1863,8 +1898,13 @@ struct Trigger gBattleArenaTriggers[] = {
+     // series starts), the next monster's line going no further than
+     // MONSTER_OFFER_LAST_NEXT. FLAG_AREA_TEMP_E8's byte counts the victories 0
+@@ -1829,8 +1862,13 @@ struct Trigger gBattleArenaTriggers[] = {
      {TRIGGER_TALK, JENNA, CONDITION_ALWAYS, EVENT(BattleArena_TalkByProgress)},
      {TRIGGER_TALK, ACTOR_ATTENDANT, CONDITION_ALWAYS,
       EVENT(BattleArena_ChooseBattleMode)},
@@ -291,82 +216,55 @@ index c5acee0b29..2b47d4b4f9 100644
 +     EVENT(BattleArena_PartyManager)},
 +#else
      {TRIGGER_TALK, ACTOR_LINKED_WINS_TELLER, CONDITION_ALWAYS,
-      EVENT(BattleArena_ReportWinTallies)},
+      EVENT(BattleArena_TellLinkedWins)},
 +#endif
      {TRIGGER_TALK, ACTOR_HEALER, CONDITION_ALWAYS,
       EVENT(BattleArena_OpenSanctum)},
      {TRIGGER_TALK, ACTOR_GREETER, CONDITION_ALWAYS,
-diff --git a/games/tbs/src/scene/import/battle_arena.s b/games/tbs/src/scene/import/battle_arena.s
-index e739667a4f..862b1f18da 100644
---- a/games/tbs/src/scene/import/battle_arena.s
-+++ b/games/tbs/src/scene/import/battle_arena.s
-@@ -27,6 +27,25 @@
- 	.set import.Message_AllTyped, 1
- 	.set import.WindowSprite_PrepareForRedraw, 1
- 	.set import.Text_DrawNumber, 1
-+	.set import.Text_DrawString, 1
-+	.set import.Text_DrawMessage, 1
-+	.set import.Unit_Calculate, 1
-+	.set import.Unit_LearnPsynergy, 1
-+	.set import.Shop_Run, 1
-+	.set import.Djinn_Give, 1
-+	.set import.Djinn_Set, 1
-+	.set import.Window_ClearInteriorTiles, 1
-+	.set import.Text_DrawStringInWindow, 1
-+	.set import.Text_DrawNumberInWindow, 1
-+	.set import.Text_DrawMessageAsTiles, 1
-+	.set import.ArenaMenu_IconChoose, 1
-+	.set import.ItemPicker_ChooseMember, 1
-+	.set import.ArenaShop_Run, 1
-+	.set import.WindowSprite_CreateFromResource, 1
-+	.set import.Sprite_Create, 1
-+	.set import.Sprite_Destroy, 1
-+	.set import.Render_ApplyProjectedPlacement, 1
-+	.set import.Window_SetTilemapEntry, 1
- 	.set import.MessageArgument_ClearAll, 1
- 	.set import.MessageArgument_Push, 1
- 	.set import.Save_ProcessSelectedFile, 1
+@@ -1871,3 +1909,5 @@ struct Trigger gBattleArenaTriggers[] = {
+      EVENT(BattleArena_ReportLinkDisconnected)},
+     {TRIGGER_TABLE_END},
+ };
++
++#include "arena_menu.c"
 diff --git a/games/tbs/src/system/overlay/imports.inc b/games/tbs/src/system/overlay/imports.inc
-index 0e25f4361a..69fbf3cfd1 100644
+index 01b84c1bc9..9637a8d27b 100644
 --- a/games/tbs/src/system/overlay/imports.inc
 +++ b/games/tbs/src/system/overlay/imports.inc
-@@ -75,6 +75,9 @@
- 	import Task_SetFlags, Task_SetFlagsFar
- @ Field bank (far_call/FIELD.S)
- 	import Sprite_StartAnimation, Sprite_StartAnimationFar
-+	import Sprite_Create, Sprite_CreateFar
-+	import Sprite_Destroy, Sprite_DestroyFar
-+	import Render_ApplyProjectedPlacement, Actor_ApplyProjectedPlacementFar
- 	import Sprite_AddAnimation, Sprite_AddAnimationFar
- 	import SpriteAnimation_Clear, SpriteAnimation_ClearFar
- 	import Actor_SelectAnimation, Actor_SelectAnimationFar
-@@ -164,6 +167,8 @@
- 	import Menu_AnimateSelectionToEntry, Menu_AnimateSelectionToEntryFar
- 	import Save_CountFilesExcludingSent, Save_CountFilesExcludingSentFar
- 	import Link_DrawPageArrows, Link_DrawPageArrowsFar
-+	import ArenaMenu_IconChoose, ArenaMenu_IconChooseFar
-+	import WindowSprite_CreateFromResource, WindowSprite_CreateFromResourceFar
- @ Game bank (far_call/GAME.S)
- 	import Djinn_GetRecoveryTable, Djinn_GetRecoveryTableFar
- 	import Unit_Get, Unit_GetFar
-@@ -195,6 +200,8 @@
- 	import DjinnRecovery_AddStandby, DjinnRecovery_AddStandbyFar
- 	import Djinn_Transfer, Djinn_TransferFar
- 	import Unit_LevelUpTo, Unit_LevelUpToFar
-+	import Unit_LearnPsynergy, Unit_LearnPsynergyFar
-+	import Window_ClearInteriorTiles, Window_ClearInteriorTilesFar
- 	import Party_AdjustCoins, Party_AdjustCoinsFar
- 	import Item_AdjustCounter, Item_AdjustCounterFar
- 	import Inventory_Count, Inventory_CountFar
-@@ -357,6 +364,8 @@
- 	import ItemPicker_Run, ItemPicker_RunFar
- 	import Sound_WaitForJingle, Sound_WaitForJingleFar
- 	import Inn_PlaySleep, Inn_PlaySleepFar
-+	import ItemPicker_ChooseMember, ItemPicker_ChooseMemberFar
-+	import ArenaShop_Run, ArenaShop_RunFar
- @ Battle bank (far_call/BATTLE.S)
- 	import DjinnRecovery_CountDownTwenty, DjinnRecovery_CountDownTwentyFar
- 	import DebugParameterSet_Load, DebugParameterSet_LoadFar
+@@ -63,6 +63,9 @@
+ 	export Task_SetFlags, Task_SetFlagsFar
+ @ Field bank (far_call/field.s)
+ 	export Sprite_StartAnimation, Sprite_StartAnimationFar
++	export Sprite_Create, Sprite_CreateFar
++	export Sprite_Destroy, Sprite_DestroyFar
++	export Render_ApplyProjectedPlacement, Render_ApplyProjectedPlacementFar
+ 	export Sprite_AddAnimation, Sprite_AddAnimationFar
+ 	export SpriteAnimation_Clear, SpriteAnimation_ClearFar
+ 	export Actor_SelectAnimation, Actor_SelectAnimationFar
+@@ -183,6 +186,8 @@
+ 	export DjinnRecovery_AddStandby, DjinnRecovery_AddStandbyFar
+ 	export Djinn_Transfer, Djinn_TransferFar
+ 	export Unit_LevelUpTo, Unit_LevelUpToFar
++	export Unit_LearnPsynergy, Unit_LearnPsynergyFar
++	export Window_ClearInteriorTiles, Window_ClearInteriorTilesFar
+ 	export Party_AdjustCoins, Party_AdjustCoinsFar
+ 	export Item_AdjustRareItemStock, Item_AdjustRareItemStockFar
+ 	export Inventory_Count, Inventory_CountFar
+@@ -345,6 +350,8 @@
+ 	export ItemPicker_Run, ItemPicker_RunFar
+ 	export Sound_WaitForJingle, Sound_WaitForJingleFar
+ 	export Inn_PlaySleep, Inn_PlaySleepFar
++	export ItemPicker_ChooseMember, ItemPicker_ChooseMemberFar
++	export ArenaShop_Run, ArenaShop_RunFar
+ @ Battle bank (far_call/battle.s)
+ 	export DjinnRecovery_CountDownTwenty, DjinnRecovery_CountDownTwentyFar
+ 	export DebugParameterSet_Load, DebugParameterSet_LoadFar
+@@ -359,3 +366,5 @@
+ 	export Sound_SetBgmTempo, Sound_SetBgmTempoFar
+ 	export Sound_GetBgmRestoreDelay, Sound_GetBgmRestoreDelayFar
+ 	export Sound_WaitForBgmRestore, Sound_WaitForBgmRestoreFar
++	export ArenaMenu_IconChoose, ArenaMenu_IconChooseFar
++	export WindowSprite_CreateFromResource, WindowSprite_CreateFromResourceFar
 -- 
-2.53.0
+2.43.0
 

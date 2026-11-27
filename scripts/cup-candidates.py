@@ -155,7 +155,7 @@ def parse_djinn_ids():
 
 
 def parse_zone_consts():
-    t = read("include/module/field/field_sequence.h")
+    t = read("include/field/field_sequence.h")
     d = {m.group(1): int(m.group(2)) for m in re.finditer(r"(ENCOUNTER_ZONE_\w+) = (\d+)", t)}
     return d
 
@@ -201,7 +201,7 @@ def parse_items():
 
 
 def parse_stock():
-    text = read("src/shop/shop/stock.c")
+    text = read("src/shop/shop_stock.c")
     body = text[text.index("sStockTable[SHOP_STOCK_ROWS][SHOP_STOCK_COLUMNS] = {"):]
     body = body[:body.index("};")]
     rows = []
@@ -514,7 +514,7 @@ def main():
     w("")
 
     # today's ladders, with their sprite slots
-    lad = read("src/battle/battle/arena_ladder.c")
+    lad = read("src/battle/arena_ladder.c")
     w("## Today's ladders (`arena_ladder.c`), with sprite slots")
     w("")
     w("Six sprite slots a team: a small enemy takes 1, any other 2 (`BattleFormation_BuildEnemyList`).")
