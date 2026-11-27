@@ -1176,6 +1176,50 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
 - Verified (headless): `touch_battle_240/288.txt`, every icon of the Fight
   and member rows shows.
 
+## 62. Native: the field menu's Item screen opens
+
+- Select, then Item, crashed the desktop build (keys too):
+  `ItemMenu_RunCommands` hides `menu->selectedItemIcon` before
+  `ItemMenu_SelectMember` has made it, the first time round. The cartridge's
+  null write lands in the BIOS; under `UBFIX` it is skipped. GBA unchanged.
+- Verified (headless): Select, Item, Garet's items, the commands, Details.
+
+## 63. Native: drag to walk, tap to talk, touch on the field menu
+
+- Drags (`native/touch.h`): a press that moves 8 pixels is a drag and never a
+  tap; `Touch_Drag` gives its heading and distance from a centre that trails
+  the finger by at most 40 pixels (a virtual stick where the finger went down).
+- The field (`include/arena/field_touch.h`): a drag steers the leader in any
+  direction (`FIELD_TOUCH_STEER` in `Actor_UpdatePlayerControl`: the drag's
+  heading in place of the pad's), past 28 pixels running; a tap in the 96-pixel
+  square round the middle of the safe area presses A (talk, check), as Nathan
+  asked ("standing in front and tapping on the center-ish of the screen"). The
+  leader is not always at the centre (at the room's bottom edge the camera
+  stops), so a later step could aim at the leader's own place.
+- Messages: a tap anywhere moves one on (`Text_CheckTextDismissed`); a finger
+  held down hurries the text and pauses, as a held button.
+- The field menu (`include/arena/menu_touch.h`): the party row on the
+  Psynergy, Item and Status screens and the Psynergy target picker, the
+  Psynergy and item lists, and the item commands (rows 8 pixels apart, as on
+  the GBA: small for fingers) take taps the same way as every other menu.
+- The battle Summon list takes taps and has the lists' Back button.
+- Headless `drag X0 Y0 X1 Y1 N` script command; `docs/CONTROLS.md` lists every
+  key, button, gesture and option.
+- The GBA ROM is byte-identical (checked against the build before 62).
+  A hook written `gKeysPressed |= 0` was not: `gKeysPressed` is volatile, so
+  the GBA build kept a load and store; such hooks are empty statements there.
+- Verified (headless, `--ui touch`): `touch_walk_240/288.txt` (greeter lines
+  by taps, walk and run by drags to the attendant, tap to talk: her menu
+  opens), `touch_fieldmenu_240/288.txt`, `touch_fielditems_240/288.txt`,
+  `touch_djinn_240.txt` (buy Flint, Djinn list by taps, unleash, next round's
+  Summon list, its targets, Back twice), `touch_lists_240.txt` (the item list:
+  select, choose, Back). Earlier touch scripts (shop, manager, Pause, picker,
+  mechanics, battle) still pass. Not checked: the SDL window itself (only the
+  headless front end runs in the cloud).
+- Known: the battle Djinn list's Back button is hidden under its stat preview
+  (from 60; right-click or Z still go back). The field has no on-screen Start
+  or Select yet, so a touch-only player cannot open the Pause or field menu.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

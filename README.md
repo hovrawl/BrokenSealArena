@@ -25,6 +25,12 @@ cd ~/alchemy && make -j$(nproc) tbs-en     # out/tbs-en/tbs-en.gba
 On Windows, `build.ps1` builds and copies the ROM to `build\tbs-en.gba`. Start with
 `AGENTS.md` and `docs/WORKFLOW.md`.
 
+**Controls** (keyboard, gamepad, mouse and touch, and the desktop build's
+options such as `--ui touch`): [`docs/CONTROLS.md`](docs/CONTROLS.md). In short:
+arrows walk, X is A, Z is B, Enter is Start, Backspace is Select, A and S are L
+and R, hold Tab to fast-forward; drag to walk, tap the middle of the screen to
+talk, tap a choice and tap it again to confirm.
+
 The Broken Seal builds from source with no cartridge. `rom/` (your own dump, if you
 keep one) and `build/` are never committed, and nothing here includes game ROMs.
 Golden Sun belongs to Camelot and Nintendo; this is an unofficial fan project.

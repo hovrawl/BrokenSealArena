@@ -1,0 +1,31 @@
+# The field menu's Item screens by touch at width 288 (the 240 script moved right 24): Item (the second icon,
+# tap twice), Garet's figure (tap, tap again: his items), his second item
+# (tap, tap again: the commands), then Equip and Details on the commands'
+# top row (tap to select each), and Details chosen with a second tap.
+include to_lobby.txt
+tap S
+wait 90
+touch 126 148
+wait 10
+touch 126 148
+wait 90
+touch 64 20
+wait 20
+shot /tmp/shots/i0.png
+touch 64 20
+wait 60
+touch 194 60
+wait 20
+shot /tmp/shots/i1.png
+touch 194 60
+wait 60
+shot /tmp/shots/i2.png
+touch 184 36
+wait 20
+shot /tmp/shots/i3.png
+touch 229 36
+wait 20
+shot /tmp/shots/i4.png
+touch 229 36
+wait 60
+shot /tmp/shots/i5.png

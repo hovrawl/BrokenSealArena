@@ -1,0 +1,38 @@
+# Touch in the field at width 288 (the 240 script moved right 24), no keys:
+# taps move the greeter's lines on, a drag
+# walks Isaac to the attendant (the way attendant.txt walks with the pad), a
+# long drag runs, and a tap near the middle of the screen talks to her.
+wait 900
+touch 54 30
+wait 40
+touch 224 40
+wait 40
+touch 144 80
+wait 40
+touch 144 80
+wait 60
+touch 144 80
+wait 40
+touch 144 80
+wait 40
+touch 144 80
+wait 60
+touch 144 80
+wait 40
+touch 144 80
+wait 60
+shot /tmp/shots/w0.png
+# walk up (a 20-pixel drag: under TOUCH_DRAG_RUN), then left
+drag 144 100 144 80 34
+shot /tmp/shots/w1.png
+drag 164 80 144 80 38
+shot /tmp/shots/w2.png
+# run up (a 36-pixel drag), then left and up to the attendant
+drag 144 116 144 80 34
+drag 164 80 144 80 6
+drag 144 100 144 80 6
+shot /tmp/shots/w3.png
+# a tap near the middle: A, the attendant speaks
+touch 144 84
+wait 150
+shot /tmp/shots/w4.png

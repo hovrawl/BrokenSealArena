@@ -1,0 +1,40 @@
+From a94e7f52ba88e8c54872be286e4be35eecf2eac8 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 27 Nov 2026 21:37:33 +0000
+Subject: [PATCH] Native: the field menu's Item screen opens
+
+Select, then Item, crashed the desktop build: ItemMenu_RunCommands hides
+menu->selectedItemIcon before ItemMenu_SelectMember has made it, the first
+time round. On the cartridge the null pointer's write lands in the BIOS,
+which ignores it; natively it is a segfault. Under UBFIX (the native build)
+the write is skipped while the icon is not there yet.
+
+The GBA ROM is unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8yjRdqf92zfRQjJVu8H
+---
+ games/tbs/src/menu/menu_item.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/games/tbs/src/menu/menu_item.c b/games/tbs/src/menu/menu_item.c
+index 0af2dd1fc9..7a65a8fd41 100644
+--- a/games/tbs/src/menu/menu_item.c
++++ b/games/tbs/src/menu/menu_item.c
+@@ -232,7 +232,12 @@ s32 ItemMenu_RunCommands(s32 *memberOut, s32 *targetOut, s32 *itemOut) {
+       menu->selectedSlots[0] = 0;
+       ItemMenu_FitMessageWindowToQuestion();
+       ItemMenu_PlaceItemWindowBelowQuestion();
+-      menu->selectedItemIcon->motion = ICON_HIDDEN;
++      // The first time round, ItemMenu_SelectMember has not made the icon
++      // yet: the cartridge writes through the null pointer into the BIOS.
++#ifdef UBFIX
++      if (menu->selectedItemIcon != NULL)
++#endif
++        menu->selectedItemIcon->motion = ICON_HIDDEN;
+       ItemMenu_DrawMessage(0, MsgWhoseItem);
+ #if TBS_PATCH_1
+       WindowSprite_RedrawSavedRectFar(menu->descriptionWindow);
+-- 
+2.43.0
+

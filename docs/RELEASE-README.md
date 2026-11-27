@@ -31,6 +31,12 @@ The first build downloads and compiles old compilers (about 500 MB, and it takes
 a long time); later builds are quick. The result is `build/tbs-en.gba`. Linux
 and Windows (MSYS2) are the tested paths; macOS is untested.
 
+## Controls
+
+See `docs/CONTROLS.md` for the desktop build's keys, gamepad, mouse and touch
+(drag to walk, tap to talk, tap a choice and tap it again to confirm) and its
+command-line options. The GBA ROM uses the console's buttons.
+
 ## Credits
 
 This project stands on two bases, and could not exist without them:

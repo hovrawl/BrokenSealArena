@@ -141,6 +141,15 @@
   least the cartridge's size, or the copy overruns the next global.
 - Building or running downloaded code (SDL3 from source) is blocked in the cloud sessions;
   the SDL front end is checked there with `-fsyntax-only` against the SDL3 headers only.
+- `gKeysPressed` and `gKeysHeld` are volatile: a GBA-side hook that expands to
+  `gKeysPressed |= 0` still loads and stores, and the ROM changes. Make the GBA
+  macro an empty statement (`((void)0)`) and do the `|=` inside the native
+  helper (`FieldTouch_AddKeys`).
+- The headless `--shots DIR` makes DIR but not its parents; a missing parent
+  writes nothing and still exits 0.
+- The battle command row's icons move with their count (four for a member
+  without Djinn, five with Djinn, six with a Summon ready): tap positions in a
+  script depend on the party's Djinn.
 
 ## Flags we claim
 

@@ -64,6 +64,16 @@ out/native-tbs-en-headless/tbs-native --script <repo>/scripts/smoke/fight.txt --
 python3 port/tools/sheet.py build/native-shots
 ```
 
+The native front end adds commands of its own: `touch X Y` (a tap at a screen pixel: down 4
+frames, up, then 20 frames of nothing), `drag X0 Y0 X1 Y1 N` (down at the first point, slid to the
+second over six frames, held there N frames, let go, then 20 frames), and `screen NAME`. Pass the
+layout and width the script was written for (`--ui touch --width 240`, or 288 for a `_288`
+script). The touch scripts are `touch_*_240.txt` and `touch_*_288.txt`: `touch_walk` (the field:
+drag to walk and run, tap to talk, taps through messages), `touch_fieldmenu` and
+`touch_fielditems` (Select's menu), `touch_djinn_240` and `touch_lists_240` (the battle Djinn,
+Summon and item lists), and the shop, manager, Pause, picker, mechanics, counter, class viewer
+and battle ones.
+
 `fight.txt` fights the Gauntlet's first team to the win (checked natively; on the GBA the frame
 counts should match, not yet checked there).
 

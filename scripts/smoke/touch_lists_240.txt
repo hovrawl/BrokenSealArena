@@ -1,0 +1,43 @@
+# The battle Djinn and item lists by touch at width 240 (--ui touch): Fight,
+# Djinn (tap, tap again: the list), its second row (tap: selected), Back; Item
+# (tap, tap again: the list), its first row, Back; then Djinn again and the
+# first Djinni chosen by tapping it twice (Isaac unleashes it, so the next
+# round has one on standby for a Summon).
+include battle.txt
+touch 120 80
+wait 50
+touch 120 80
+wait 50
+touch 120 80
+wait 50
+touch 100 148
+wait 60
+touch 140 148
+wait 10
+touch 140 148
+wait 60
+shot /tmp/shots/l0.png
+touch 180 112
+wait 20
+shot /tmp/shots/l1.png
+touch 24 84
+wait 40
+touch 164 148
+wait 10
+touch 164 148
+wait 60
+shot /tmp/shots/l2.png
+touch 180 96
+wait 20
+shot /tmp/shots/l3.png
+touch 24 84
+wait 40
+touch 140 148
+wait 10
+touch 140 148
+wait 60
+touch 180 96
+wait 20
+touch 180 96
+wait 60
+shot /tmp/shots/l4.png

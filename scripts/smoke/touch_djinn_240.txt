@@ -1,0 +1,139 @@
+# Battle lists by touch with Djinn (--ui touch --width 240): buy Flint for
+# Isaac, start the Gauntlet, unleash Flint from the Djinn list by taps, then
+# look at a Summon list in the next round.
+include to_manager.txt
+tap R
+wait 20
+tap A
+wait 150
+tap A
+wait 150
+tap A
+wait 60
+tap B
+wait 120
+tap B
+wait 120
+tap B
+wait 120
+press L 58
+press D 80
+wait 30
+press U 40
+press L 44
+press U 60
+press L 10
+press U 10
+tap A
+wait 150
+tap A
+wait 150
+tap A
+wait 200
+tap A
+wait 200
+press R 40
+press U 30
+press R 14
+wait 60
+tap A
+wait 900
+touch 120 80
+wait 50
+touch 120 80
+wait 50
+touch 120 80
+wait 50
+touch 120 80
+wait 50
+touch 120 80
+wait 50
+shot /tmp/shots/s0.png
+# Fight, then Isaac's row: Djinn is the third icon
+touch 100 148
+wait 60
+shot /tmp/shots/s1.png
+touch 112 148
+wait 10
+touch 112 148
+wait 60
+shot /tmp/shots/s2.png
+# the first Djinni: tap (selected), tap again (chosen), then the target
+touch 200 96
+wait 20
+touch 200 96
+wait 60
+shot /tmp/shots/s3.png
+touch 65 100
+wait 30
+touch 65 100
+wait 60
+shot /tmp/shots/s4.png
+# Garet, Mia and Ivan attack (keys), the round plays out, its messages go on
+# by taps, and Isaac's row has Summon: open its list by touch.
+tap A
+wait 30
+tap A
+wait 30
+tap A
+wait 60
+tap A
+wait 30
+tap A
+wait 30
+tap A
+wait 60
+tap A
+wait 30
+tap A
+wait 30
+tap A
+wait 300
+shot /tmp/shots/s5.png
+touch 120 80
+wait 60
+touch 120 80
+wait 60
+touch 120 80
+wait 60
+touch 120 80
+wait 60
+touch 120 80
+wait 60
+touch 120 80
+wait 60
+touch 120 80
+wait 60
+touch 120 80
+wait 60
+touch 120 80
+wait 60
+touch 120 80
+wait 60
+touch 120 80
+wait 60
+touch 120 80
+wait 60
+shot /tmp/shots/s6.png
+touch 100 148
+wait 60
+shot /tmp/shots/s7.png
+# Summon: the fourth of six icons; tap, tap again: the list
+touch 117 148
+wait 10
+touch 117 148
+wait 60
+shot /tmp/shots/s8.png
+# its first row chosen by a second tap: the targets
+touch 200 96
+wait 30
+touch 200 96
+wait 60
+shot /tmp/shots/s9.png
+# Back to the list, Back to the row
+touch 24 84
+wait 40
+shot /tmp/shots/s10.png
+touch 24 84
+wait 40
+shot /tmp/shots/s11.png
