@@ -1,4 +1,4 @@
-From b989480d424a87a2031e28f9f8532648808ea86a Mon Sep 17 00:00:00 2001
+From 3b04bf4446e7ac4e8ce247b47ba719c0198869fa Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Fri, 27 Nov 2026 21:37:55 +0000
 Subject: [PATCH] Native: drag to walk, tap to talk, touch on the field menu
@@ -43,10 +43,11 @@ Claude-Session: https://claude.ai/code/session_014ta8yjRdqf92zfRQjJVu8H
  games/tbs/src/window/window_typing.c          |  3 +-
  port/README.md                                | 22 ++++-
  port/include/native/touch.h                   | 13 +++
+ port/src/native_platform.c                    |  1 +
  port/src/native_touch.c                       | 56 +++++++++++-
  port/src/platform_headless.c                  | 36 ++++++--
  port/src/platform_sdl.c                       |  6 +-
- 14 files changed, 314 insertions(+), 19 deletions(-)
+ 15 files changed, 315 insertions(+), 19 deletions(-)
  create mode 100644 games/tbs/include/arena/field_touch.h
  create mode 100644 games/tbs/include/arena/menu_touch.h
 
@@ -522,6 +523,18 @@ index cdcdb5ca07..63fdd65910 100644
  /// 1 while the pointer is down; its place in screen pixels.
  int Touch_Held(int *x, int *y);
  /// A Back button that stays on screen while the game runs its own loops (the
+diff --git a/port/src/native_platform.c b/port/src/native_platform.c
+index 191c6e2c5a..065c052d81 100644
+--- a/port/src/native_platform.c
++++ b/port/src/native_platform.c
+@@ -7,6 +7,7 @@
+ #include "native/native.h"
+ #include "native/dev.h"
+ #include "native/overlay.h"
++#include "native/touch.h"
+ 
+ #include <errno.h>
+ #include <stdarg.h>
 diff --git a/port/src/native_touch.c b/port/src/native_touch.c
 index 69efc706a6..ec94b2885b 100644
 --- a/port/src/native_touch.c
@@ -695,5 +708,5 @@ index 8abd54b620..940addf52c 100644
  #include "native/native.h"
  
 -- 
-2.43.0
+2.56.1
 
