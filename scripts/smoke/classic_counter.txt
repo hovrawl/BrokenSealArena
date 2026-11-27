@@ -1,0 +1,15 @@
+# The stat counter with keys (run with --ui classic for the GBA layout):
+# Characters, Isaac, the counter with its prompt, Right twice, then B.
+include to_manager.txt
+tap A
+wait 60
+tap A
+wait 120
+shot /tmp/shots/s0.png
+tap R
+tap R
+wait 20
+shot /tmp/shots/s1.png
+tap B
+wait 60
+shot /tmp/shots/s2.png

@@ -1,0 +1,33 @@
+# The stat and Djinn counters, touch layout at width 240: Characters, Isaac,
+# the stat counter (header with his name and Back), tap the third stat, tap
+# it again (no boosts yet: the notice), Back; then the Djinn counter for
+# Garet, tap the second Djinni, Back.
+include to_manager.txt
+tap A
+wait 60
+tap A
+wait 90
+shot /tmp/shots/s0.png
+touch 80 112
+wait 20
+shot /tmp/shots/s1.png
+touch 80 112
+wait 20
+shot /tmp/shots/s2.png
+touch 212 12
+wait 60
+shot /tmp/shots/s3.png
+tap R
+tap A
+wait 60
+touch 44 124
+wait 20
+touch 44 124
+wait 90
+shot /tmp/shots/s4.png
+touch 48 112
+wait 20
+shot /tmp/shots/s5.png
+touch 212 12
+wait 60
+shot /tmp/shots/s6.png

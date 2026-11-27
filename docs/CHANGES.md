@@ -1125,6 +1125,17 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
 - Verified (headless): `touch_mechanics_240/288.txt`, `screen_mechanics.txt`
   with `--ui classic`.
 
+## 58. The counters' touch layout
+
+- `ArenaShop_Run` (stat and Djinn counters): in the touch layout a header
+  (the buyer's name, Back) replaces the "What would you like?" prompt; the
+  price, coins, stock row and description windows keep their rows and run
+  the full width (coins at the right edge). Classic is unchanged.
+- Verified (headless): `touch_counter_240/288.txt` (stat counter: tap a stat,
+  tap again for the no-boosts notice, Back; Djinn counter for Garet: tap a
+  Djinni, Back; figures sit on their price tags at both widths),
+  `classic_counter.txt` with `--ui classic`.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.
