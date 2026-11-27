@@ -1100,6 +1100,31 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
   `touch_classviewer_240/288.txt` again (unchanged). The GBA ROM builds; not
   run on mGBA here.
 
+## 56. The member picker's touch layout
+
+- `ItemPicker_ChooseMember` (party manager, scholar): in the touch layout the
+  status and Djinn panels open full width under a header (the panel's name,
+  `MsgArenaCharacters` or the next message; Back), the party strip below as
+  before. Classic is unchanged; the items mode stays classic in both. Djinn
+  figures are placed from the panel window's position.
+- Verified (headless): `touch_picker_240/288.txt` (status panel, tap a member,
+  Back; Djinn panel, tap a member twice to open the Djinn counter, B, Back),
+  `classic_picker.txt` with `--ui classic`. Djinn figures in the panel were
+  not seen (a new game has no Djinn).
+
+## 57. The mechanics library, as the game's menus
+
+- The owner found the text-only topic list not Golden Sun enough. The topics
+  are now laid out as the field Psynergy and Item menus: a name window, the
+  six topics in two columns with an icon each (Weaken, Venus Star, Long
+  Sword, Sol Blade, Sleep, Ragnarok), and a line about the chosen topic along
+  the bottom (`MsgArenaMechHint0` to `5`). Classic: windows stacked at the
+  bottom, 16-pixel rows, the right column 100 pixels on (room for "Physical
+  or magic"). Touch: header with Back, 24-pixel rows across the full width.
+- `UiList` gains grids (`UiList_SetGrid`) and per-entry icons.
+- Verified (headless): `touch_mechanics_240/288.txt`, `screen_mechanics.txt`
+  with `--ui classic`.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

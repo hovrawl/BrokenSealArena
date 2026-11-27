@@ -1,0 +1,85 @@
+From 75493a82fc60ec862c8c733f64d985d149eae823 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 27 Nov 2026 08:16:22 +0000
+Subject: [PATCH] Member picker: the touch layout on the UI kit
+
+In the touch layout the party manager's and the scholar's member picker
+opens full width with a header (the panel's name, Back), the status or
+Djinn panel under it and the party strip below. The classic layout is
+unchanged. Djinn figures are placed from the panel window's position.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8ykfbWFo924wEqysLhg
+---
+ games/tbs/src/shop/arena_shop.c | 27 ++++++++++++++++++++++++---
+ 1 file changed, 24 insertions(+), 3 deletions(-)
+
+diff --git a/games/tbs/src/shop/arena_shop.c b/games/tbs/src/shop/arena_shop.c
+index 8c6c845691..60cc7f7b10 100644
+--- a/games/tbs/src/shop/arena_shop.c
++++ b/games/tbs/src/shop/arena_shop.c
+@@ -86,8 +86,8 @@ static s32 ArenaPicker_DrawDjinn(struct Window *window, s32 unitId,
+       if (figure != 0) {
+         Sprite_StartAnimationFar(figure, 2);
+         figures[shown] = figure;
+-        positions[shown * 2] = 8 + x + 8;
+-        positions[shown * 2 + 1] = 8 + y + 19;
++        positions[shown * 2] = window->x * 8 + 8 + x + 8;
++        positions[shown * 2 + 1] = window->y * 8 + 8 + y + 19;
+       } else {
+         Window_SetTilemapEntryFar(window, ARENA_ELEMENT_TILE + element, x / 8,
+                                   (y + 8) / 8, 0);
+@@ -193,13 +193,29 @@ s32 ItemPicker_ChooseMember(s32 mode) {
+   s32 redraw = 1;
+   s32 unitId = 0;
+   s32 result = 0;
++  s32 touch;
++  struct Window *header = 0;
+   s32 i;
+ 
+   for (i = 0; i < ARENA_PANEL_DJINN_MAX; i++)
+     figures[i] = 0;
++  // The touch layout (panels only): a header with the screen's name and
++  // Back across the top, the panel under it at full width, the strip below.
++  touch = UI_TOUCH_LAYOUT && mode != ARENA_PICKER_ITEMS;
++  if (touch)
++    UiScreen_BeginFullWidth();
+   Shop_InitializeState();
+   shop = gMenuState;
+-  if (mode == ARENA_PICKER_ITEMS) {
++  if (touch) {
++    header = UiHeader_Open();
++    UiHeader_Draw(header, UI_HEADER_BACK_BUTTON);
++    Text_DrawMessageAsTilesFar(MsgArenaCharacters +
++                                   (mode == ARENA_PICKER_STATUS ? 0 : 1),
++                               header, 6, 0);
++    shop->itemWindow =
++        Window_CreateFar(0, 3, UI_SCREEN_TILES, 10, WINDOW_FLAG_INSTANT);
++    shop->moneyWindow = 0;
++  } else if (mode == ARENA_PICKER_ITEMS) {
+     shop->moneyWindow =
+         Window_CreateFar(0, 9, SHOP_MONEY_WINDOW_WIDTH, 4, WINDOW_FLAG_INSTANT);
+     shop->itemWindow = Window_CreateFar(16, 12, 14, 8, WINDOW_FLAG_INSTANT);
+@@ -251,6 +267,7 @@ s32 ItemPicker_ChooseMember(s32 mode) {
+         ArenaFigure_Place(figures[i], positions[i * 2], positions[i * 2 + 1],
+                           ARENA_FIGURE_SCALE);
+     }
++    UiHeader_Touch(header, UI_HEADER_BACK_BUTTON);
+ #ifdef NATIVE
+     if (WindowTouch_PickMember(partyWindow, shop->partyMemberCount,
+                                &memberIndex)) {
+@@ -290,7 +307,11 @@ s32 ItemPicker_ChooseMember(s32 mode) {
+   Window_CloseFar(partyWindow, 2);
+   Window_CloseFar(shop->itemWindow, 2);
+   Window_CloseFar(shop->moneyWindow, 2);
++  if (header != 0)
++    Window_CloseFar(header, 2);
+   wait(1);
++  if (touch)
++    UiScreen_EndFullWidth();
+   Shop_ReleaseState();
+   return result;
+ }
+-- 
+2.43.0
+

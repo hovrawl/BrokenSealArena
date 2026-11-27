@@ -177,9 +177,15 @@ change costs nothing, before it costs a build.
     rows past the window scroll, with the shop's blinking page arrows at the
     right edge (tap an arrow to scroll a page); a tap selects a row and a tap
     on the selected row chooses it. Classic layouts pass 16-pixel rows, touch
-    layouts `UI_ROW_HEIGHT`.
-- Used by: class viewer (header), mechanics topic list (header with title,
-  list). `--ui-size` stops at 24 until every list scrolls.
+    layouts `UI_ROW_HEIGHT`. `UiList_SetGrid(list, columns, columnWidth)`
+    makes it a grid read across (Left and Right move an entry); `list.icons`
+    (pairs of `ICON_KIND_*`, id) puts an icon 20 pixels before each name, the
+    hand then 30 pixels before the name, as the Psynergy and Item menus.
+  - Topic lists look like the game's menus, never bare text: a name window,
+    icon and name entries, and a line about the chosen entry along the bottom
+    (the mechanics library).
+- Used by: class viewer (header), mechanics library (header, icon grid,
+  hint line), member picker (header). `--ui-size` stops at 24 until every list scrolls.
 
 ## 4. Standard layouts we have already used
 

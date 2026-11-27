@@ -1,0 +1,30 @@
+# The party manager's member picker, touch layout at width 288: Characters
+# (status panel), tap the second member, Back in the header; then Djinn (a
+# panel of figures), tap the third member, tap it again to open the Djinn
+# counter, B, and Back.
+include to_manager.txt
+tap A
+wait 60
+shot /tmp/shots/p0.png
+touch 44 124
+wait 20
+shot /tmp/shots/p1.png
+touch 260 12
+wait 60
+shot /tmp/shots/p2.png
+tap R
+tap A
+wait 60
+shot /tmp/shots/p3.png
+touch 68 124
+wait 20
+shot /tmp/shots/p4.png
+touch 68 124
+wait 90
+shot /tmp/shots/p5.png
+tap B
+wait 60
+shot /tmp/shots/p6.png
+touch 260 12
+wait 60
+shot /tmp/shots/p7.png

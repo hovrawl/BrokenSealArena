@@ -1,16 +1,16 @@
-# The mechanics topic list on the UI kit at width 288 (--ui touch): the list,
-# a tap on the second topic, the page-down arrow, then Back.
+# The mechanics library, touch layout at width 288: the topics (two columns
+# of icon and name, the line about the topic at the bottom), a tap on the
+# second topic, a tap on the fifth, Down (wraps to the top), then Back.
 include to_lobby.txt
 screen mechanics
 wait 60
 shot /tmp/shots/m0.png
-touch 80 68
+touch 174 44
 wait 20
 shot /tmp/shots/m1.png
-touch 272 150
+touch 60 92
 wait 20
 shot /tmp/shots/m2.png
-tap D
 tap D
 wait 20
 shot /tmp/shots/m3.png

@@ -12,6 +12,13 @@ MSGS = [
     ('MsgArenaUiPrevious', '{button_icon:3}'),
     ('MsgArenaUiNext', '{button_icon:4}'),
     ('MsgArenaUiMechanicsTitle', 'Battle mechanics'),
+    # The mechanics library's line under the topics, one per topic.
+    ('MsgArenaMechHint0', 'Find the element a foe resists least.'),
+    ('MsgArenaMechHint1', 'Power, Resist, and what Djinn add.'),
+    ('MsgArenaMechHint2', 'How much a hit or Psynergy deals.'),
+    ('MsgArenaMechHint3', 'How often a weapon unleashes.'),
+    ('MsgArenaMechHint4', 'The odds of sleep, poison and more.'),
+    ('MsgArenaMechHint5', 'Which moves count as physical.'),
 ]
 
 text = open(PO).read()

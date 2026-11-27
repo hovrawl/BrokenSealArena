@@ -1,14 +1,13 @@
-# The mechanics topic list (run with --ui classic for the original layout):
-# the list, two rows down, up past the top (wraps), then B.
+# The mechanics library (run with --ui classic for the GBA layout): the
+# topics, Down, Right, Up twice (wraps to the bottom line), then B.
 include to_lobby.txt
 screen mechanics
 wait 60
 shot /tmp/shots/m0.png
 tap D
-tap D
+tap R
 wait 20
 shot /tmp/shots/m1.png
-tap U
 tap U
 tap U
 wait 20

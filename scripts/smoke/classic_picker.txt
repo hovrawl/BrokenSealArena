@@ -1,0 +1,15 @@
+# The party manager's member picker with keys (run with --ui classic for the
+# GBA layout): Characters, Right to the second member, B, then Djinn.
+include to_manager.txt
+tap A
+wait 60
+shot /tmp/shots/p0.png
+tap R
+wait 20
+shot /tmp/shots/p1.png
+tap B
+wait 60
+tap R
+tap A
+wait 60
+shot /tmp/shots/p2.png
