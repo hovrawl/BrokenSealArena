@@ -1,0 +1,132 @@
+From 6044ba0be600b6116993c5d8f04be32afa639633 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sat, 28 Nov 2026 09:18:31 +1100
+Subject: [PATCH] Native: tap a person to face and talk to them
+
+In a room, a tap on a person within 48 pixels who has a talk event turns
+the leader to face them and requests the talk, as A does once it has
+found someone. Reach is wider than the A check (32) so a person across a
+counter or off to the side answers. A tap elsewhere near the middle
+still presses A (the field menu when nothing is ahead). Desktop build
+only; the GBA ROM is unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/arena/field_touch.h | 76 ++++++++++++++++++++++++++-
+ port/README.md                        |  8 ++-
+ 2 files changed, 81 insertions(+), 3 deletions(-)
+
+diff --git a/games/tbs/include/arena/field_touch.h b/games/tbs/include/arena/field_touch.h
+index 6c06c17048..6d22b71a43 100644
+--- a/games/tbs/include/arena/field_touch.h
++++ b/games/tbs/include/arena/field_touch.h
+@@ -38,12 +38,86 @@
+     heading_;                                                                  \
+   })
+ 
+-/// A tap round the leader adds A to this frame's keys.
++// The field's own files (field_internal.h) have the actors and the camera;
++// the window code includes this for the message helpers only.
++#ifdef ALCHEMY_FIELD_INTERNAL_H
++/// A person's tap target round the feet's place on screen: 24 pixels wide and
++/// from 32 above the feet to 6 below (a standing figure and its shadow).
++#define FIELD_TOUCH_PERSON_HALF_WIDTH 12
++#define FIELD_TOUCH_PERSON_ABOVE 32
++#define FIELD_TOUCH_PERSON_BELOW 6
++/// Reach, in pixels, measured as the A check measures it
++/// (Field_FindNearbyTalkTarget: an ACTOR_NEAR_TALK actor's distance counted
++/// ten thirteenths), but 48 where A's is 32: a tap names who is meant, so a
++/// person across a counter, or a step off to the side, is in reach too.
++#define FIELD_TOUCH_REACH 48
++/// field_sequence_run.c's FIELD_TALK_REQUEST: the talk request's flag.
++#define FIELD_TOUCH_TALK_REQUEST (1 << 12)
++
++/// A tap on a person within reach who has something to say: the leader turns
++/// to face them, as an event's Actor_FaceActor does, and the field is asked to
++/// talk to them, as A does once it has found them (field_sequence_run.c), so
++/// their script runs and they turn to the leader. Returns 1 when it did. The
++/// rooms' flat camera only (not the world map): a person's feet are at
++/// (x, z - height) less the view's corner.
++static inline s32 FieldTouch_TalkToTapped(void) {
++  struct FieldState *state = gFieldState;
++  s32 leaderId = gMainRoutineState.leaderActorId;
++  struct Actor *leader = Actor_Lookup(leaderId);
++  struct MapGridScrollState *grid = gMapGridState[0];
++  s32 viewX, viewZ, id;
++
++  if (state == NULL || state->mode == ACTOR_SYSTEM_WORLD_MAP ||
++      leader == 0 || grid == 0)
++    return 0;
++  viewX = MapGridScrollState_View(grid)[0] & FIELD_PIXEL_MASK;
++  viewZ = MapGridScrollState_View(grid)[1] & FIELD_PIXEL_MASK;
++  for (id = 0; id < ACTOR_ID_COUNT; id++) {
++    struct Actor *person = Actor_Lookup(id);
++    s32 dx, dy, dz, distance, feetX, feetY;
++
++    if (id == leaderId || person == 0 || person->script == 0 ||
++        (person->spriteStorageKind & ACTOR_SPRITE_KIND_MASK) !=
++            ACTOR_SPRITE_ONE ||
++        (person->collisionFlags & ACTOR_NOT_TARGETED) != 0)
++      continue;
++    dx = (person->x.fixed - leader->x.fixed) / FIXED_ONE;
++    dy = (person->y.fixed - leader->y.fixed) / FIXED_ONE;
++    dz = (person->z.fixed - leader->z.fixed) / FIXED_ONE;
++    distance = Iwram_Sqrt(dx * dx + dy * dy + dz * dz);
++    if ((person->collisionFlags & ACTOR_NEAR_TALK) != 0)
++      distance = distance * 10 / 13;
++    if (distance >= FIELD_TOUCH_REACH || dy >= 48 || dy <= -48)
++      continue;
++    feetX = FIXEDtoINT(person->x.fixed - viewX);
++    feetY = FIXEDtoINT(person->z.fixed - viewZ - person->y.fixed);
++    if (Scene_FindActorTalkTrigger(id) == 0 ||
++        !Touch_TappedRect(feetX - FIELD_TOUCH_PERSON_HALF_WIDTH,
++                          feetY - FIELD_TOUCH_PERSON_ABOVE,
++                          FIELD_TOUCH_PERSON_HALF_WIDTH * 2,
++                          FIELD_TOUCH_PERSON_ABOVE + FIELD_TOUCH_PERSON_BELOW))
++      continue;
++    leader->facing = Trig_Atan(person->z.fixed - leader->z.fixed,
++                               person->x.fixed - leader->x.fixed);
++    AreaNameWindow_HideFar();
++    state->talk = id | FIELD_TOUCH_TALK_REQUEST;
++    state->fieldMenu = 0;
++    return 1;
++  }
++  return 0;
++}
++
++/// A tap on a person near the leader talks to them; else a tap round the
++/// leader adds A to this frame's keys (talk to or check what is ahead, or the
++/// field menu when nothing is).
+ static inline void FieldTouch_AddKeys(void) {
++  if (FieldTouch_TalkToTapped())
++    return;
+   if (Touch_TappedUiRect(FIELD_TOUCH_ACT_X, FIELD_TOUCH_ACT_Y,
+                          FIELD_TOUCH_ACT_SIZE, FIELD_TOUCH_ACT_SIZE))
+     gKeysPressed |= KEY_A;
+ }
++#endif
+ 
+ /// 1 while a finger is down: as a held button, it hurries a message's text
+ /// and its pauses.
+diff --git a/port/README.md b/port/README.md
+index d3caa5988d..901016ee56 100644
+--- a/port/README.md
++++ b/port/README.md
+@@ -73,8 +73,12 @@ and `Touch_Drag` reports its heading and distance from a centre that trails the
+ finger by at most `TOUCH_DRAG_REACH` (a virtual stick where the finger went
+ down). In the field (`include/arena/field_touch.h`) a drag steers the leader in
+ any direction (`FIELD_TOUCH_STEER` in `Actor_UpdatePlayerControl`), past
+-`TOUCH_DRAG_RUN` running; a tap in the 96-pixel square round the middle of the
+-safe area presses A (`Field_CheckConfiguredKeys`); a tap anywhere moves a
++`TOUCH_DRAG_RUN` running; a tap on a person within 48 pixels who has a talk
++event turns the leader to face them and requests the talk itself
++(`FieldTouch_TalkToTapped`: the flat camera's feet place, x and z less height
++less the view's corner, with a 24 by 38 target; A's own reach is 32, too short
++across the lobby's counters); otherwise a tap in the 96-pixel square round the
++middle of the safe area presses A (`Field_CheckConfiguredKeys`); a tap anywhere moves a
+ message on and a held finger hurries its text (`window_messages.c`,
+ `window_typing.c`). The headless build's `drag X0 Y0 X1 Y1 N` presses at
+ (X0, Y0), slides to (X1, Y1) over six frames, holds there N frames and lets go.
+-- 
+2.56.1
+

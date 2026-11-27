@@ -72,7 +72,8 @@ script). The touch scripts are `touch_*_240.txt` and `touch_*_288.txt`: `touch_w
 drag to walk and run, tap to talk, taps through messages), `touch_fieldmenu` and
 `touch_fielditems` (Select's menu), `touch_djinn_240` and `touch_lists_240` (the battle Djinn,
 Summon and item lists), `touch_backtap_240` and `touch_backtap_battle_240` (a
-tap on the background goes back), and the shop, manager, Pause, picker, mechanics, counter, class viewer
+tap on the background goes back), `touch_talkto_240` (tap the attendant from
+below and to the side: Isaac turns, her menu opens), and the shop, manager, Pause, picker, mechanics, counter, class viewer
 and battle ones.
 
 `fight.txt` fights the Gauntlet's first team to the win (checked natively; on the GBA the frame

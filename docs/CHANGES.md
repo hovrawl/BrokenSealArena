@@ -1249,6 +1249,41 @@ back, like a phone"; in the field menu too.
   lands on the wall beside the manager's row, which now closes the row (as
   intended). Not checked: the SDL window itself.
 
+## 65. Native: tap a person to face and talk to them
+
+Nathan, after trying 63: standing just below and to the side of the attendant,
+dragging would not turn Isaac to her; "tapping should hit test if an npc is
+underneath, and turn and interact with that npc". And: "Good that the empty
+tap brings up the standard menu" (kept).
+
+- `FieldTouch_TalkToTapped` (`include/arena/field_touch.h`, called first in
+  `FieldTouch_AddKeys`): for each actor with a single sprite, not the leader
+  and not `ACTOR_NOT_TARGETED`, within reach and with a talk event
+  (`Scene_FindActorTalkTrigger`), a tap on its figure (24 by 38 pixels round
+  the feet's place on screen: x and z less height, less the view's corner, as
+  the rooms' camera places it) turns the leader to face it
+  (`facing = Trig_Atan(dz, dx)`, as `Actor_FaceActorById`) and sets the talk
+  request (`state->talk = id | FIELD_TALK_REQUEST`), as A does once it has
+  found someone; the person's script runs and turns them to the leader.
+- Reach: 48 pixels, measured as A measures it (`ACTOR_NEAR_TALK` counts ten
+  thirteenths, 48 high at most). Tried first: turn and press A. It failed in
+  Nathan's spot: the attendant is 34 pixels away across her counter, past A's
+  32, so A opened the field menu. Requesting the talk directly fixes it.
+- A tap on a person out of reach is not used: it falls through to the middle
+  zone (A) or, on a sprite, does nothing. A tap on the floor near the middle
+  still presses A (the field menu when nothing is ahead).
+- Rooms only (the flat camera); the world map is skipped. Walking up to a
+  person out of reach would need a path (the leader's own steering by
+  `FIELD_TOUCH_STEER` toward them until in reach, stopping at walls): a
+  possible next step.
+- GBA ROM byte-identical (the code is under `NATIVE`).
+- Verified (headless, `--ui touch --width 240`): `touch_talkto_240.txt` walks
+  below and right of the attendant, steps so Isaac faces away, taps her: he
+  turns up-left to her and "What would you like to do?" opens with her icon
+  row; a floor tap closes it (64); a tap on the old man across the room does
+  nothing; a tap on empty floor near the middle opens the field menu. The 20
+  touch scripts and the two back-tap scripts give the same shots as after 64.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

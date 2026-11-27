@@ -35,8 +35,12 @@ SDL feeds a touch screen to the game as the mouse, so the two work the same:
     the leader walks the way you drag, in any direction, like a stick centred
     where you pressed. Drag further (about 28 pixels of the game's screen) to
     run. The centre follows your finger, so turning round takes a short move.
-  - **Tap near the middle of the screen** to talk to or check whatever is in
-    front of the leader (A). Stand facing the person first.
+  - **Tap a person next to you** to face and talk to them: the leader turns to
+    them and they answer, from any side, even across a counter (up to about
+    three steps away). A tap on someone further off does nothing.
+  - **Tap near the middle of the screen** (on the floor, not a person) to check
+    whatever is in front of the leader (A), or open the field menu when
+    nothing is there.
   - **Tap anywhere** to move a message on; keep a finger down to hurry its text.
 - **In menus:** tap a choice to select it, tap it again to confirm. This works
   on the party manager and its shops, the attendant's and manager's icon rows,
