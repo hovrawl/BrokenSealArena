@@ -220,3 +220,8 @@
   win count mid-battle (`cup_clear.txt`). Round 1 of a cup is tuned for the party's level,
   not for the stock-game damage (a level-8 target Vermin hit Isaac for 43).
 - Python written through shell heredocs loses `\n`; write scripts with the Write tool.
+
+- Natively `WINDOW_MAP_WIDTH` is 64 (the window layer's wide map, patch 49),
+  but other BG maps stay 32 wide: code that writes another layer's map (the
+  battle command row's BG1 icons) must index it with `BG_SCREEN_WIDTH`, or
+  the tiles land off the map (patch 61).

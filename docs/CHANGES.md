@@ -1164,10 +1164,17 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
   anywhere to go on from a battle message.
 - Verified (headless): `touch_battle_240/288.txt` (intro messages by taps,
   Fight, Psynergy list, pick Earthquake, its targets, Back twice, Attack, aim
-  at another enemy, confirm, Back from Garet to Isaac). The command row shows
-  only the selected icon natively (BG1's icon tiles do not show; also with
-  keys, so a native rendering gap, not this patch). The Djinn and item lists
+  at another enemy, confirm, Back from Garet to Isaac). The Djinn and item lists
   were built but not tapped in a run.
+
+## 61. Native: the battle command row's icons
+
+- The command row writes its icons into BG1's map (screen block 31, 32 tiles
+  wide in every build) but indexed it with `WINDOW_MAP_WIDTH`, 64 natively
+  since patch 49, so only the selected icon (a sprite) showed. Now
+  `BG_SCREEN_WIDTH`; the GBA build is unchanged (both 32).
+- Verified (headless): `touch_battle_240/288.txt`, every icon of the Fight
+  and member rows shows.
 
 ## Planned
 
