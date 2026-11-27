@@ -50,6 +50,10 @@ SDL feeds a touch screen to the game as the mouse, so the two work the same:
 - **Back:** the **Back** button at the top right (shops, class viewer,
   mechanics) or beside a battle menu presses B. The **right mouse button** is
   always B.
+- **In battle, double tap and hold** to speed through messages, like holding
+  B: tap, then put the finger straight back down near the same spot and keep
+  it there. B is held until you lift it. A quick double tap (both taps short)
+  is still two taps, so tap to select then tap to confirm works as before.
 - **Tap the background to go back**, like a phone's back gesture: a tap on the
   room or the battlefield, outside every window, icon and person, presses B.
   It closes the manager's and attendant's icon rows, the field menu and the

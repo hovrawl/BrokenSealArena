@@ -1,0 +1,28 @@
+# Double tap and hold for B in battle (run with --ui touch --width 240): at
+# the battle's first message, a tap, then the finger down again at once and
+# held: B is held, so the messages race by as with a held B button, and the
+# command row comes up. Then a quick double tap (both short) on the Psynergy
+# list's second row: selected, then chosen (the targets), as two taps.
+include battle.txt
+shot /tmp/shots/h0.png
+hold 120 80 4
+wait 6
+hold 120 80 40
+shot /tmp/shots/h1.png
+hold 120 80 80
+shot /tmp/shots/h2.png
+hold 120 80 80
+wait 30
+shot /tmp/shots/h3.png
+touch 100 148
+wait 60
+touch 116 148
+wait 10
+touch 116 148
+wait 60
+shot /tmp/shots/h4.png
+hold 120 116 4
+wait 6
+hold 120 116 4
+wait 60
+shot /tmp/shots/h5.png

@@ -69,14 +69,14 @@ it the run uses `tbs-native.sav` in the working directory, which is the
 owner's own save when run from the repo root (GOTCHAS, Testing).
 
 The native front end adds commands of its own: `touch X Y` (a tap at a screen pixel: down 4
-frames, up, then 20 frames of nothing), `drag X0 Y0 X1 Y1 N` (down at the first point, slid to the
+frames, up, then 20 frames of nothing), `hold X Y N` (down N frames, up, no pause), `drag X0 Y0 X1 Y1 N` (down at the first point, slid to the
 second over six frames, held there N frames, let go, then 20 frames), and `screen NAME`. Pass the
 layout and width the script was written for (`--ui touch --width 240`, or 288 for a `_288`
 script). The touch scripts are `touch_*_240.txt` and `touch_*_288.txt`: `touch_walk` (the field:
 drag to walk and run, tap to talk, taps through messages), `touch_fieldmenu` and
 `touch_fielditems` (Select's menu), `touch_djinn_240` and `touch_lists_240` (the battle Djinn,
 Summon and item lists), `touch_backtap_240` and `touch_backtap_battle_240` (a
-tap on the background goes back), `touch_iconedge_240` (an icon row tap near the boundary), `touch_talkto_240` (tap the attendant from
+tap on the background goes back), `touch_iconedge_240` (an icon row tap near the boundary), `touch_bhold_240` and `touch_bhold_control_240` (double tap and hold for B in battle), `touch_talkto_240` (tap the attendant from
 below and to the side: Isaac turns, her menu opens), and the shop, manager, Pause, picker, mechanics, counter, class viewer
 and battle ones.
 

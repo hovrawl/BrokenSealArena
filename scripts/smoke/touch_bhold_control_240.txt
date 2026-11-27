@@ -1,0 +1,24 @@
+# Control for touch_bhold_240: one long press, no double tap.
+include battle.txt
+shot /tmp/shots/h0.png
+wait 4
+wait 6
+hold 120 80 40
+shot /tmp/shots/h1.png
+hold 120 80 80
+shot /tmp/shots/h2.png
+hold 120 80 80
+wait 30
+shot /tmp/shots/h3.png
+touch 100 148
+wait 60
+touch 116 148
+wait 10
+touch 116 148
+wait 60
+shot /tmp/shots/h4.png
+hold 120 116 4
+wait 6
+hold 120 116 4
+wait 60
+shot /tmp/shots/h5.png

@@ -1361,6 +1361,32 @@ Nathan: "List UI should have taller list items when in touch layout."
   the whole row, the hand on the selected row, nothing clipped; targets and
   Back from the lists as before.
 
+## 69. Native: double tap and hold for B in battle
+
+Nathan: "For battles, holding B allows auto scrolling text, I think a double
+tap + hold should simulate this."
+
+- `native_touch.c` (`BHold_Update`, `Touch_BHeld`; `Keys_Update` holds B
+  while it is set): a press that starts within 15 frames of a tap's release
+  and 16 pixels of its place, while a battle runs, and is held still for 10
+  frames, holds B until the finger lifts; that release is not a tap. Let go
+  sooner, it is an ordinary tap. A drag cancels it. The first tap does its
+  usual job (moves a message on).
+- Battle indicator: `ArenaWindow_InBattle` (`arena_icon_menu.c`): the window
+  system in battle mode (`WindowState.battleMode`, set by
+  `WindowSystem_InitBattle`, cleared when the field sets the windows up
+  again). No hook in the battle code.
+- Headless `hold X Y N`: the finger down N frames with no pause after (two
+  with a short `wait` between make a double tap).
+- GBA ROM byte-identical.
+- Verified (headless, `--ui touch --width 240`): `touch_bhold_240.txt` at the
+  battle's first message: tap, down again and held, the messages race by and
+  the command row is up 40 frames later; held on the party's row, B does
+  nothing there; a quick double tap on the Psynergy list's second row selects
+  and chooses it (the targets). `touch_bhold_control_240.txt` (one long press,
+  no double tap) is still on the first message at the same point. The 20 touch
+  scripts give the same shots as before.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.
