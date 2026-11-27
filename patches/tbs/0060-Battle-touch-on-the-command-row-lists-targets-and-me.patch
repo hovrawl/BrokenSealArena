@@ -1,0 +1,495 @@
+From d0650165983e32adf7b6bdc0442a3599d840a04a Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 27 Nov 2026 09:02:03 +0000
+Subject: [PATCH] Battle: touch on the command row, lists, targets and messages
+
+In the touch layout (include/arena/battle_touch.h, short hooks in the
+battle menus):
+- the command row: a tap selects an icon, a tap on the selected one
+  chooses it (Fight, Attack, Psynergy and the rest);
+- the Psynergy, Djinn and item lists: a tap selects a row or chooses the
+  selected one; the page arrows turn pages;
+- the targets: a tap on a unit aims at it, a tap on the aimed one confirms
+  (a tap anywhere for an action that takes every unit);
+- a Back button (B) by the open menu: above the portrait in a member's
+  command row, at the left of the lists and the targets;
+- battle messages waiting on the arrow go on with a tap anywhere.
+Classic and the GBA build are unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8ykfbWFo924wEqysLhg
+---
+ games/tbs/include/arena/battle_touch.h        | 125 ++++++++++++++++++
+ games/tbs/src/battle/battle_internal.h        |   1 +
+ games/tbs/src/battle/battle_playback.c        |   1 +
+ games/tbs/src/battle/battle_playback_queue.c  |   2 +
+ games/tbs/src/shop/arena_ui_kit.c             |  19 ++-
+ .../src/window/screens_battle_command_row.c   |  18 +++
+ .../src/window/screens_battle_djinn_menu.c    |   5 +
+ .../tbs/src/window/screens_battle_item_menu.c |   5 +
+ .../src/window/screens_battle_psynergy_menu.c |   5 +
+ games/tbs/src/window/screens_battle_targets.c |  28 ++++
+ games/tbs/src/window/screens_internal.h       |   1 +
+ 11 files changed, 199 insertions(+), 11 deletions(-)
+ create mode 100644 games/tbs/include/arena/battle_touch.h
+
+diff --git a/games/tbs/include/arena/battle_touch.h b/games/tbs/include/arena/battle_touch.h
+new file mode 100644
+index 0000000000..1005b7f5d8
+--- /dev/null
++++ b/games/tbs/include/arena/battle_touch.h
+@@ -0,0 +1,125 @@
++#ifndef GUARD_ARENA_BATTLE_TOUCH_H
++#define GUARD_ARENA_BATTLE_TOUCH_H
++
++/// @file
++/// Touch for the battle menus in the desktop and phone builds (docs/UI.md):
++/// the command row, the Psynergy, Djinn and item lists, the targets, and a
++/// Back button while a menu is open. Each turns a tap into the keys the menu
++/// already reads, so the menus' own code runs unchanged: a tap on another
++/// choice moves there, a tap on the chosen one presses A. Only in the touch
++/// layout (--ui touch); the GBA build and --ui classic have none of it.
++/// Included by the battle menu parts of screens.c.
++
++#include "arena/ui_kit.h"
++
++/// Where the battle menus put their Back button: the lists' at the left of
++/// their top row (the portrait has the bottom left); the command row's above
++/// its portrait.
++#define BATTLE_BACK_LIST_X 0
++#define BATTLE_BACK_LIST_Y 9
++#define BATTLE_BACK_ROW_X 0
++#define BATTLE_BACK_ROW_Y 14
++
++#ifdef NATIVE
++#include "native/touch.h"
++#include "arena/arena_touch.h"
++
++/// A grid of `count` cells, `columns` across, each `width` by `height` from
++/// (left, top) in screen pixels: a tap on another cell moves *selected there
++/// (with the cursor sound) and returns 1; a tap on *selected adds KEY_A to
++/// *keys.
++static inline s32 BattleTouch_PickCell(s32 left, s32 top, s32 width, s32 height,
++                                       s32 columns, s32 count, s32 *selected,
++                                       s32 *keys) {
++  s32 cell;
++
++  if (!UI_TOUCH_LAYOUT)
++    return 0;
++  cell = Touch_TappedUiCell(left, top, width, height, columns, count);
++  if (cell < 0)
++    return 0;
++  if (cell == *selected) {
++    *keys |= KEY_A;
++    return 0;
++  }
++  Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++  *selected = cell;
++  return 1;
++}
++
++/// The battle lists (`pageRows` rows of 16 pixels in `window`, the page
++/// arrows on its top edge): a tap on a row selects it or, on the chosen row,
++/// presses A (gKeysPressed); a tap on a page arrow presses Left or Right
++/// (gKeysRepeat). Call before the menu reads the keys.
++static inline void BattleTouch_List(struct Window *window, s32 pageRows,
++                                    s32 firstEntry, s32 count, s32 *selectedRow,
++                                    s32 *preferredRow) {
++  s32 rows = count - firstEntry;
++  s32 pages = (count + pageRows - 1) / pageRows;
++  s32 row = *selectedRow;
++  s32 keys = 0;
++
++  if (!UI_TOUCH_LAYOUT || count == 0)
++    return;
++  if (rows > pageRows)
++    rows = pageRows;
++  if (pages > 1) {
++    // The arrows sit on the border row, one tile each; taps reach 24 pixels.
++    if (WindowTouch_Cell(window, (window->width - pages - 3) * 8, -8, 8, 8, 1,
++                         1) == 0) {
++      gKeysRepeat |= KEY_LEFT;
++      return;
++    }
++    if (WindowTouch_Cell(window, (window->width - 2) * 8, -8, 8, 8, 1, 1) ==
++        0) {
++      gKeysRepeat |= KEY_RIGHT;
++      return;
++    }
++  }
++  if (BattleTouch_PickCell(window->x * 8 + 8, window->y * 8 + 8,
++                           (window->width - 2) * 8, 16, 1, rows, &row, &keys)) {
++    *selectedRow = row;
++    *preferredRow = row;
++  }
++  gKeysPressed |= keys;
++}
++
++/// A battle message waiting for the player (the bobbing arrow): a tap
++/// anywhere goes on, as A does. Returns KEY_A when tapped, for the caller to
++/// add to the keys it reads.
++static inline u32 BattleTouch_Advance(void) {
++  if (UI_TOUCH_LAYOUT && Touch_TappedRect(0, 0, 0x7fff, 0x7fff))
++    return KEY_A;
++  return 0;
++}
++
++/// The Back button of the battle menus: a small window with B Back at tile
++/// (x, y) whose tap holds B for a frame (Touch_SetBackZone). Returns 0 in the
++/// classic layout. Close with BattleTouch_CloseBack.
++static inline struct Window *BattleTouch_OpenBack(s32 x, s32 y) {
++  struct Window *button;
++
++  if (!UI_TOUCH_LAYOUT)
++    return 0;
++  button = Window_Create(x, y, 6, 3, WINDOW_FLAG_INSTANT);
++  Text_DrawMessageAsTiles(MsgArenaUiBack, button, 0, 0);
++  Touch_SetBackZone(x * 8, y * 8, 48, 24);
++  return button;
++}
++
++static inline void BattleTouch_CloseBack(struct Window *button) {
++  if (button == 0)
++    return;
++  Touch_SetBackZone(0, 0, 0, 0);
++  Window_Close(button, 1);
++}
++
++#else
++#define BattleTouch_Advance() 0
++#define BattleTouch_List(window, pageRows, firstEntry, count, selectedRow,     \
++                         preferredRow)
++#define BattleTouch_OpenBack(x, y) ((struct Window *)0)
++#define BattleTouch_CloseBack(button)
++#endif
++
++#endif
+diff --git a/games/tbs/src/battle/battle_internal.h b/games/tbs/src/battle/battle_internal.h
+index 2157d9cb25..e6dbe624ee 100644
+--- a/games/tbs/src/battle/battle_internal.h
++++ b/games/tbs/src/battle/battle_internal.h
+@@ -111,6 +111,7 @@
+ /// party members (LinkBattle_SendParty), and the opponent's take the first
+ /// three enemy ids from FIRST_ENEMY_UNIT.
+ #include "arena_config.h"
++#include "arena/battle_touch.h"
+ #if ARENA_LINK4
+ #define LINK_PARTY_SIZE 4
+ #else
+diff --git a/games/tbs/src/battle/battle_playback.c b/games/tbs/src/battle/battle_playback.c
+index fdba9ef247..4c281bddba 100644
+--- a/games/tbs/src/battle/battle_playback.c
++++ b/games/tbs/src/battle/battle_playback.c
+@@ -262,6 +262,7 @@ void BattlePlayback_Run(void) {
+       x = window->x * 8 + (offset->x >> 8) + 4;
+       prompt->x = x;
+       prompt->y = CURSOR_BOB_Y() + window->y * 8 + (offset->y >> 8) + 6;
++      gKeysPressedLatch |= BattleTouch_Advance(); // Arena romhack: a tap
+       if ((gKeysHeld & KEY_B) || (gKeysPressedLatch & KEY_ADVANCE) ||
+           ((u32)(gVBlankCount - events->timer) > 10 &&
+            (gKeysHeld & KEY_ADVANCE))) {
+diff --git a/games/tbs/src/battle/battle_playback_queue.c b/games/tbs/src/battle/battle_playback_queue.c
+index 33719fdfac..721f3861bc 100644
+--- a/games/tbs/src/battle/battle_playback_queue.c
++++ b/games/tbs/src/battle/battle_playback_queue.c
+@@ -83,6 +83,7 @@ UNREAD_RESULT BattleMessage_WaitForAdvance(void) {
+     Oam_AddSpriteAtDepth(prompt, OAM_DEPTH_WINDOW);
+     // A held advance key counts only after 16 frames, so one still held from
+     // the previous message does not skip this one; B held goes on at once.
++    gKeysPressed |= BattleTouch_Advance(); // Arena romhack: a tap goes on
+     if ((gKeysHeld & KEY_B) || (gKeysPressed & KEY_ADVANCE) ||
+         (frame > 15 && (gKeysHeld & KEY_ADVANCE)))
+       break;
+@@ -121,6 +122,7 @@ UNREAD_RESULT BattleMessage_WaitForAdvanceAt(s32 x, s32 y) {
+     prompt->oam.f.x = position.x + ((gFrameCount & 4) >> 1) - 4;
+     prompt->oam.f.y = position.y - ((gFrameCount & 4) >> 2) - 8;
+     Oam_AddSpriteAtDepth(prompt, OAM_DEPTH_WINDOW);
++    gKeysPressed |= BattleTouch_Advance(); // Arena romhack: a tap goes on
+     if (gKeysPressed & KEY_ADVANCE)
+       break;
+     wait(1);
+diff --git a/games/tbs/src/shop/arena_ui_kit.c b/games/tbs/src/shop/arena_ui_kit.c
+index fe166d5b4e..c89d62664c 100644
+--- a/games/tbs/src/shop/arena_ui_kit.c
++++ b/games/tbs/src/shop/arena_ui_kit.c
+@@ -92,8 +92,7 @@ void UiBackButton_Close(struct Window *button) {
+ /// `rowHeight` pixels from `top` inside the window, the text `textX` in (the
+ /// hand sits 22 pixels before it), as many rows as fit showing.
+ void UiList_Init(struct UiList *list, struct Window *window, s32 count,
+-                 s32 labelBase, s32 rowHeight, s32 top, s32 textX,
+-                 s32 cursor) {
++                 s32 labelBase, s32 rowHeight, s32 top, s32 textX, s32 cursor) {
+   s32 inside = (window->height - 2) * 8 - top;
+ 
+   list->window = window;
+@@ -176,8 +175,7 @@ void UiList_Draw(struct UiList *list) {
+         icon->depth = 252;
+     }
+     Text_DrawMessageAsTilesFar(list->labelBase + row, window,
+-                               UiList_TextX(list, row),
+-                               UiList_RowY(list, row));
++                               UiList_TextX(list, row), UiList_RowY(list, row));
+   }
+   if (list->first > 0) {
+     struct WindowSprite *icon = WindowSprite_CreateFar(
+@@ -188,18 +186,17 @@ void UiList_Draw(struct UiList *list) {
+     icon->animationStep = 0;
+   }
+   if (list->first + list->visible < list->count) {
+-    struct WindowSprite *icon = WindowSprite_CreateFar(
+-        shop->nextPageIcon, WINDOW_SPRITE_SIZE_16X16, window, arrowX,
+-        (window->height - 2) * 8 - 8);
++    struct WindowSprite *icon =
++        WindowSprite_CreateFar(shop->nextPageIcon, WINDOW_SPRITE_SIZE_16X16,
++                               window, arrowX, (window->height - 2) * 8 - 8);
+ 
+     icon->kind = WINDOW_SPRITE_PLAIN;
+     icon->motion = WINDOW_SPRITE_MOTION_HOP_DOWN_NEXT_PAGE;
+     icon->animationStep = 0;
+   }
+-  MenuCursor_Place(window,
+-                   UiList_TextX(list, list->cursor) -
+-                       (list->icons != 0 ? 30 : 22),
+-                   UiList_RowY(list, list->cursor));
++  MenuCursor_Place(
++      window, UiList_TextX(list, list->cursor) - (list->icons != 0 ? 30 : 22),
++      UiList_RowY(list, list->cursor));
+ }
+ 
+ /// One frame of input: touch (a tap on a row selects it, on the chosen row
+diff --git a/games/tbs/src/window/screens_battle_command_row.c b/games/tbs/src/window/screens_battle_command_row.c
+index ecb170ef26..660916a5e7 100644
+--- a/games/tbs/src/window/screens_battle_command_row.c
++++ b/games/tbs/src/window/screens_battle_command_row.c
+@@ -40,6 +40,7 @@ s32 BattleCommandRow_Run(s32 mode) {
+   s32 keys, repeat;
+   s32 iconSlot;
+   s32 i, kindCount;
++  struct Window *back;
+ 
+   state = WINDOW_STATE;
+   // One 1 KB entry for the selected icon's 32x32, 256-colour sprite.
+@@ -58,6 +59,10 @@ s32 BattleCommandRow_Run(s32 mode) {
+         Window_Create(WINDOW_X, COMMAND_ROW_TOP, DISPLAY_TILE_WIDTH - WINDOW_X,
+                       3, MENU_WINDOW_FLAGS);
+   selectionUi->drawnIndex = -1;
++  // Arena romhack: touch's Back (to the previous member) in a member's row.
++  back = mode != COMMAND_ROW_PARTY
++             ? BattleTouch_OpenBack(BATTLE_BACK_ROW_X, BATTLE_BACK_ROW_Y)
++             : 0;
+   // The commands: Fight, Flee and Status for the party; for a party member
+   // Attack, Psynergy, Djinn and Summon while the party can call a summon (the
+   // recovery table's first word, DjinnRecoveryTable.summonMask), Summon only
+@@ -271,6 +276,18 @@ s32 BattleCommandRow_Run(s32 mode) {
+         navigation->tutorialDelay--;
+       }
+     }
++#ifdef NATIVE
++    {
++      // Arena romhack: a tap on an icon selects it; on the selected one, A.
++      s32 picked = selectionUi->selectedIndex;
++
++      if (BattleTouch_PickCell(selectionUi->entries[0].positionX + 5,
++                               COMMAND_ROW_TOP * 8, COMMAND_ICON_SPACING, 24,
++                               selectionUi->iconCount, selectionUi->iconCount,
++                               &picked, &keys))
++        selectionUi->selectedIndex = picked;
++    }
++#endif
+     if ((keys & KEYS_SHOULDERS) && mode != COMMAND_ROW_PARTY) {
+       command = COMMAND_ROW_STATUS;
+       break;
+@@ -313,6 +330,7 @@ s32 BattleCommandRow_Run(s32 mode) {
+   for (entryIndex = 0; entryIndex < selectionUi->iconCount; entryIndex++)
+     VramCache_FreeEntry(selectionUi->entries[entryIndex].resource);
+   state->holdTilemapUpload = 1;
++  BattleTouch_CloseBack(back);
+   Window_Close(selectionUi->window, 1);
+   // Cover the strip again: seven panels of WINDOW_TILE_COMMAND_PANEL from
+   // column 5.
+diff --git a/games/tbs/src/window/screens_battle_djinn_menu.c b/games/tbs/src/window/screens_battle_djinn_menu.c
+index b55c4dc99c..a8af1702f8 100644
+--- a/games/tbs/src/window/screens_battle_djinn_menu.c
++++ b/games/tbs/src/window/screens_battle_djinn_menu.c
+@@ -55,6 +55,7 @@ s32 BattleDjinnMenu_Run(s32 member, s32 unused) {
+   struct Unit *unit;
+   struct DjinnRecoveryList *list;
+   struct Window *listWindow;
++  struct Window *back;
+   struct Window *iconWindow;
+   struct PartyStatusWindow *partyStatus;
+   u32 selectedDjinn;
+@@ -93,6 +94,7 @@ s32 BattleDjinnMenu_Run(s32 member, s32 unused) {
+                                     WINDOW_FLAG_BORDERED_CANVAS);
+   Text_UseExtraTiles(1);
+   listWindow = Window_Create(21, 9, 9, 11, MENU_WINDOW_FLAGS);
++  back = BattleTouch_OpenBack(BATTLE_BACK_LIST_X, BATTLE_BACK_LIST_Y);
+   BATTLE_MENU_GET_CURSOR(firstEntry, selectedRow, preferredRow);
+   unit = Unit_GetFar(member);
+ 
+@@ -323,6 +325,8 @@ s32 BattleDjinnMenu_Run(s32 member, s32 unused) {
+       Window_MarkTilemapRow(state, listWindow->y - 1);
+     }
+ 
++    BattleTouch_List(listWindow, BATTLE_LIST_ROWS, firstEntry, djinnCount,
++                     &selectedRow, &preferredRow);
+     // Tutorial input replaces live keys but uses the same navigation below.
+     pressed = gKeysPressed;
+     repeated = gKeysRepeat;
+@@ -543,6 +547,7 @@ s32 BattleDjinnMenu_Run(s32 member, s32 unused) {
+   VramCache_FreeEntry(cursorSlot);
+   Window_Close(messageWindow, 1);
+   Window_Close(previewWindow, 1);
++  BattleTouch_CloseBack(back);
+   Window_Close(listWindow, 1);
+   Window_MarkVisibleTextTiles();
+   Text_UseExtraTiles(0);
+diff --git a/games/tbs/src/window/screens_battle_item_menu.c b/games/tbs/src/window/screens_battle_item_menu.c
+index 3007271f02..a28694a6b5 100644
+--- a/games/tbs/src/window/screens_battle_item_menu.c
++++ b/games/tbs/src/window/screens_battle_item_menu.c
+@@ -54,6 +54,7 @@ s32 BattleItemMenu_Run(s32 member, u16 *entries, s32 count) {
+   struct MenuPoint cursorPosition;
+   struct BattleMenuState *navigation;
+   struct Window *window;
++  struct Window *back;
+   s32 firstEntry;
+   s32 selectedRow;
+   s32 item;
+@@ -78,6 +79,7 @@ s32 BattleItemMenu_Run(s32 member, u16 *entries, s32 count) {
+   BATTLE_MENU_GET_CURSOR(firstEntry, selectedRow, preferredRow);
+   window =
+       Window_Create(15, 9, 15, BATTLE_LIST_ROWS * 2 + 1, MENU_WINDOW_FLAGS);
++  back = BattleTouch_OpenBack(BATTLE_BACK_LIST_X, BATTLE_BACK_LIST_Y);
+ 
+   for (i = 0; i < BATTLE_LIST_ROWS; i++) {
+     s32 y = i * 2;
+@@ -219,6 +221,8 @@ s32 BattleItemMenu_Run(s32 member, u16 *entries, s32 count) {
+     BATTLE_MENU_SET_CURSOR(firstEntry, selectedRow, preferredRow);
+     navigation = gBattleMenuState;
+ 
++    BattleTouch_List(window, BATTLE_LIST_ROWS, firstEntry, count, &selectedRow,
++                     &preferredRow);
+     // A takes a usable item; a broken or refused one plays the error sound
+     // and shows why.
+     if ((gKeysPressed & KEY_A) != 0) {
+@@ -315,6 +319,7 @@ s32 BattleItemMenu_Run(s32 member, u16 *entries, s32 count) {
+   }
+ 
+   Window_Close(messageWindow, 1);
++  BattleTouch_CloseBack(back);
+   Window_Close(window, 1);
+   wait(1);
+   VramCache_FreeEntry(cursorHandle);
+diff --git a/games/tbs/src/window/screens_battle_psynergy_menu.c b/games/tbs/src/window/screens_battle_psynergy_menu.c
+index a87e9f1e1e..054d486b6e 100644
+--- a/games/tbs/src/window/screens_battle_psynergy_menu.c
++++ b/games/tbs/src/window/screens_battle_psynergy_menu.c
+@@ -22,6 +22,7 @@ s32 BattlePsynergyMenu_Run(s32 unitId, u16 *actions, s32 count) {
+   struct MenuPoint cursorPosition;
+   struct BattleMenuState *navigation;
+   struct Window *window;
++  struct Window *back;
+   s32 selectedRow;
+   s32 encodedAction;
+   s32 iconTile;
+@@ -46,6 +47,7 @@ s32 BattlePsynergyMenu_Run(s32 unitId, u16 *actions, s32 count) {
+   iconCount = BATTLE_LIST_ROWS;
+   BATTLE_MENU_GET_CURSOR(firstEntry, selectedRow, preferredRow);
+   window = Window_Create(9, 9, 21, BATTLE_LIST_ROWS * 2 + 1, MENU_WINDOW_FLAGS);
++  back = BattleTouch_OpenBack(BATTLE_BACK_LIST_X, BATTLE_BACK_LIST_Y);
+ 
+   for (i = 0; i < BATTLE_LIST_ROWS; i++) {
+     s32 y = i * 2;
+@@ -204,6 +206,8 @@ s32 BattlePsynergyMenu_Run(s32 unitId, u16 *actions, s32 count) {
+ 
+     BATTLE_MENU_SET_CURSOR(firstEntry, selectedRow, preferredRow);
+     navigation = gBattleMenuState;
++    BattleTouch_List(window, BATTLE_LIST_ROWS, firstEntry, count, &selectedRow,
++                     &preferredRow);
+ 
+     if ((gKeysPressed & KEY_A) != 0) {
+       if (count != 0) {
+@@ -283,6 +287,7 @@ s32 BattlePsynergyMenu_Run(s32 unitId, u16 *actions, s32 count) {
+     wait(1);
+   }
+ 
++  BattleTouch_CloseBack(back);
+   Window_Close(messageWindow, 1);
+   Window_Close(window, 1);
+   wait(1);
+diff --git a/games/tbs/src/window/screens_battle_targets.c b/games/tbs/src/window/screens_battle_targets.c
+index c6732c6179..37f4acae6c 100644
+--- a/games/tbs/src/window/screens_battle_targets.c
++++ b/games/tbs/src/window/screens_battle_targets.c
+@@ -144,6 +144,7 @@ s32 BattleTarget_RunSelection(s32 selection, s32 mode, u32 spread, u32 kind) {
+   struct BattleState *battle;
+   struct Window *window;
+   struct Window *conditionWindow;
++  struct Window *back;
+   s32 targetIndex;
+   s32 targetCount;
+   s32 candidateCount;
+@@ -273,6 +274,7 @@ s32 BattleTarget_RunSelection(s32 selection, s32 mode, u32 spread, u32 kind) {
+   window = Window_Create(0, TARGET_NAME_WINDOW_ROW, DISPLAY_TILE_WIDTH, 4,
+                          WINDOW_FLAG_INSTANT | WINDOW_FLAG_TEXT_CANVAS |
+                              WINDOW_FLAG_OUTLINED_TEXT);
++  back = BattleTouch_OpenBack(BATTLE_BACK_LIST_X, BATTLE_BACK_LIST_Y);
+   do {
+     /* FAKEMATCH(temporary): firstSprite holds &cursorSprites[0]. */
+     firstSprite = cursorSprites;
+@@ -699,6 +701,31 @@ s32 BattleTarget_RunSelection(s32 selection, s32 mode, u32 spread, u32 kind) {
+         Oam_AddSpriteAtDepth(marker, OAM_DEPTH_WINDOW);
+       }
+     }
++#ifdef NATIVE
++    // Arena romhack: a tap on a unit aims at it; on the aimed one, A.
++    if (UI_TOUCH_LAYOUT && spread != ABILITY_RANGE_ALL) {
++      struct ScreenPoint point;
++      s32 k;
++
++      for (k = 0; k < candidateCount; k++) {
++        if (candidateIds[k] == BATTLE_UNIT_REMOVED)
++          continue;
++        BattleMotion_ProjectCursorPointFar(candidateIds[k], &point);
++        if (!Touch_TappedRect(point.x - 16, point.y - 8, 32, 48))
++          continue;
++        if (k == targetIndex) {
++          gKeysPressed |= KEY_A;
++        } else {
++          Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++          targetIndex = k;
++          redraw |= TARGET_REDRAW_SPREAD;
++        }
++        break;
++      }
++    } else if (UI_TOUCH_LAYOUT && Touch_TappedRect(0, 0, DISPLAY_WIDTH, 96)) {
++      gKeysPressed |= KEY_A; // every unit: a tap on the field confirms
++    }
++#endif
+     pressed = gKeysPressed;
+     repeated = gKeysRepeat;
+     if (gBattleMenuState->tutorialStep) {
+@@ -766,6 +793,7 @@ s32 BattleTarget_RunSelection(s32 selection, s32 mode, u32 spread, u32 kind) {
+   VramCache_FreeEntry(cursorSlot);
+   if (conditionWindow != 0)
+     Window_Close(conditionWindow, 1);
++  BattleTouch_CloseBack(back);
+   Window_Close(window, 1);
+   BattleHighlight_SetModesFar(candidateIds, HIGHLIGHT_OFF);
+   gBattleMenuState->targetViewOffset = 0;
+diff --git a/games/tbs/src/window/screens_internal.h b/games/tbs/src/window/screens_internal.h
+index cedfac0ac1..acc8863f33 100644
+--- a/games/tbs/src/window/screens_internal.h
++++ b/games/tbs/src/window/screens_internal.h
+@@ -41,6 +41,7 @@
+ #include "window/scales.h"
+ #include "window/select.h"
+ #include "window/text_font.h"
++#include "arena/battle_touch.h"
+ 
+ #ifdef MODERN
+ // The menu object calls these window functions with no prototype in scope, so
+-- 
+2.43.0
+

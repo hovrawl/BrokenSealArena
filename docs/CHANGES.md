@@ -1152,6 +1152,23 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
   Sell, Back, Back out of the shop), `touch_shop_288.txt` with
   `--ui classic` (the centred layout as before).
 
+## 60. Battle menus by touch
+
+- `include/arena/battle_touch.h` and short hooks in `screens_battle_*.c`,
+  `battle_playback.c` and `battle_playback_queue.c`, all in the touch layout
+  only: command row icons (tap to select, tap the selected one to choose),
+  the Psynergy, Djinn and item lists (rows; page arrows), targets (tap a unit
+  to aim, tap again to confirm; a tap anywhere for an all-units action), a
+  Back button window (B, through `Touch_SetBackZone`) above the portrait in
+  a member's row and at the left of the lists and targets, and a tap
+  anywhere to go on from a battle message.
+- Verified (headless): `touch_battle_240/288.txt` (intro messages by taps,
+  Fight, Psynergy list, pick Earthquake, its targets, Back twice, Attack, aim
+  at another enemy, confirm, Back from Garet to Isaac). The command row shows
+  only the selected icon natively (BG1's icon tiles do not show; also with
+  keys, so a native rendering gap, not this patch). The Djinn and item lists
+  were built but not tapped in a run.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.
