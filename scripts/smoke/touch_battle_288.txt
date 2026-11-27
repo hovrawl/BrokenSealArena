@@ -1,3 +1,4 @@
+# List rows are the touch layout's 24 pixels (patch 68): taps aim at row centres.
 # Battle menus by touch (the intro messages go on by taps too) at width 288 (--ui touch): Fight (tap the selected
 # icon), Psynergy (tap, tap again: the list with Back at the bottom left), the
 # second Psynergy (tap, tap again: targets), Back twice (to the row), Attack
@@ -19,10 +20,10 @@ wait 10
 touch 116 148
 wait 60
 shot /tmp/shots/t2.png
-touch 120 104
+touch 120 116
 wait 20
 shot /tmp/shots/t3.png
-touch 120 104
+touch 120 116
 wait 60
 shot /tmp/shots/t4.png
 touch 24 84

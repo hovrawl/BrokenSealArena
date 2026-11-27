@@ -1,0 +1,460 @@
+From 2c39358c1d7b71a2b1f45c2d0690aeae946e2fc3 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sat, 28 Nov 2026 09:54:53 +1100
+Subject: [PATCH] Battle: taller list rows in the touch layout
+
+The battle Psynergy, Item, Djinn and Summon lists take their row numbers
+from layout values (arena/battle_touch.h): BATTLE_LIST_ROWS is a page's
+rows, with BATTLE_LIST_MAX_ROWS for the arrays. On the GBA and in the
+classic layout they are the old 16-pixel rows, and the ROM is unchanged.
+With the touch layout's 24-pixel rows a list shows three rows of three
+tiles a page (two for Summon), text and icons centred and the highlight
+over the whole row.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/arena/battle_touch.h        | 55 +++++++++++++++++--
+ games/tbs/include/window/menu_list.h          |  5 +-
+ .../src/window/screens_battle_djinn_menu.c    | 20 +++----
+ .../tbs/src/window/screens_battle_item_menu.c | 19 +++----
+ .../src/window/screens_battle_psynergy_menu.c | 35 ++++++------
+ .../src/window/screens_battle_summon_menu.c   | 29 +++++-----
+ 6 files changed, 107 insertions(+), 56 deletions(-)
+
+diff --git a/games/tbs/include/arena/battle_touch.h b/games/tbs/include/arena/battle_touch.h
+index 9890f26c50..e820edfc50 100644
+--- a/games/tbs/include/arena/battle_touch.h
++++ b/games/tbs/include/arena/battle_touch.h
+@@ -20,6 +20,50 @@
+ #define BATTLE_BACK_ROW_X 0
+ #define BATTLE_BACK_ROW_Y 14
+ 
++/// The battle lists' rows (Psynergy, Djinn, Item, Summon): on the GBA and in
++/// the classic layout BATTLE_LIST_ROWS rows of two tiles (16 pixels), text on
++/// a row's first tile row; in the touch layout three rows of three tiles (24
++/// pixels, UI_ROW_HEIGHT's default) a page, text and the tile icons on a row's
++/// middle tile row, so they sit centred, and the window as tall as before.
++/// Constants on the GBA, so its code is unchanged.
++/// The tall rows go with the touch layout's row height (--ui-size): 24 or
++/// more gives them; 16 keeps the GBA's.
++#define BATTLE_LIST_TALL (UI_TOUCH_LAYOUT && UI_ROW_HEIGHT >= 24)
++#define BATTLE_LIST_PAGE_ROWS (BATTLE_LIST_TALL ? 3 : BATTLE_LIST_MAX_ROWS)
++#define BATTLE_LIST_ROW_TILES (BATTLE_LIST_TALL ? 3 : 2)
++#define BATTLE_LIST_ROW_HEIGHT (BATTLE_LIST_ROW_TILES * 8)
++/// The tile row, within a row, of its text and tile icons.
++#define BATTLE_LIST_TEXT_TILE (BATTLE_LIST_TALL ? 1 : 0)
++/// Row `row`'s text tile row and pixel y, from the window's interior.
++#define BATTLE_LIST_TILE_Y(row)                                                \
++  ((row) * BATTLE_LIST_ROW_TILES + BATTLE_LIST_TEXT_TILE)
++#define BATTLE_LIST_TEXT_Y(row) (BATTLE_LIST_TILE_Y(row) * 8)
++/// A list window's height in tiles for `rows` rows. The GBA's last row
++/// reaches into the bottom border (its text is on the first of its two tile
++/// rows); a 24-pixel row is kept inside, so its highlight bar is too.
++#define BATTLE_LIST_WINDOW_HEIGHT(rows)                                        \
++  ((rows) * BATTLE_LIST_ROW_TILES + (BATTLE_LIST_TALL ? 2 : 1))
++/// The highlight bar's height in tiles: the text's tile row on the GBA, the
++/// whole row in the touch layout.
++#define BATTLE_LIST_HIGHLIGHT_TILES (BATTLE_LIST_TALL ? 3 : 1)
++/// Row `row`'s highlight bar (its top tile row on screen), and the bar drawn
++/// in `palette` (HIGHLIGHT_PALETTE to light it, WINDOW_PALETTE to clear it).
++#define BATTLE_LIST_HIGHLIGHT_Y(window, row)                                   \
++  ((window)->y + (row) * BATTLE_LIST_ROW_TILES + 1)
++#define BATTLE_LIST_HIGHLIGHT(window, row, palette)                            \
++  Window_HighlightRect((window)->x + 1,                                        \
++                       BATTLE_LIST_HIGHLIGHT_Y(window, row),                   \
++                       (window)->width - 2, BATTLE_LIST_HIGHLIGHT_TILES,       \
++                       palette)
++/// The pointing hand beside row `row` (MENU_PLACE_CURSOR, by these rows).
++#define BATTLE_LIST_PLACE_CURSOR(position, window, row, margin, sprite)        \
++  do {                                                                         \
++    (position).x = (window)->x * 8 - (margin);                                 \
++    (position).y = (BATTLE_LIST_TILE_Y(row) + (window)->y) * 8 + 20;           \
++    ((u32 *)(sprite))[1] = OBJ_SIZE_16X16;                                     \
++    ((u32 *)(sprite))[2] = 0;                                                  \
++  } while (0)
++
+ #ifdef NATIVE
+ #include "native/touch.h"
+ #include "arena/arena_touch.h"
+@@ -47,10 +91,10 @@ static inline s32 BattleTouch_PickCell(s32 left, s32 top, s32 width, s32 height,
+   return 1;
+ }
+ 
+-/// The battle lists (`pageRows` rows of 16 pixels in `window`, the page
+-/// arrows on its top edge): a tap on a row selects it or, on the chosen row,
+-/// presses A (gKeysPressed); a tap on a page arrow presses Left or Right
+-/// (gKeysRepeat). Call before the menu reads the keys.
++/// The battle lists (`pageRows` rows of BATTLE_LIST_ROW_HEIGHT in `window`,
++/// the page arrows on its top edge): a tap on a row selects it or, on the
++/// chosen row, presses A (gKeysPressed); a tap on a page arrow presses Left or
++/// Right (gKeysRepeat). Call before the menu reads the keys.
+ static inline void BattleTouch_List(struct Window *window, s32 pageRows,
+                                     s32 firstEntry, s32 count, s32 *selectedRow,
+                                     s32 *preferredRow) {
+@@ -77,7 +121,8 @@ static inline void BattleTouch_List(struct Window *window, s32 pageRows,
+     }
+   }
+   if (BattleTouch_PickCell(window->x * 8 + 8, window->y * 8 + 8,
+-                           (window->width - 2) * 8, 16, 1, rows, &row, &keys)) {
++                           (window->width - 2) * 8, BATTLE_LIST_ROW_HEIGHT, 1,
++                           rows, &row, &keys)) {
+     *selectedRow = row;
+     *preferredRow = row;
+   }
+diff --git a/games/tbs/include/window/menu_list.h b/games/tbs/include/window/menu_list.h
+index 3e2d4238d9..cd07bb563a 100644
+--- a/games/tbs/include/window/menu_list.h
++++ b/games/tbs/include/window/menu_list.h
+@@ -19,7 +19,10 @@
+ #include "window/window_sprite.h"
+ 
+ /// The items a battle's item list shows at once, two tiles a row.
+-enum { BATTLE_LIST_ROWS = 5 };
++/// Arena romhack: BATTLE_LIST_MAX_ROWS; BATTLE_LIST_ROWS is a page's rows,
++/// fewer in the touch layout (arena/battle_touch.h).
++enum { BATTLE_LIST_MAX_ROWS = 5 };
++#define BATTLE_LIST_ROWS BATTLE_LIST_PAGE_ROWS
+ 
+ /// A menu sprite: a list link and its OAM attributes, as two words or as
+ /// fields.
+diff --git a/games/tbs/src/window/screens_battle_djinn_menu.c b/games/tbs/src/window/screens_battle_djinn_menu.c
+index a8af1702f8..bbc7f0f7fc 100644
+--- a/games/tbs/src/window/screens_battle_djinn_menu.c
++++ b/games/tbs/src/window/screens_battle_djinn_menu.c
+@@ -93,7 +93,9 @@ s32 BattleDjinnMenu_Run(s32 member, s32 unused) {
+                                 WINDOW_FLAG_INSTANT | WINDOW_FLAG_TEXT_CANVAS |
+                                     WINDOW_FLAG_BORDERED_CANVAS);
+   Text_UseExtraTiles(1);
+-  listWindow = Window_Create(21, 9, 9, 11, MENU_WINDOW_FLAGS);
++  listWindow = Window_Create(21, 9, 9,
++                             BATTLE_LIST_WINDOW_HEIGHT(BATTLE_LIST_ROWS),
++                             MENU_WINDOW_FLAGS);
+   back = BattleTouch_OpenBack(BATTLE_BACK_LIST_X, BATTLE_BACK_LIST_Y);
+   BATTLE_MENU_GET_CURSOR(firstEntry, selectedRow, preferredRow);
+   unit = Unit_GetFar(member);
+@@ -149,8 +151,7 @@ s32 BattleDjinnMenu_Run(s32 member, s32 unused) {
+       selectedDjinn = djinnEntries[firstEntry + selectedRow];
+       standbyElements = 0;
+       state->holdTilemapUpload = 1;
+-      Window_HighlightRect(listWindow->x + 1, listWindow->y + drawnRow * 2 + 1,
+-                           listWindow->width - 2, 1, WINDOW_PALETTE);
++      BATTLE_LIST_HIGHLIGHT(listWindow, drawnRow, WINDOW_PALETTE);
+       if (previewPage != 0) {
+         Window_Close(messageWindow, 1);
+         messageWindow =
+@@ -241,7 +242,7 @@ s32 BattleDjinnMenu_Run(s32 member, s32 unused) {
+           Window_SetTilemapEntry(listWindow,
+                                  (s32)BATTLE_DJINN_ENTRY_ELEMENT(encodedDjinn) +
+                                      LIST_TILE_SUMMON_ELEMENT,
+-                                 0, j * 2, 0);
++                                 0, BATTLE_LIST_TILE_Y(j), 0);
+           if (encodedDjinn & BATTLE_DJINN_ENTRY_RECOVERY_MASK) {
+             Text_SetColor(TEXT_COLOR_YELLOW);
+           } else if (encodedDjinn & BATTLE_DJINN_ENTRY_STANDBY) {
+@@ -252,12 +253,13 @@ s32 BattleDjinnMenu_Run(s32 member, s32 unused) {
+                         DJINN_PER_ELEMENT +
+                     DJINN_COMMAND_INDEX(encodedDjinn)) +
+                   MsgDjinnName,
+-              listWindow, 8, j * 16);
++              listWindow, 8, BATTLE_LIST_TEXT_Y(j));
+           if (encodedDjinn & BATTLE_DJINN_ENTRY_RECOVERY_MASK) {
+             Text_DrawNumberAtOffset(
+                 (s32)((encodedDjinn & BATTLE_DJINN_ENTRY_RECOVERY_MASK) >>
+                       BATTLE_DJINN_ENTRY_RECOVERY_SHIFT),
+-                DJINN_RECOVERY_DIGITS, listWindow, DJINN_RECOVERY_X, j * 16);
++                DJINN_RECOVERY_DIGITS, listWindow, DJINN_RECOVERY_X,
++                BATTLE_LIST_TEXT_Y(j));
+           }
+           Text_SetColor(TEXT_COLOR_WHITE);
+           j++;
+@@ -279,9 +281,7 @@ s32 BattleDjinnMenu_Run(s32 member, s32 unused) {
+                                  listWindow->width - listPages + j - 2, -1, 0);
+         }
+       }
+-      Window_HighlightRect(listWindow->x + 1,
+-                           listWindow->y + selectedRow * 2 + 1,
+-                           listWindow->width - 2, 1, HIGHLIGHT_PALETTE);
++      BATTLE_LIST_HIGHLIGHT(listWindow, selectedRow, HIGHLIGHT_PALETTE);
+       state->dirty = 1;
+       state->holdTilemapUpload = 0;
+     }
+@@ -498,7 +498,7 @@ s32 BattleDjinnMenu_Run(s32 member, s32 unused) {
+       }
+     }
+ 
+-    MENU_PLACE_CURSOR(cursorPos, listWindow, selectedRow, 2, sprite);
++    BATTLE_LIST_PLACE_CURSOR(cursorPos, listWindow, selectedRow, 2, sprite);
+     sprite->oam.f.tile = VramCache_Reload(cursorSlot, (s32)gPointingHandTiles);
+     sprite->oam.f.x = cursorPos.x + ((gFrameCount & 4) >> 1) - 6;
+     sprite->oam.f.y = cursorPos.y - ((gFrameCount & 4) >> 2) - 8;
+diff --git a/games/tbs/src/window/screens_battle_item_menu.c b/games/tbs/src/window/screens_battle_item_menu.c
+index a28694a6b5..fb3cc871cd 100644
+--- a/games/tbs/src/window/screens_battle_item_menu.c
++++ b/games/tbs/src/window/screens_battle_item_menu.c
+@@ -65,8 +65,8 @@ s32 BattleItemMenu_Run(s32 member, u16 *entries, s32 count) {
+   struct MenuSprite cursorStorage;
+   struct MenuSprite *iconSprite;
+   u16 messageText[64];
+-  s32 iconSlots[BATTLE_LIST_ROWS];
+-  struct MenuSprite sprites[BATTLE_LIST_ROWS];
++  s32 iconSlots[BATTLE_LIST_MAX_ROWS];
++  struct MenuSprite sprites[BATTLE_LIST_MAX_ROWS];
+ 
+   state = WINDOW_STATE;
+   drawnFirstEntry = -1;
+@@ -78,11 +78,12 @@ s32 BattleItemMenu_Run(s32 member, u16 *entries, s32 count) {
+   iconCount = 0;
+   BATTLE_MENU_GET_CURSOR(firstEntry, selectedRow, preferredRow);
+   window =
+-      Window_Create(15, 9, 15, BATTLE_LIST_ROWS * 2 + 1, MENU_WINDOW_FLAGS);
++      Window_Create(15, 9, 15, BATTLE_LIST_WINDOW_HEIGHT(BATTLE_LIST_ROWS),
++                    MENU_WINDOW_FLAGS);
+   back = BattleTouch_OpenBack(BATTLE_BACK_LIST_X, BATTLE_BACK_LIST_Y);
+ 
+   for (i = 0; i < BATTLE_LIST_ROWS; i++) {
+-    s32 y = i * 2;
++    s32 y = BATTLE_LIST_TILE_Y(i);
+ 
+     iconSprite = &sprites[i];
+     MenuSprite_Initialize(sprites[i], OBJ_SIZE_16X16);
+@@ -113,8 +114,7 @@ s32 BattleItemMenu_Run(s32 member, u16 *entries, s32 count) {
+ 
+     if (firstEntry != drawnFirstEntry || selectedRow != drawnRow) {
+       state->holdTilemapUpload = 1;
+-      Window_HighlightRect(window->x + 1, window->y + drawnRow * 2 + 1,
+-                           window->width - 2, 1, WINDOW_PALETTE);
++      BATTLE_LIST_HIGHLIGHT(window, drawnRow, WINDOW_PALETTE);
+       Text_FillCanvasBackground();
+       if (count != 0) {
+         if (Item_CheckBattleUse(member, entries[firstEntry + selectedRow]) ==
+@@ -150,7 +150,7 @@ s32 BattleItemMenu_Run(s32 member, u16 *entries, s32 count) {
+             Text_SetColor(TEXT_COLOR_RED);
+           }
+           Text_DrawMessageAsTiles((item & INVENTORY_ITEM_ID_MASK) + MsgItemName,
+-                                  window, 16, i * 16);
++                                  window, 16, BATTLE_LIST_TEXT_Y(i));
+           Text_SetColor(TEXT_COLOR_WHITE);
+           sprites[i].oam.f.tile = ItemIcon_LoadIntoSlot(item, iconSlots[i]);
+         }
+@@ -173,8 +173,7 @@ s32 BattleItemMenu_Run(s32 member, u16 *entries, s32 count) {
+         }
+       }
+ 
+-      Window_HighlightRect(window->x + 1, window->y + selectedRow * 2 + 1,
+-                           window->width - 2, 1, HIGHLIGHT_PALETTE);
++      BATTLE_LIST_HIGHLIGHT(window, selectedRow, HIGHLIGHT_PALETTE);
+       state->dirty = 1;
+       state->holdTilemapUpload = 0;
+     }
+@@ -209,7 +208,7 @@ s32 BattleItemMenu_Run(s32 member, u16 *entries, s32 count) {
+       Oam_AddSpriteAtDepth(iconSprite, OAM_DEPTH_WINDOW);
+     }
+ 
+-    MENU_PLACE_CURSOR(cursorPosition, window, selectedRow, 2, sprite);
++    BATTLE_LIST_PLACE_CURSOR(cursorPosition, window, selectedRow, 2, sprite);
+     sprite->oam.f.tile =
+         VramCache_Reload(cursorHandle, (s32)gPointingHandTiles);
+     sprite->oam.f.x = cursorPosition.x + ((gFrameCount & 4) >> 1) - 4;
+diff --git a/games/tbs/src/window/screens_battle_psynergy_menu.c b/games/tbs/src/window/screens_battle_psynergy_menu.c
+index 054d486b6e..e00e0188bd 100644
+--- a/games/tbs/src/window/screens_battle_psynergy_menu.c
++++ b/games/tbs/src/window/screens_battle_psynergy_menu.c
+@@ -32,8 +32,8 @@ s32 BattlePsynergyMenu_Run(s32 unitId, u16 *actions, s32 count) {
+   struct MenuSprite cursor;
+   struct MenuSprite *iconSprite;
+   u16 messageText[64];
+-  s32 iconSlots[BATTLE_LIST_ROWS];
+-  struct MenuSprite sprites[BATTLE_LIST_ROWS];
++  s32 iconSlots[BATTLE_LIST_MAX_ROWS];
++  struct MenuSprite sprites[BATTLE_LIST_MAX_ROWS];
+   s32 glyph;
+ 
+   state = WINDOW_STATE;
+@@ -46,11 +46,12 @@ s32 BattlePsynergyMenu_Run(s32 unitId, u16 *actions, s32 count) {
+                                     WINDOW_FLAG_BORDERED_CANVAS);
+   iconCount = BATTLE_LIST_ROWS;
+   BATTLE_MENU_GET_CURSOR(firstEntry, selectedRow, preferredRow);
+-  window = Window_Create(9, 9, 21, BATTLE_LIST_ROWS * 2 + 1, MENU_WINDOW_FLAGS);
++  window = Window_Create(9, 9, 21, BATTLE_LIST_WINDOW_HEIGHT(BATTLE_LIST_ROWS),
++                         MENU_WINDOW_FLAGS);
+   back = BattleTouch_OpenBack(BATTLE_BACK_LIST_X, BATTLE_BACK_LIST_Y);
+ 
+   for (i = 0; i < BATTLE_LIST_ROWS; i++) {
+-    s32 y = i * 2;
++    s32 y = BATTLE_LIST_TILE_Y(i);
+ 
+     iconSprite = &sprites[i];
+     MenuSprite_Initialize(sprites[i], OBJ_SIZE_16X16);
+@@ -78,8 +79,7 @@ s32 BattlePsynergyMenu_Run(s32 unitId, u16 *actions, s32 count) {
+   for (;;) {
+     if (firstEntry != drawnFirstEntry || selectedRow != drawnRow) {
+       state->holdTilemapUpload = 1;
+-      Window_HighlightRect(window->x + 1, window->y + drawnRow * 2 + 1,
+-                           window->width - 2, 1, WINDOW_PALETTE);
++      BATTLE_LIST_HIGHLIGHT(window, drawnRow, WINDOW_PALETTE);
+       Text_FillCanvasBackground();
+       if (count != 0) {
+         BATTLE_MENU_MESSAGE_COPY(
+@@ -104,10 +104,10 @@ s32 BattlePsynergyMenu_Run(s32 unitId, u16 *actions, s32 count) {
+             break;
+           }
+           action = Ability_Get(encodedAction);
+-          Window_SetTilemapEntry(window, PSYNERGY_COST_FIRST_TILE, 11, i * 2,
+-                                 0);
+-          Window_SetTilemapEntry(window, PSYNERGY_COST_SECOND_TILE, 12, i * 2,
+-                                 0);
++          Window_SetTilemapEntry(window, PSYNERGY_COST_FIRST_TILE, 11,
++                                 BATTLE_LIST_TILE_Y(i), 0);
++          Window_SetTilemapEntry(window, PSYNERGY_COST_SECOND_TILE, 12,
++                                 BATTLE_LIST_TILE_Y(i), 0);
+           Ability_BuildIconTiles(encodedAction & ACTION_ID_MASK, 0,
+                                  &iconSlots[i], &glyph, 1);
+           sprites[i].oam.f.tile = glyph;
+@@ -122,15 +122,16 @@ s32 BattlePsynergyMenu_Run(s32 unitId, u16 *actions, s32 count) {
+ 
+           state->textPalette = BASIC_COLORS_PALETTE;
+           Text_DrawMessageAsTiles(encodedAction + MsgAbilityName, window, 16,
+-                                  i * 16);
+-          Text_DrawNumberAtOffset(action->ppCost, 2, window, 104, i * 16);
++                                  BATTLE_LIST_TEXT_Y(i));
++          Text_DrawNumberAtOffset(action->ppCost, 2, window, 104,
++                                  BATTLE_LIST_TEXT_Y(i));
+           Text_SetColor(TEXT_COLOR_WHITE);
+           state->textPalette = WINDOW_PALETTE;
+ 
+           if (action->element != ELEMENT_NONE) {
+             Window_SetTilemapEntry(window,
+                                    action->element + LIST_TILE_SUMMON_ELEMENT,
+-                                   15, i * 2, 0);
++                                   15, BATTLE_LIST_TILE_Y(i), 0);
+           }
+ 
+           rangePattern = action->range;
+@@ -139,7 +140,7 @@ s32 BattlePsynergyMenu_Run(s32 unitId, u16 *actions, s32 count) {
+           } else {
+             rangePattern--;
+           }
+-          RangeIcon_Draw(window, 16, i * 2, rangePattern, 0);
++          RangeIcon_Draw(window, 16, BATTLE_LIST_TILE_Y(i), rangePattern, 0);
+         }
+         iconCount = i;
+         drawnFirstEntry = firstEntry;
+@@ -160,8 +161,7 @@ s32 BattlePsynergyMenu_Run(s32 unitId, u16 *actions, s32 count) {
+         }
+       }
+ 
+-      Window_HighlightRect(window->x + 1, window->y + selectedRow * 2 + 1,
+-                           window->width - 2, 1, HIGHLIGHT_PALETTE);
++      BATTLE_LIST_HIGHLIGHT(window, selectedRow, HIGHLIGHT_PALETTE);
+       state->dirty = 1;
+       state->holdTilemapUpload = 0;
+     }
+@@ -195,7 +195,8 @@ s32 BattlePsynergyMenu_Run(s32 unitId, u16 *actions, s32 count) {
+       Oam_AddSpriteAtDepth(&sprites[i], OAM_DEPTH_WINDOW);
+     }
+ 
+-    MENU_PLACE_CURSOR(cursorPosition, window, selectedRow, 4, iconSprite);
++    BATTLE_LIST_PLACE_CURSOR(cursorPosition, window, selectedRow, 4,
++                             iconSprite);
+     iconSprite->oam.f.tile =
+         VramCache_Reload(cursorHandle, (s32)gPointingHandTiles);
+     iconSprite->oam.f.x = cursorPosition.x + ((gFrameCount & 4) >> 1) - 4;
+diff --git a/games/tbs/src/window/screens_battle_summon_menu.c b/games/tbs/src/window/screens_battle_summon_menu.c
+index dc914f483c..95d6dc45ea 100644
+--- a/games/tbs/src/window/screens_battle_summon_menu.c
++++ b/games/tbs/src/window/screens_battle_summon_menu.c
+@@ -13,7 +13,11 @@
+ #endif
+ 
+ /// The summons a page of the list shows.
+-#define SUMMON_LIST_ROWS 4
++/// Arena romhack: the rows a page shows: four, or two of the touch layout's
++/// 24-pixel rows (BATTLE_LIST_ROW_TILES), all that fit below the standby
++/// counts. SUMMON_LIST_MAX_ROWS sizes the arrays.
++#define SUMMON_LIST_MAX_ROWS 4
++#define SUMMON_LIST_ROWS (BATTLE_LIST_TALL ? 2 : SUMMON_LIST_MAX_ROWS)
+ 
+ /// The battle summon list: the summons the party holds enough Djinn for
+ /// (Summon_ListLearnedFar, DjinnRecoveryTable.summonMask), SUMMON_LIST_ROWS to
+@@ -21,12 +25,12 @@
+ /// element, the others in TEXT_COLOR_RED.
+ s32 BattleSummonMenu_Run(s32 unusedA, s32 unusedB, const u8 *standby) {
+   struct MenuSprite cursorStorage;
+-  struct MenuSprite sprites[SUMMON_LIST_ROWS];
++  struct MenuSprite sprites[SUMMON_LIST_MAX_ROWS];
+   u8 learnedSummons[33]; // in menu order
+   u8 orderedSummons[33]; // those standby can pay for first
+   u16 text[64];
+-  s32 iconSlots[SUMMON_LIST_ROWS];
+-  u8 visibleSummons[SUMMON_LIST_ROWS];
++  s32 iconSlots[SUMMON_LIST_MAX_ROWS];
++  u8 visibleSummons[SUMMON_LIST_MAX_ROWS];
+   s32 glyph;
+   s32 count;
+   struct Window *window;
+@@ -57,13 +61,14 @@ s32 BattleSummonMenu_Run(s32 unusedA, s32 unusedB, const u8 *standby) {
+   counts = Window_Create(20, 8, 10, 3, MENU_WINDOW_FLAGS);
+   mask = 0;
+   BATTLE_MENU_GET_CURSOR(firstEntry, selectedRow, preferredRow);
+-  window = Window_Create(SUMMON_MENU_WINDOW_X, 11, SUMMON_MENU_WINDOW_WIDTH, 9,
++  window = Window_Create(SUMMON_MENU_WINDOW_X, 11, SUMMON_MENU_WINDOW_WIDTH,
++                         BATTLE_LIST_WINDOW_HEIGHT(SUMMON_LIST_ROWS),
+                          MENU_WINDOW_FLAGS);
+   back = BattleTouch_OpenBack(BATTLE_BACK_LIST_X, BATTLE_BACK_LIST_Y);
+ 
+   // Icon sprites for each row.
+   for (index = 0; index < SUMMON_LIST_ROWS; index++) {
+-    s32 y = index * 2;
++    s32 y = BATTLE_LIST_TILE_Y(index);
+ 
+     sprite = &sprites[index];
+     MenuSprite_Initialize(sprites[index], OBJ_SIZE_16X16);
+@@ -119,8 +124,7 @@ s32 BattleSummonMenu_Run(s32 unusedA, s32 unusedB, const u8 *standby) {
+     // Redraw when the page or row changes.
+     if (firstEntry != drawnFirstEntry || selectedRow != drawnRow) {
+       state->holdTilemapUpload = 1;
+-      Window_HighlightRect(window->x + 1, window->y + drawnRow * 2 + 1,
+-                           window->width - 2, 1, WINDOW_PALETTE);
++      BATTLE_LIST_HIGHLIGHT(window, drawnRow, WINDOW_PALETTE);
+       Text_FillCanvasBackground();
+ 
+       // Description and required Djinni elements: mask has bit n for each
+@@ -170,14 +174,14 @@ s32 BattleSummonMenu_Run(s32 unusedA, s32 unusedB, const u8 *standby) {
+             affordable = element == ELEMENT_COUNT;
+             Ability_BuildIconTiles(summon->abilityId & ACTION_ID_MASK, 0,
+                                    &iconSlots[index], &glyph, 1);
+-            y = index * 2;
++            y = BATTLE_LIST_TILE_Y(index);
+             sprites[index].oam.f.tile = glyph;
+             // A summon the party cannot afford is drawn in TEXT_COLOR_RED.
+             if (!affordable)
+               Text_SetColor(TEXT_COLOR_RED);
+             Text_DrawMessageAsTiles(SummonDefinition_Get(id)->abilityId +
+                                         MsgAbilityName,
+-                                    window, 16, index * 16);
++                                    window, 16, BATTLE_LIST_TEXT_Y(index));
+             for (element = 0; element < ELEMENT_COUNT; element++) {
+               if (summon->djinnRequired[element] != 0) {
+                 Window_SetTilemapEntry(window,
+@@ -216,8 +220,7 @@ s32 BattleSummonMenu_Run(s32 unusedA, s32 unusedB, const u8 *standby) {
+               -1, 0);
+         }
+       }
+-      Window_HighlightRect(window->x + 1, window->y + selectedRow * 2 + 1,
+-                           window->width - 2, 1, HIGHLIGHT_PALETTE);
++      BATTLE_LIST_HIGHLIGHT(window, selectedRow, HIGHLIGHT_PALETTE);
+       state->dirty = 1;
+       state->holdTilemapUpload = 0;
+     }
+@@ -229,7 +232,7 @@ s32 BattleSummonMenu_Run(s32 unusedA, s32 unusedB, const u8 *standby) {
+     }
+ 
+     // The cursor wobbles every four frames.
+-    MENU_PLACE_CURSOR(cursorPosition, window, selectedRow, 2, cur);
++    BATTLE_LIST_PLACE_CURSOR(cursorPosition, window, selectedRow, 2, cur);
+     cur->oam.f.tile =
+         VramCache_Reload((u16)cursorHandle, (s32)gPointingHandTiles);
+     cur->oam.f.x = cursorPosition.x + ((gFrameCount & 4) >> 1) - 4;
+-- 
+2.56.1
+

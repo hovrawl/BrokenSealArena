@@ -1325,6 +1325,42 @@ Nathan: the battle Back button's "B Back" ran over its window's right border.
   on the command row, the Psynergy list and the targets, text inside the
   border. GBA ROM byte-identical.
 
+## 68. Battle: taller list rows in the touch layout
+
+Nathan: "List UI should have taller list items when in touch layout."
+
+- The battle Psynergy, Item, Djinn and Summon lists drew 16-pixel rows (two
+  tile rows; text, PP cost, element and range icons on the first). Their row
+  numbers are now layout values (`arena/battle_touch.h`):
+  `BATTLE_LIST_ROW_TILES`, `BATTLE_LIST_TILE_Y(row)` / `_TEXT_Y(row)`,
+  `BATTLE_LIST_WINDOW_HEIGHT(rows)`, `BATTLE_LIST_HIGHLIGHT(window, row,
+  palette)`, `BATTLE_LIST_PLACE_CURSOR`, and the cell height in
+  `BattleTouch_List`. `BATTLE_LIST_ROWS` (upstream's enum, menu_list.h) is now
+  a page's rows, `BATTLE_LIST_MAX_ROWS` (5) sizes the arrays; the Summon list
+  likewise (`SUMMON_LIST_ROWS`, `SUMMON_LIST_MAX_ROWS` 4). So most upstream
+  lines stay as they were.
+- On the GBA and in the classic layout they are the old constants: the GBA
+  ROM is byte-identical (checked after the refactor and after the touch
+  values), and `--ui classic` shots are identical to before.
+- Touch layout with 24-pixel rows (`UI_ROW_HEIGHT` 24 or more, the default):
+  rows of three tiles, the text and tile icons on the middle one (centred),
+  the highlight bar the whole row, the hand at the row's text; three rows a
+  page (two for Summon, below the standby counts), the window two tiles
+  taller than its rows so the last row's bar stays off the border; paging as
+  before. `--ui-size 16` keeps the GBA's rows (UI.md rule 7).
+- Not done: the field menu's Psynergy and item lists (`menu_touch.h`) keep
+  16-pixel rows (CONTROLS "Not yet").
+- Smoke scripts: battle list taps now aim at the 24-pixel rows' centres
+  (`touch_battle_240/288`, `touch_lists_240`, `touch_djinn_240`). The old taps
+  at y 96 sat on a 16-pixel row boundary and took the second row; the new
+  ones pick the same rows as before, so every shot after a choice matches the
+  build before 68.
+- Verified (headless, fresh saves): Psynergy (three rows, page 1 of 2),
+  Item, Djinn (Flint, beside its stat preview) and Summon (Venus with its
+  cost) lists, each looked at: rows evenly spaced, text centred, the bar over
+  the whole row, the hand on the selected row, nothing clipped; targets and
+  Back from the lists as before.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

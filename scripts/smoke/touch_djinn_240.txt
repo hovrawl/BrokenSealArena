@@ -1,3 +1,4 @@
+# List rows are the touch layout's 24 pixels (patch 68): taps aim at row centres.
 # Battle lists by touch with Djinn (--ui touch --width 240): buy Flint for
 # Isaac, start the Gauntlet, unleash Flint from the Djinn list by taps, then
 # look at a Summon list in the next round.
@@ -59,9 +60,9 @@ touch 112 148
 wait 60
 shot /tmp/shots/s2.png
 # the first Djinni: tap (selected), tap again (chosen), then the target
-touch 200 96
+touch 200 92
 wait 20
-touch 200 96
+touch 200 92
 wait 60
 shot /tmp/shots/s3.png
 touch 65 100
@@ -125,9 +126,9 @@ touch 117 148
 wait 60
 shot /tmp/shots/s8.png
 # its first row chosen by a second tap: the targets
-touch 200 96
+touch 200 108
 wait 30
-touch 200 96
+touch 200 108
 wait 60
 shot /tmp/shots/s9.png
 # Back to the list, Back to the row
