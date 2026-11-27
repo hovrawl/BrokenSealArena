@@ -1,0 +1,102 @@
+From 852d417ff5d8d760138886334801e5e4a6282eb1 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 27 Nov 2026 08:37:48 +0000
+Subject: [PATCH] Counters: the touch layout on the UI kit
+
+In the touch layout the stat and Djinn counters open full width with a
+header (who is buying, Back) in place of the "What would you like?"
+prompt; the price, coins, stock row and description windows keep their
+places and stretch to the screen. Classic is unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8ykfbWFo924wEqysLhg
+---
+ games/tbs/src/shop/arena_shop.c | 36 ++++++++++++++++++++++++---------
+ 1 file changed, 27 insertions(+), 9 deletions(-)
+
+diff --git a/games/tbs/src/shop/arena_shop.c b/games/tbs/src/shop/arena_shop.c
+index 60cc7f7b10..e7390684ba 100644
+--- a/games/tbs/src/shop/arena_shop.c
++++ b/games/tbs/src/shop/arena_shop.c
+@@ -717,6 +717,7 @@ s32 ArenaShop_Run(s32 kind, s32 unitId) {
+   struct Window *stockWindow;
+   struct Window *messageWindow;
+   struct WindowSprite *anchor;
++  struct Window *header = 0;
+   struct Sprite *figures[SHOP_STOCK_PAGE_ITEMS];
+   s32 count;
+   s32 selected = 0;
+@@ -727,6 +728,8 @@ s32 ArenaShop_Run(s32 kind, s32 unitId) {
+ 
+   for (i = 0; i < SHOP_STOCK_PAGE_ITEMS; i++)
+     figures[i] = 0;
++  if (UI_TOUCH_LAYOUT)
++    UiScreen_BeginFullWidth();
+   Shop_InitializeState();
+   shop = gMenuState;
+   if (kind == ARENA_SHOP_DJINN) {
+@@ -752,21 +755,31 @@ s32 ArenaShop_Run(s32 kind, s32 unitId) {
+   anchor->kind = 0;
+   MenuCursor_SetPositionImmediate(&shop->cursor, -32, 112);
+   shop->cursor.anchor = anchor;
+-  // The prompt, as a shopkeeper's line is shown (Shop_ShowKeeperMessage).
+-  Message_CloseFinishedWindowsFar();
+-  Message_OpenWindowFar(MsgWhatWouldYouLike, 5, 0, 0x22);
+-  while (Message_AllTypedFar() == 0)
++  if (UI_TOUCH_LAYOUT) {
++    // The touch layout: a header with who is buying and Back in place of the
++    // prompt; the counter's windows as below, across the full width.
++    header = UiHeader_Open();
++    UiHeader_Draw(header, UI_HEADER_BACK_BUTTON);
++    Text_DrawStringAtOffsetFar(Unit_GetFar(unitId)->name, header, 6, 0);
++  } else {
++    // The prompt, as a shopkeeper's line is shown (Shop_ShowKeeperMessage).
++    Message_CloseFinishedWindowsFar();
++    Message_OpenWindowFar(MsgWhatWouldYouLike, 5, 0, 0x22);
++    while (Message_AllTypedFar() == 0)
++      wait(1);
+     wait(1);
+-  wait(1);
++  }
+   shop->itemWindow = 0;
+-  shop->moneyWindow = Window_CreateFar(
+-      30 - SHOP_MONEY_WINDOW_WIDTH, 7, SHOP_MONEY_WINDOW_WIDTH, 4, WINDOW_FLAG_INSTANT);
++  shop->moneyWindow =
++      Window_CreateFar(UI_SCREEN_TILES - SHOP_MONEY_WINDOW_WIDTH, 7,
++                       SHOP_MONEY_WINDOW_WIDTH, 4, WINDOW_FLAG_INSTANT);
+   priceWindow =
+       Window_CreateFar(0, 8, SHOP_PRICE_WIDTH, 4, WINDOW_FLAG_INSTANT);
+-  stockWindow = Window_CreateFar(0, 12, 30, 4, WINDOW_FLAG_INSTANT);
++  stockWindow = Window_CreateFar(0, 12, UI_SCREEN_TILES, 4, WINDOW_FLAG_INSTANT);
+   shop->cursor.anchor->motion = WINDOW_SPRITE_MOTION_HOP_DOWN_LEFT;
+   shop->cursorFrames = 12;
+-  messageWindow = Window_CreateFar(0, 17, 30, 3, WINDOW_FLAG_INSTANT);
++  messageWindow =
++      Window_CreateFar(0, 17, UI_SCREEN_TILES, 3, WINDOW_FLAG_INSTANT);
+ 
+   while (1) {
+     if (redraw != 0) {
+@@ -812,6 +825,7 @@ s32 ArenaShop_Run(s32 kind, s32 unitId) {
+                               ? 0x10000
+                               : ARENA_FIGURE_SCALE);
+     }
++    UiHeader_Touch(header, UI_HEADER_BACK_BUTTON);
+ #ifdef NATIVE
+     if (ShopTouch_PickStock(stockWindow, count, &selected)) {
+       notice = 0;
+@@ -876,8 +890,12 @@ s32 ArenaShop_Run(s32 kind, s32 unitId) {
+   Window_CloseFar(priceWindow, 2);
+   Window_CloseFar(shop->moneyWindow, 2);
+   Message_CloseFinishedWindowsFar();
++  if (header != 0)
++    Window_CloseFar(header, 2);
+   Window_CloseFar(anchorWindow, 2);
+   wait(1);
++  if (UI_TOUCH_LAYOUT)
++    UiScreen_EndFullWidth();
+   Shop_ReleaseState();
+   return 0;
+ }
+-- 
+2.43.0
+

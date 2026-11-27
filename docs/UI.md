@@ -26,6 +26,21 @@ interface. It joins three sources: what we learned building the arena's screens
    game's text does.
 5. **Look at it before saying it works.** Every state of every screen gets a
    screenshot from the smoke suite, checked against the stock screen it copies.
+6. **Source accurate (the owner's rule, 2026-11-27).** The hack is a port of
+   the game's source that we change towards our goals; anything we build must
+   feel as if it shipped with Golden Sun. New widgets (buttons, list rows,
+   grids, headers) are made of the game's own window frames, font, hand and
+   icons, never new art.
+7. **One code path, more than one layout.** A screen is written once and lays
+   itself out from its layout: the classic layout (the GBA's 30 by 20 tiles)
+   and, on desktop and phones, a touch layout (the full width, header buttons,
+   rows big enough to tap). The GBA build always takes the classic one
+   (`include/arena/ui_kit.h`). Touch widgets must allow for enlarging: their
+   row height is a setting (`--ui-size`), not a constant.
+8. **Byte-identity is a tool, not a goal.** A refactor that only moves a
+   screen's numbers into its layout should leave the GBA ROM byte-identical
+   (the compare proves nothing changed); a change that alters a screen is
+   checked by the smoke suite instead.
 
 ## 2. How to build a new interface
 
@@ -131,6 +146,51 @@ change costs nothing, before it costs a build.
   copy its drawing instead.
 - Bank space is limited; check the map before adding to a main-image bank.
 
+## 3a. The UI kit (layouts for every build)
+
+- `include/arena/ui_kit.h`: `UI_TOUCH_LAYOUT` (0 on the GBA; on desktop the
+  `--ui classic|touch` choice, default touch), `UI_ROW_HEIGHT` (16 on the GBA;
+  `--ui-size 16|24`, default 24), `UI_SCREEN_TILES`, and
+  `UiScreen_BeginFullWidth` / `UiScreen_EndFullWidth` (the 240-pixel safe area
+  off while a touch layout is open).
+- A screen keeps its layout in a small struct filled by one function (the
+  class viewer's `CvLayout` and `ClassViewer_Layout`): window rects per step,
+  grid columns, column width, row height, and the header's button places. The
+  drawing and input code reads only the struct.
+- Touch layouts: a header window 3 tiles tall across the top, its buttons
+  taking taps over all 24 pixels: `{button_icon:3}` and `{button_icon:4}` (L
+  and R) at the left, `{button_icon:2}Back` at the right (`MsgArenaUi*`). A
+  header button presses the key it shows (L, R, Select, B), so the screen's
+  key code runs unchanged. Grids take taps with `WindowTouch_Pick`
+  (`arena_touch.h`): a tap selects, a tap on the selection presses A.
+- Widgets (`src/shop/arena_ui_kit.c`, included by `shop.c`; use these before
+  writing a screen's own):
+  - `UiHeader_Open()` makes the header; `UiHeader_Draw(header, buttons)` clears
+    it and draws `UI_HEADER_PAGES` ([L] [R]) and `UI_HEADER_BACK_BUTTON`; the
+    screen then draws its title, at `UI_HEADER_TITLE_X` after [L] [R], or at
+    x 6 without them. `UiHeader_Touch(header, buttons)` each frame turns taps
+    into keys (an empty macro on the GBA).
+  - `UiList`: a column of message rows (`labelBase + index`) in any window.
+    `UiList_Init(list, window, count, labelBase, rowHeight, top, textX,
+    cursor)`, `UiList_Draw`, and `UiList_Step` each frame, which returns
+    `UI_LIST_MOVED`, `UI_LIST_CHOSEN` or `UI_LIST_CANCELLED`. Up and Down wrap;
+    rows past the window scroll, with the shop's blinking page arrows at the
+    right edge (tap an arrow to scroll a page); a tap selects a row and a tap
+    on the selected row chooses it. Classic layouts pass 16-pixel rows, touch
+    layouts `UI_ROW_HEIGHT`. `UiList_SetGrid(list, columns, columnWidth)`
+    makes it a grid read across (Left and Right move an entry); `list.icons`
+    (pairs of `ICON_KIND_*`, id) puts an icon 20 pixels before each name, the
+    hand then 30 pixels before the name, as the Psynergy and Item menus.
+  - Topic lists look like the game's menus, never bare text: a name window,
+    icon and name entries, and a line about the chosen entry along the bottom
+    (the mechanics library).
+  - `UiBackButton_Open()` / `UiBackButton_Close(button)`: for screens that
+    run the game's own loops (the shops), a B Back window at the top right
+    whose tap holds B for a frame everywhere (`Touch_SetBackZone`).
+- Used by: shops (Back button, full width), counters (header),
+  class viewer (header), mechanics library (header, icon grid,
+  hint line), member picker (header). `--ui-size` stops at 24 until every list scrolls.
+
 ## 4. Standard layouts we have already used
 
 Positions are tile coordinates (x, y, width, height) unless a pixel offset is
@@ -165,7 +225,7 @@ What each is made of, so a new one can start from the nearest.
 | Djinn and Psynergy panels | 30 by 11 panel; ability icons; animated element figures | picker modes 1 and 2 |
 | Stat, Djinn and Psynergy counters | `Shop_SelectBuy`'s whole layout | `ArenaShop_Run(kind, unit)` |
 | Win report | the attendant speaking a message with the coins as a blank | `ArenaMenu_ShowWin` |
-| Class viewer (the scholar) | the picker, a 30 by 11 panel over a 30 by 9 list, Djinn figures, tile text, red text, the Psynergy panel's icons | `ClassViewer_Run` (`shop/shop/arena_class_viewer.c`) |
+| Class viewer (the scholar) | the picker, a 30 by 11 panel over a 30 by 9 list, Djinn figures, tile text, red text, the Psynergy panel's icons; touch layout: header buttons, a 3 by 2 grid of rows, the detail under it | `ClassViewer_Run` (`shop/arena_class_viewer.c`) |
 | Saving | the Pause menu and its own file list and messages | stock `PauseMenu_Run`, `Save_ToChosenFile` |
 
 ## 6. Review checklist (before anyone looks at it)

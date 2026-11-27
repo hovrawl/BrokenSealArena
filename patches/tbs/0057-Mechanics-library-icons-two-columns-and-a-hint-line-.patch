@@ -1,0 +1,1044 @@
+From c83d56d839b10b2da83b4f79513d76fbf6078e71 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 27 Nov 2026 08:20:50 +0000
+Subject: [PATCH] Mechanics library: icons, two columns and a hint line, as the
+ menus
+
+The mechanics teacher's topics are laid out as the field Psynergy and Item
+menus are: a name window, the topics in two columns, each with an icon
+(Weaken, a Venus Star, Long Sword, Sol Blade, Sleep, Ragnarok) and its
+name, and a line about the chosen topic along the bottom
+(MsgArenaMechHint0 to 5). UiList gains grids (UiList_SetGrid: Left and
+Right move an entry, Up and Down a line) and icons per entry.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8ykfbWFo924wEqysLhg
+---
+ games/tbs/include/arena/arena_cups.h    |   2 +-
+ games/tbs/include/arena/ui_kit.h        |   8 +-
+ games/tbs/src/scene/arena_cup_info.inc  |  82 ++++++-------
+ games/tbs/src/shop/arena_class_viewer.c |  75 +++++++-----
+ games/tbs/src/shop/arena_ui_kit.c       |  97 ++++++++++++----
+ games/tbs/text/en.po                    | 146 ++++++++++++++----------
+ 6 files changed, 255 insertions(+), 155 deletions(-)
+
+diff --git a/games/tbs/include/arena/arena_cups.h b/games/tbs/include/arena/arena_cups.h
+index bd1369786f..2672a3e4a6 100644
+--- a/games/tbs/include/arena/arena_cups.h
++++ b/games/tbs/include/arena/arena_cups.h
+@@ -70,6 +70,6 @@ extern const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT];
+ extern const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3];
+ extern const u8 gArenaCrossboneRows[3];
+ 
+-#define MSG_ARENA_CUP_NAME 10824
++#define MSG_ARENA_CUP_NAME 10830
+ 
+ #endif
+diff --git a/games/tbs/include/arena/ui_kit.h b/games/tbs/include/arena/ui_kit.h
+index d14dd7c389..c8dd790366 100644
+--- a/games/tbs/include/arena/ui_kit.h
++++ b/games/tbs/include/arena/ui_kit.h
+@@ -43,12 +43,17 @@ void Screen_SetUiSafeArea(int on);
+ 
+ struct Window;
+ 
+-/// A list of message rows in a window (arena_ui_kit.c).
++/// A list of message entries in a window (arena_ui_kit.c): one column, or a
++/// grid of `columns` read across (UiList_SetGrid). `icons`, when set, gives
++/// each entry an icon before its name, as the Psynergy and Item menus do: a
++/// pair (ICON_KIND_*, id) per entry.
+ struct UiList {
+   struct Window *window;
+   s16 count, visible, first, cursor;
+   s16 rowHeight, top, textX;
++  s16 columns, columnWidth;
+   s32 labelBase;
++  const u16 *icons;
+ };
+ 
+ /// What UiList_Step saw this frame.
+@@ -69,6 +74,7 @@ void UiHeader_Touch(struct Window *header, s32 buttons);
+ #endif
+ void UiList_Init(struct UiList *list, struct Window *window, s32 count,
+                  s32 labelBase, s32 rowHeight, s32 top, s32 textX, s32 cursor);
++void UiList_SetGrid(struct UiList *list, s32 columns, s32 columnWidth);
+ void UiList_Reveal(struct UiList *list);
+ void UiList_Draw(struct UiList *list);
+ s32 UiList_Step(struct UiList *list);
+diff --git a/games/tbs/src/scene/arena_cup_info.inc b/games/tbs/src/scene/arena_cup_info.inc
+index dc12e67443..893b80b46f 100644
+--- a/games/tbs/src/scene/arena_cup_info.inc
++++ b/games/tbs/src/scene/arena_cup_info.inc
+@@ -2,66 +2,66 @@
+ // Included by arena_menu.c. Global const data: a scene overlay has no static data of its own.
+ 
+ const struct ArenaCupReward gArenaCup0Rewards[] = {
+-    {2, 2, 0, 0, 0, 10842},
+-    {3, 2, 1, 2, 0, 10844},
+-    {4, 1, 0, 14, 0, 10851},
++    {2, 2, 0, 0, 0, 10848},
++    {3, 2, 1, 2, 0, 10850},
++    {4, 1, 0, 14, 0, 10857},
+     {5, 0, 1, 0, 91, 0},
+     {6, 0, 2, 0, 265, 0},
+-    {7, 1, 3, 22, 0, 10852},
++    {7, 1, 3, 22, 0, 10858},
+ };
+ const struct ArenaCupReward gArenaCup1Rewards[] = {
+-    {2, 2, 2, 3, 0, 10845},
++    {2, 2, 2, 3, 0, 10851},
+     {3, 0, 4, 0, 22, 0},
+-    {4, 2, 3, 3, 0, 10845},
+-    {5, 1, 5, 8, 0, 10856},
++    {4, 2, 3, 3, 0, 10851},
++    {5, 1, 5, 8, 0, 10862},
+     {6, 0, 6, 0, 76, 0},
+ };
+ const struct ArenaCupReward gArenaCup2Rewards[] = {
+-    {1, 2, 4, 5, 0, 10847},
++    {1, 2, 4, 5, 0, 10853},
+     {2, 0, 7, 0, 266, 0},
+-    {3, 1, 8, 23, 0, 10860},
++    {3, 1, 8, 23, 0, 10866},
+     {3, 0, 9, 0, 8, 0},
+-    {4, 2, 5, 2, 0, 10844},
+-    {5, 1, 10, 2, 0, 10861},
++    {4, 2, 5, 2, 0, 10850},
++    {5, 1, 10, 2, 0, 10867},
+     {5, 0, 11, 0, 93, 0},
+ };
+ const struct ArenaCupReward gArenaCup3Rewards[] = {
+-    {1, 2, 6, 1, 0, 10843},
+-    {2, 2, 7, 0, 0, 10842},
++    {1, 2, 6, 1, 0, 10849},
++    {2, 2, 7, 0, 0, 10848},
+     {3, 0, 12, 0, 36, 0},
+-    {4, 1, 13, 10, 0, 10865},
+-    {4, 2, 8, 5, 0, 10847},
+-    {5, 2, 9, 4, 0, 10846},
++    {4, 1, 13, 10, 0, 10871},
++    {4, 2, 8, 5, 0, 10853},
++    {5, 2, 9, 4, 0, 10852},
+     {6, 0, 14, 0, 130, 0},
+-    {7, 2, 10, 4, 0, 10846},
+-    {8, 2, 11, 4, 0, 10846},
++    {7, 2, 10, 4, 0, 10852},
++    {8, 2, 11, 4, 0, 10852},
+ };
+ const struct ArenaCupReward gArenaCup4Rewards[] = {
+-    {1, 2, 12, 2, 0, 10844},
++    {1, 2, 12, 2, 0, 10850},
+     {2, 0, 15, 0, 132, 0},
+-    {3, 2, 13, 0, 0, 10842},
+-    {4, 1, 16, 26, 0, 10869},
+-    {5, 2, 14, 1, 0, 10843},
++    {3, 2, 13, 0, 0, 10848},
++    {4, 1, 16, 26, 0, 10875},
++    {5, 2, 14, 1, 0, 10849},
+     {6, 0, 17, 0, 163, 0},
+ };
+ const struct ArenaCupReward gArenaCup5Rewards[] = {
+-    {1, 2, 15, 2, 0, 10844},
++    {1, 2, 15, 2, 0, 10850},
+     {2, 0, 18, 0, 95, 0},
+     {3, 0, 19, 0, 170, 0},
+-    {3, 2, 16, 0, 0, 10842},
++    {3, 2, 16, 0, 0, 10848},
+     {4, 0, 20, 0, 141, 0},
+     {4, 0, 21, 0, 134, 0},
+-    {4, 2, 17, 3, 0, 10845},
+-    {5, 1, 22, 19, 0, 10873},
++    {4, 2, 17, 3, 0, 10851},
++    {5, 1, 22, 19, 0, 10879},
+     {6, 0, 23, 0, 259, 0},
+-    {7, 1, 24, 13, 0, 10874},
+-    {8, 2, 18, 1, 0, 10843},
++    {7, 1, 24, 13, 0, 10880},
++    {8, 2, 18, 1, 0, 10849},
+ };
+ const struct ArenaCupReward gArenaCup6Rewards[] = {
+     {1, 0, 25, 0, 164, 0},
+     {2, 0, 26, 0, 113, 0},
+     {3, 0, 27, 0, 161, 0},
+-    {4, 1, 28, 27, 0, 10878},
++    {4, 1, 28, 27, 0, 10884},
+     {5, 0, 29, 0, 85, 0},
+     {5, 0, 30, 0, 162, 0},
+     {6, 0, 31, 0, 112, 0},
+@@ -74,38 +74,38 @@ const struct ArenaCupReward gArenaCup6Rewards[] = {
+ const struct ArenaCupReward gArenaCup8Rewards[] = {
+     {1, 0, 37, 0, 151, 0},
+     {2, 0, 38, 0, 267, 0},
+-    {2, 2, 19, 5, 0, 10847},
++    {2, 2, 19, 5, 0, 10853},
+     {3, 0, 39, 0, 268, 0},
+     {4, 0, 40, 0, 24, 0},
+     {5, 0, 41, 0, 96, 0},
+-    {5, 2, 20, 1, 0, 10843},
++    {5, 2, 20, 1, 0, 10849},
+     {6, 0, 42, 0, 98, 0},
+     {7, 0, 43, 0, 50, 0},
+     {8, 0, 44, 0, 83, 0},
+-    {8, 2, 21, 3, 0, 10845},
++    {8, 2, 21, 3, 0, 10851},
+     {9, 0, 45, 0, 11, 0},
+     {10, 0, 46, 0, 38, 0},
+ };
+ 
+ const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT] = {
+     // Tret Cup
+-    {8, 2, 0, 15, 6, 0, 0x0, gArenaCup0Rewards, 10848, 10849, 10850, 0x80},
++    {8, 2, 0, 15, 6, 0, 0x0, gArenaCup0Rewards, 10854, 10855, 10856, 0x80},
+     // Mercury Cup
+-    {8, 2, 1, 18, 5, 0, 0x0, gArenaCup1Rewards, 10853, 10854, 10855, 0x80},
++    {8, 2, 1, 18, 5, 0, 0x0, gArenaCup1Rewards, 10859, 10860, 10861, 0x80},
+     // Mogall Cup
+-    {7, 2, 2, 20, 7, 0, 0x0, gArenaCup2Rewards, 10857, 10858, 10859, 0x40},
++    {7, 2, 2, 20, 7, 0, 0x0, gArenaCup2Rewards, 10863, 10864, 10865, 0x40},
+     // Altin Cup
+-    {9, 2, 3, 25, 9, 0, 0x80, gArenaCup3Rewards, 10862, 10863, 10864, 0x100},
++    {9, 2, 3, 25, 9, 0, 0x80, gArenaCup3Rewards, 10868, 10869, 10870, 0x100},
+     // Tolbi Cup
+-    {8, 2, 4, 27, 6, 0, 0x40, gArenaCup4Rewards, 10866, 10867, 10868, 0x80},
++    {8, 2, 4, 27, 6, 0, 0x40, gArenaCup4Rewards, 10872, 10873, 10874, 0x80},
+     // Lunpa Cup
+-    {10, 2, 5, 35, 11, 0, 0x100, gArenaCup5Rewards, 10870, 10871, 10872, 0x200},
++    {10, 2, 5, 35, 11, 0, 0x100, gArenaCup5Rewards, 10876, 10877, 10878, 0x200},
+     // Lighthouse Cup
+-    {10, 2, 6, 50, 12, 0, 0x100, gArenaCup6Rewards, 10875, 10876, 10877, 0x200},
++    {10, 2, 6, 50, 12, 0, 0x100, gArenaCup6Rewards, 10881, 10882, 10883, 0x200},
+     // Boss Rush
+-    {6, 1, 7, 0, 0, 0, 0x0, 0, 10879, 10880, 10881, 0x3f},
++    {6, 1, 7, 0, 0, 0, 0x0, 0, 10885, 10886, 10887, 0x3f},
+     // Crossbone Isle
+-    {10, 3, 7, 0, 13, 0, 0x0, gArenaCup8Rewards, 10882, 10883, 10884, 0x200},
++    {10, 3, 7, 0, 13, 0, 0x0, gArenaCup8Rewards, 10888, 10889, 10890, 0x200},
+ };
+ 
+ const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3] = {
+diff --git a/games/tbs/src/shop/arena_class_viewer.c b/games/tbs/src/shop/arena_class_viewer.c
+index ad16a14044..e46f058465 100644
+--- a/games/tbs/src/shop/arena_class_viewer.c
++++ b/games/tbs/src/shop/arena_class_viewer.c
+@@ -705,26 +705,42 @@ s32 ClassViewer_Run(s32 unitId) {
+   return 0;
+ }
+ 
+-/// Topics the mechanics teacher offers, one row of sixteen pixels each.
++/// Topics the mechanics teacher offers.
+ #define MG_TOPIC_COUNT 6
+ 
+-/// Arena romhack: the mechanics teacher's topic list (MsgArenaMechTopic0 on),
+-/// a UiList with the hand on `first`: Up and Down move (and wrap), A returns the
+-/// row, B returns -1. Classic layout: a 22 by 15 window of 16-pixel rows, as
+-/// before; touch layout: a header with Back over a full-width list of
+-/// UI_ROW_HEIGHT rows, which scrolls when they do not all fit. The windows
+-/// close before returning, so the topic's text can be shown. Far-called from
+-/// the Battle Arena overlay.
++/// Each topic's icon, as the Psynergy and Item menus show them: (kind, id).
++static const u16 sMechanicsGuide_Icons[MG_TOPIC_COUNT * 2] = {
++    ICON_KIND_ABILITY, ABILITY_WEAKEN,   // weaknesses: Weaken lowers Resist
++    ICON_KIND_ITEM,    ITEM_VENUS_STAR,  // element power
++    ICON_KIND_ITEM,    ITEM_LONG_SWORD,  // damage
++    ICON_KIND_ITEM,    ITEM_SOL_BLADE,   // unleash chance
++    ICON_KIND_ABILITY, ABILITY_SLEEP,    // status chance
++    ICON_KIND_ABILITY, ABILITY_RAGNAROK, // physical or magic
++};
++
++/// Arena romhack: the mechanics teacher's library, laid out as the field
++/// Psynergy and Item menus are: a name window, the topics in two columns,
++/// each an icon and a name, and a line about the chosen topic along the
++/// bottom (MsgArenaMechHint0 on). The hand starts on `first`; A returns the
++/// topic, B returns -1. Classic layout: the windows stacked at the bottom of
++/// the screen, 16-pixel rows; touch layout: a header with Back, then the
++/// topics in UI_ROW_HEIGHT rows across the full width. The windows close
++/// before returning, so the topic's text can be shown. Far-called from the
++/// Battle Arena overlay.
+ s32 MechanicsGuide_Choose(s32 first) {
+   struct ShopState *shop;
+   struct Window *anchorWindow;
+-  struct Window *header = 0;
++  struct Window *title;
+   struct Window *window;
++  struct Window *hint;
+   struct WindowSprite *anchor;
+   struct UiList list;
+   s32 result = -1;
+   s32 redraw = 1;
+   s32 step;
++  s32 rowHeight = UI_TOUCH_LAYOUT ? UI_ROW_HEIGHT : 16;
++  s32 lines = (MG_TOPIC_COUNT + 1) / 2;
++  s32 top;
+ 
+   while (gKeysHeld != 0)
+     wait(1);
+@@ -742,31 +758,38 @@ s32 MechanicsGuide_Choose(s32 first) {
+   MenuCursor_SetPositionImmediate(&shop->cursor, -32, 112);
+   shop->cursor.anchor = anchor;
+   if (UI_TOUCH_LAYOUT) {
+-    s32 height = MG_TOPIC_COUNT * UI_ROW_HEIGHT / 8 + 2;
+-
+-    if (height > 17)
+-      height = 17;
+-    header = UiHeader_Open();
+-    UiHeader_Draw(header, UI_HEADER_BACK_BUTTON);
+-    Text_DrawMessageAsTilesFar(MsgArenaUiMechanicsTitle, header, 6, 0);
+-    window = Window_CreateFar(0, 3, UI_SCREEN_TILES, height,
+-                              WINDOW_FLAG_INSTANT);
+-    UiList_Init(&list, window, MG_TOPIC_COUNT, MsgArenaMechTopic0,
+-                UI_ROW_HEIGHT, 0, 24, first);
++    title = UiHeader_Open();
++    UiHeader_Draw(title, UI_HEADER_BACK_BUTTON);
++    top = 3;
+   } else {
+-    window = Window_CreateFar(4, 2, 22, 15, WINDOW_FLAG_INSTANT);
+-    UiList_Init(&list, window, MG_TOPIC_COUNT, MsgArenaMechTopic0, 16, 4, 24,
+-                first);
++    // The name window sits on the topics' window, as the menus' titles do.
++    top = 20 - 3 - (lines * rowHeight / 8 + 2);
++    title = Window_CreateFar(0, top - 3, 14, 3, WINDOW_FLAG_INSTANT);
+   }
++  Text_DrawMessageAsTilesFar(MsgArenaUiMechanicsTitle, title,
++                             UI_TOUCH_LAYOUT ? 6 : 4, 0);
++  window = Window_CreateFar(0, top, UI_SCREEN_TILES,
++                            lines * rowHeight / 8 + 2, WINDOW_FLAG_INSTANT);
++  hint = Window_CreateFar(0, 17, UI_SCREEN_TILES, 3, WINDOW_FLAG_INSTANT);
++  UiList_Init(&list, window, MG_TOPIC_COUNT, MsgArenaMechTopic0, rowHeight, 0,
++              28, first);
++  // On the GBA's 30 tiles the right column starts 100 pixels on, which
++  // leaves room for "Physical or magic"; a wider screen splits evenly.
++  UiList_SetGrid(&list, 2,
++                 UI_SCREEN_TILES > 30 ? (UI_SCREEN_TILES - 2) * 4 : 100);
++  list.icons = sMechanicsGuide_Icons;
+   shop->cursorFrames = 12;
+ 
+   for (;;) {
+     if (redraw != 0) {
+       redraw = 0;
+       UiList_Draw(&list);
++      WindowSprite_PrepareForRedrawFar(hint);
++      Text_DrawMessageAsTilesFar(MsgArenaMechHint0 + list.cursor, hint, 4, 0);
+     }
+     wait(1);
+-    UiHeader_Touch(header, UI_HEADER_BACK_BUTTON);
++    if (UI_TOUCH_LAYOUT)
++      UiHeader_Touch(title, UI_HEADER_BACK_BUTTON);
+     step = UiList_Step(&list);
+     if (step == UI_LIST_CANCELLED)
+       break;
+@@ -778,9 +801,9 @@ s32 MechanicsGuide_Choose(s32 first) {
+       redraw = 1;
+   }
+ 
++  Window_CloseFar(hint, 2);
+   Window_CloseFar(window, 2);
+-  if (header != 0)
+-    Window_CloseFar(header, 2);
++  Window_CloseFar(title, 2);
+   Window_CloseFar(anchorWindow, 2);
+   wait(1);
+   if (UI_TOUCH_LAYOUT)
+diff --git a/games/tbs/src/shop/arena_ui_kit.c b/games/tbs/src/shop/arena_ui_kit.c
+index efca8cb59d..dfa078fc0b 100644
+--- a/games/tbs/src/shop/arena_ui_kit.c
++++ b/games/tbs/src/shop/arena_ui_kit.c
+@@ -76,6 +76,9 @@ void UiList_Init(struct UiList *list, struct Window *window, s32 count,
+   list->rowHeight = rowHeight;
+   list->top = top;
+   list->textX = textX;
++  list->columns = 1;
++  list->columnWidth = (window->width - 2) * 8;
++  list->icons = 0;
+   list->visible = inside / rowHeight;
+   if (list->visible > count)
+     list->visible = count;
+@@ -86,21 +89,46 @@ void UiList_Init(struct UiList *list, struct Window *window, s32 count,
+   UiList_Reveal(list);
+ }
+ 
+-/// Scrolls so the chosen row shows.
++/// Makes the list a grid: `columns` entries to a line, `columnWidth` pixels
++/// apart, read across. Up and Down move a line, Left and Right an entry.
++void UiList_SetGrid(struct UiList *list, s32 columns, s32 columnWidth) {
++  s32 lines = ((list->window->height - 2) * 8 - list->top) / list->rowHeight;
++
++  if (lines < 1)
++    lines = 1;
++  list->columns = columns;
++  list->columnWidth = columnWidth;
++  list->visible = lines * columns;
++  if (list->visible > list->count)
++    list->visible = list->count;
++  list->first = 0;
++  UiList_Reveal(list);
++}
++
++/// Scrolls, a line at a time, so the chosen entry shows.
+ void UiList_Reveal(struct UiList *list) {
++  s32 line = list->cursor - list->cursor % list->columns;
++
+   if (list->cursor < list->first)
+-    list->first = list->cursor;
++    list->first = line;
+   if (list->cursor >= list->first + list->visible)
+-    list->first = list->cursor - list->visible + 1;
++    list->first = line + list->columns - list->visible;
++  if (list->first < 0)
++    list->first = 0;
+ }
+ 
+-/// The y of a showing row's text (tile text sits on 8-pixel rows), in the
++/// The y of a showing entry's text (tile text sits on 8-pixel rows), in the
+ /// window.
+ static s32 UiList_RowY(const struct UiList *list, s32 row) {
+-  return list->top + (row - list->first) * list->rowHeight +
++  return list->top + (row - list->first) / list->columns * list->rowHeight +
+          (list->rowHeight - 8) / 2;
+ }
+ 
++/// The x of an entry's text, in the window.
++static s32 UiList_TextX(const struct UiList *list, s32 row) {
++  return list->textX + (row - list->first) % list->columns * list->columnWidth;
++}
++
+ /// Draws the showing rows, the arrows (the shop's own, hopping) when rows are
+ /// hidden above or below, and puts the hand on the chosen row.
+ void UiList_Draw(struct UiList *list) {
+@@ -111,9 +139,20 @@ void UiList_Draw(struct UiList *list) {
+ 
+   WindowSprite_PrepareForRedrawFar(window);
+   for (row = list->first;
+-       row < list->first + list->visible && row < list->count; row++)
+-    Text_DrawMessageAsTilesFar(list->labelBase + row, window, list->textX,
++       row < list->first + list->visible && row < list->count; row++) {
++    if (list->icons != 0) {
++      // The icon 20 pixels before the name, centred on its tile row.
++      struct WindowSprite *icon = WindowSprite_CreateFromResourceFar(
++          list->icons[row * 2], list->icons[row * 2 + 1], window,
++          UiList_TextX(list, row) - 20, UiList_RowY(list, row) - 4);
++
++      if (icon != 0)
++        icon->depth = 252;
++    }
++    Text_DrawMessageAsTilesFar(list->labelBase + row, window,
++                               UiList_TextX(list, row),
+                                UiList_RowY(list, row));
++  }
+   if (list->first > 0) {
+     struct WindowSprite *icon = WindowSprite_CreateFar(
+         shop->previousPageIcon, WINDOW_SPRITE_SIZE_16X16, window, arrowX, -8);
+@@ -131,7 +170,9 @@ void UiList_Draw(struct UiList *list) {
+     icon->motion = WINDOW_SPRITE_MOTION_HOP_DOWN_NEXT_PAGE;
+     icon->animationStep = 0;
+   }
+-  MenuCursor_Place(window, list->textX - 22,
++  MenuCursor_Place(window,
++                   UiList_TextX(list, list->cursor) -
++                       (list->icons != 0 ? 30 : 22),
+                    UiList_RowY(list, list->cursor));
+ }
+ 
+@@ -152,10 +193,10 @@ s32 UiList_Step(struct UiList *list) {
+     if (list->first > 0 &&
+         WindowTouch_Cell(window, arrowX, -12, 24, 24, 1, 1) == 0) {
+       Sound_PlayFar(SE_MENU_CURSOR_MOVE);
+-      list->cursor -= list->visible;
+-      if (list->cursor < 0)
+-        list->cursor = 0;
+-      list->first = list->cursor;
++      list->first -= list->visible;
++      if (list->first < 0)
++        list->first = 0;
++      list->cursor = list->first;
+       return UI_LIST_MOVED;
+     }
+     if (list->first + list->visible < list->count &&
+@@ -163,13 +204,14 @@ s32 UiList_Step(struct UiList *list) {
+                          1, 1) == 0) {
+       Sound_PlayFar(SE_MENU_CURSOR_MOVE);
+       list->first += list->visible;
+-      if (list->first > list->count - list->visible)
+-        list->first = list->count - list->visible;
+       list->cursor = list->first;
++      if (list->cursor >= list->count)
++        list->cursor = list->count - 1;
+       return UI_LIST_MOVED;
+     }
+-    if (WindowTouch_Pick(window, 0, list->top, arrowX - 4, list->rowHeight, 1,
+-                         showing, &slot)) {
++    if (WindowTouch_Pick(window, 0, list->top,
++                         list->columns > 1 ? list->columnWidth : arrowX - 4,
++                         list->rowHeight, list->columns, showing, &slot)) {
+       list->cursor = list->first + slot;
+       return UI_LIST_MOVED;
+     }
+@@ -183,19 +225,24 @@ s32 UiList_Step(struct UiList *list) {
+     Sound_PlayFar(SE_MENU_CANCEL);
+     return UI_LIST_CANCELLED;
+   }
+-  if ((gKeysRepeat & KEY_UP) != 0) {
+-    Sound_PlayFar(SE_MENU_CURSOR_MOVE);
+-    list->cursor = (list->cursor + list->count - 1) % list->count;
+-    UiList_Reveal(list);
+-    return UI_LIST_MOVED;
+-  }
+-  if ((gKeysRepeat & KEY_DOWN) != 0) {
++  {
++    s32 step = 0;
++
++    if ((gKeysRepeat & KEY_UP) != 0)
++      step = -list->columns;
++    else if ((gKeysRepeat & KEY_DOWN) != 0)
++      step = list->columns;
++    else if (list->columns > 1 && (gKeysRepeat & KEY_LEFT) != 0)
++      step = -1;
++    else if (list->columns > 1 && (gKeysRepeat & KEY_RIGHT) != 0)
++      step = 1;
++    if (step == 0)
++      return 0;
+     Sound_PlayFar(SE_MENU_CURSOR_MOVE);
+-    list->cursor = (list->cursor + 1) % list->count;
++    list->cursor = (list->cursor + list->count + step) % list->count;
+     UiList_Reveal(list);
+     return UI_LIST_MOVED;
+   }
+-  return 0;
+ }
+ 
+ #undef UI_HEADER_BUTTON
+diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
+index 3d4d7350a5..a26fb6d8bc 100644
+--- a/games/tbs/text/en.po
++++ b/games/tbs/text/en.po
+@@ -65568,114 +65568,138 @@ msgctxt "MsgArenaUiMechanicsTitle"
+ msgid "10823"
+ msgstr "Battle mechanics"
+ 
++msgctxt "MsgArenaMechHint0"
++msgid "10824"
++msgstr "Find the element a foe resists least."
++
++msgctxt "MsgArenaMechHint1"
++msgid "10825"
++msgstr "Power, Resist, and what Djinn add."
++
++msgctxt "MsgArenaMechHint2"
++msgid "10826"
++msgstr "How much a hit or Psynergy deals."
++
++msgctxt "MsgArenaMechHint3"
++msgid "10827"
++msgstr "How often a weapon unleashes."
++
++msgctxt "MsgArenaMechHint4"
++msgid "10828"
++msgstr "The odds of sleep, poison and more."
++
++msgctxt "MsgArenaMechHint5"
++msgid "10829"
++msgstr "Which moves count as physical."
++
+ # BEGIN GENERATED CUPS (scripts/gen-cups.py; do not edit by hand)
+ 
+ msgctxt "MsgArenaCupName0"
+-msgid "10824"
++msgid "10830"
+ msgstr ""
+ "Tret Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName1"
+-msgid "10825"
++msgid "10831"
+ msgstr ""
+ "Mercury Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName2"
+-msgid "10826"
++msgid "10832"
+ msgstr ""
+ "Mogall Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName3"
+-msgid "10827"
++msgid "10833"
+ msgstr ""
+ "Altin Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName4"
+-msgid "10828"
++msgid "10834"
+ msgstr ""
+ "Tolbi Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName5"
+-msgid "10829"
++msgid "10835"
+ msgstr ""
+ "Lunpa Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName6"
+-msgid "10830"
++msgid "10836"
+ msgstr ""
+ "Lighthouse Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName7"
+-msgid "10831"
++msgid "10837"
+ msgstr ""
+ "Boss Rush"
+ 
+ 
+ msgctxt "MsgArenaCupName8"
+-msgid "10832"
++msgid "10838"
+ msgstr ""
+ "Crossbone Isle"
+ 
+ 
+ msgctxt "MsgArenaCupNext"
+-msgid "10833"
++msgid "10839"
+ msgstr ""
+ "Next cup"
+ 
+ 
+ msgctxt "MsgArenaCupReplay"
+-msgid "10834"
++msgid "10840"
+ msgstr ""
+ "Replay"
+ 
+ 
+ msgctxt "MsgArenaCupSide"
+-msgid "10835"
++msgid "10841"
+ msgstr ""
+ "Side cups"
+ 
+ 
+ msgctxt "MsgArenaCupReplayPrompt"
+-msgid "10836"
++msgid "10842"
+ msgstr ""
+ "Replay which cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupGroupEarly"
+-msgid "10837"
++msgid "10843"
+ msgstr ""
+ "Early cups"
+ 
+ 
+ msgctxt "MsgArenaCupGroupLate"
+-msgid "10838"
++msgid "10844"
+ msgstr ""
+ "Later cups"
+ 
+ 
+ msgctxt "MsgArenaCupSidePrompt"
+-msgid "10839"
++msgid "10845"
+ msgstr ""
+ "Which side cup\n"
+ "will you enter?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaGearReward"
+-msgid "10840"
++msgid "10846"
+ msgstr ""
+ "A find from the\n"
+ "dungeon! It is yours.{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaDjinnNoRoom"
+-msgid "10841"
++msgid "10847"
+ msgstr ""
+ "Your Djinn are full!\n"
+ "Make room, then win\n"
+@@ -65683,56 +65707,56 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaBoostGetHP"
+-msgid "10842"
++msgid "10848"
+ msgstr ""
+ "You can boost\n"
+ "HP once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetPP"
+-msgid "10843"
++msgid "10849"
+ msgstr ""
+ "You can boost\n"
+ "PP once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetAttack"
+-msgid "10844"
++msgid "10850"
+ msgstr ""
+ "You can boost\n"
+ "Attack once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetDefense"
+-msgid "10845"
++msgid "10851"
+ msgstr ""
+ "You can boost\n"
+ "Defense once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetAgility"
+-msgid "10846"
++msgid "10852"
+ msgstr ""
+ "You can boost\n"
+ "Agility once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetLuck"
+-msgid "10847"
++msgid "10853"
+ msgstr ""
+ "You can boost\n"
+ "Luck once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaCupConfirm0"
+-msgid "10848"
++msgid "10854"
+ msgstr ""
+ "Enter the\n"
+ "Tret Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared0"
+-msgid "10849"
++msgid "10855"
+ msgstr ""
+ "You cleared the\n"
+ "Tret Cup!\n"
+@@ -65740,7 +65764,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst0"
+-msgid "10850"
++msgid "10856"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65754,7 +65778,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup0DjinnForge"
+-msgid "10851"
++msgid "10857"
+ msgstr ""
+ "You won the Djinni\n"
+ "Forge!\n"
+@@ -65762,7 +65786,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup0DjinnBreeze"
+-msgid "10852"
++msgid "10858"
+ msgstr ""
+ "You won the Djinni\n"
+ "Breeze!\n"
+@@ -65770,14 +65794,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm1"
+-msgid "10853"
++msgid "10859"
+ msgstr ""
+ "Enter the\n"
+ "Mercury Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared1"
+-msgid "10854"
++msgid "10860"
+ msgstr ""
+ "You cleared the\n"
+ "Mercury Cup!\n"
+@@ -65785,7 +65809,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst1"
+-msgid "10855"
++msgid "10861"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65797,7 +65821,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup1DjinnSleet"
+-msgid "10856"
++msgid "10862"
+ msgstr ""
+ "You won the Djinni\n"
+ "Sleet!\n"
+@@ -65805,14 +65829,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm2"
+-msgid "10857"
++msgid "10863"
+ msgstr ""
+ "Enter the\n"
+ "Mogall Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared2"
+-msgid "10858"
++msgid "10864"
+ msgstr ""
+ "You cleared the\n"
+ "Mogall Cup!\n"
+@@ -65820,7 +65844,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst2"
+-msgid "10859"
++msgid "10865"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65832,7 +65856,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup2DjinnZephyr"
+-msgid "10860"
++msgid "10866"
+ msgstr ""
+ "You won the Djinni\n"
+ "Zephyr!\n"
+@@ -65840,7 +65864,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup2DjinnQuartz"
+-msgid "10861"
++msgid "10867"
+ msgstr ""
+ "You won the Djinni\n"
+ "Quartz!\n"
+@@ -65848,14 +65872,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm3"
+-msgid "10862"
++msgid "10868"
+ msgstr ""
+ "Enter the\n"
+ "Altin Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared3"
+-msgid "10863"
++msgid "10869"
+ msgstr ""
+ "You cleared the\n"
+ "Altin Cup!\n"
+@@ -65863,7 +65887,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst3"
+-msgid "10864"
++msgid "10870"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65878,7 +65902,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup3DjinnSpritz"
+-msgid "10865"
++msgid "10871"
+ msgstr ""
+ "You won the Djinni\n"
+ "Spritz!\n"
+@@ -65886,14 +65910,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm4"
+-msgid "10866"
++msgid "10872"
+ msgstr ""
+ "Enter the\n"
+ "Tolbi Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared4"
+-msgid "10867"
++msgid "10873"
+ msgstr ""
+ "You cleared the\n"
+ "Tolbi Cup!\n"
+@@ -65901,7 +65925,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst4"
+-msgid "10868"
++msgid "10874"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65915,7 +65939,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup4DjinnSquall"
+-msgid "10869"
++msgid "10875"
+ msgstr ""
+ "You won the Djinni\n"
+ "Squall!\n"
+@@ -65923,14 +65947,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm5"
+-msgid "10870"
++msgid "10876"
+ msgstr ""
+ "Enter the\n"
+ "Lunpa Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared5"
+-msgid "10871"
++msgid "10877"
+ msgstr ""
+ "You cleared the\n"
+ "Lunpa Cup!\n"
+@@ -65938,7 +65962,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst5"
+-msgid "10872"
++msgid "10878"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65954,7 +65978,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup5DjinnFlash"
+-msgid "10873"
++msgid "10879"
+ msgstr ""
+ "You won the Djinni\n"
+ "Flash!\n"
+@@ -65962,7 +65986,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup5DjinnDew"
+-msgid "10874"
++msgid "10880"
+ msgstr ""
+ "You won the Djinni\n"
+ "Dew!\n"
+@@ -65970,14 +65994,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm6"
+-msgid "10875"
++msgid "10881"
+ msgstr ""
+ "Enter the\n"
+ "Lighthouse Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared6"
+-msgid "10876"
++msgid "10882"
+ msgstr ""
+ "You cleared the\n"
+ "Lighthouse Cup!\n"
+@@ -65985,7 +66009,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst6"
+-msgid "10877"
++msgid "10883"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -66001,7 +66025,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup6DjinnLuff"
+-msgid "10878"
++msgid "10884"
+ msgstr ""
+ "You won the Djinni\n"
+ "Luff!\n"
+@@ -66009,14 +66033,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm7"
+-msgid "10879"
++msgid "10885"
+ msgstr ""
+ "Enter the\n"
+ "Boss Rush?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared7"
+-msgid "10880"
++msgid "10886"
+ msgstr ""
+ "You cleared the\n"
+ "Boss Rush!\n"
+@@ -66024,7 +66048,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst7"
+-msgid "10881"
++msgid "10887"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -66032,14 +66056,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm8"
+-msgid "10882"
++msgid "10888"
+ msgstr ""
+ "Enter the\n"
+ "Crossbone Isle?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared8"
+-msgid "10883"
++msgid "10889"
+ msgstr ""
+ "You cleared the\n"
+ "Crossbone Isle!\n"
+@@ -66047,7 +66071,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst8"
+-msgid "10884"
++msgid "10890"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+-- 
+2.43.0
+

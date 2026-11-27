@@ -1,0 +1,17 @@
+# The mechanics library (run with --ui classic for the GBA layout): the
+# topics, Down, Right, Up twice (wraps to the bottom line), then B.
+include to_lobby.txt
+screen mechanics
+wait 60
+shot /tmp/shots/m0.png
+tap D
+tap R
+wait 20
+shot /tmp/shots/m1.png
+tap U
+tap U
+wait 20
+shot /tmp/shots/m2.png
+tap B
+wait 40
+shot /tmp/shots/m3.png

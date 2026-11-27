@@ -1,0 +1,29 @@
+# Touch in the weapon shop's selling at width 240 (run with --width 240): tap
+# Sell, tap the second party member twice, then the second slot of the bag
+# twice.
+include to_manager.txt
+touch 122 148
+wait 10
+touch 122 148
+wait 120
+touch 62 148
+wait 30
+touch 62 148
+wait 320
+touch 87 145
+wait 20
+touch 87 145
+wait 60
+shot /tmp/shots/l0.png
+touch 40 115
+wait 20
+shot /tmp/shots/l1.png
+touch 40 115
+wait 40
+shot /tmp/shots/l2.png
+touch 160 108
+wait 20
+shot /tmp/shots/l3.png
+touch 160 108
+wait 60
+shot /tmp/shots/l4.png

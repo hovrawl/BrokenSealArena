@@ -1,0 +1,25 @@
+# The class viewer's touch layout at width 240 (run with --width 240, the
+# default --ui touch): tap the second class to highlight it and again for
+# its Psynergy, Back, the next line (R), the filter, then Back out.
+include to_lobby.txt
+screen classviewer
+wait 60
+shot /tmp/shots/c0.png
+touch 112 44
+wait 20
+shot /tmp/shots/c1.png
+touch 112 44
+wait 30
+shot /tmp/shots/c2.png
+touch 202 12
+wait 30
+shot /tmp/shots/c3.png
+touch 46 12
+wait 20
+shot /tmp/shots/c4.png
+touch 118 12
+wait 20
+shot /tmp/shots/c5.png
+touch 202 12
+wait 40
+shot /tmp/shots/c6.png

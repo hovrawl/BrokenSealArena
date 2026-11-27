@@ -1,0 +1,1199 @@
+From 32df14b688b19153b6399a3455a525ab339915dc Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 27 Nov 2026 08:13:22 +0000
+Subject: [PATCH] UI kit: shared header and scrolling list; mechanics list on
+ the kit
+
+arena_ui_kit.c adds UiHeader (the touch layout's top bar with [L] [R] and
+Back, tappable) and UiList (a list of message rows with the shop's page
+arrows, keys and taps). The mechanics topic list now uses them: classic is
+the old window, touch is a full-width list under a "Battle mechanics"
+header. The class viewer draws its header through the kit.
+
+The shop bank had no room left: the English banks from battle onward move
+up 0x2000 (ld_script.ld), the image still ends before ROM_END.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8ykfbWFo924wEqysLhg
+---
+ games/tbs/include/arena/arena_cups.h    |   2 +-
+ games/tbs/include/arena/ui_kit.h        |  38 +++++
+ games/tbs/ld_script.ld                  |  18 +--
+ games/tbs/src/scene/arena_cup_info.inc  |  82 +++++-----
+ games/tbs/src/shop/arena_class_viewer.c | 107 ++++++-------
+ games/tbs/src/shop/arena_ui_kit.c       | 202 ++++++++++++++++++++++++
+ games/tbs/src/shop/shop.c               |   1 +
+ games/tbs/text/en.po                    | 126 ++++++++-------
+ 8 files changed, 409 insertions(+), 167 deletions(-)
+ create mode 100644 games/tbs/src/shop/arena_ui_kit.c
+
+diff --git a/games/tbs/include/arena/arena_cups.h b/games/tbs/include/arena/arena_cups.h
+index 2a6bbc95f1..bd1369786f 100644
+--- a/games/tbs/include/arena/arena_cups.h
++++ b/games/tbs/include/arena/arena_cups.h
+@@ -70,6 +70,6 @@ extern const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT];
+ extern const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3];
+ extern const u8 gArenaCrossboneRows[3];
+ 
+-#define MSG_ARENA_CUP_NAME 10823
++#define MSG_ARENA_CUP_NAME 10824
+ 
+ #endif
+diff --git a/games/tbs/include/arena/ui_kit.h b/games/tbs/include/arena/ui_kit.h
+index 22405691c0..d14dd7c389 100644
+--- a/games/tbs/include/arena/ui_kit.h
++++ b/games/tbs/include/arena/ui_kit.h
+@@ -35,4 +35,42 @@ void Screen_SetUiSafeArea(int on);
+ /// a full-width touch layout.
+ #define UI_SCREEN_TILES (DISPLAY_WIDTH / 8)
+ 
++/// The header's buttons (UiHeader_Draw, UiHeader_Touch).
++#define UI_HEADER_PAGES 1       ///< [L] [R] at the left
++#define UI_HEADER_BACK_BUTTON 2 ///< B Back at the right
++/// Where a header's title starts after [L] [R], in pixels inside it.
++#define UI_HEADER_TITLE_X 54
++
++struct Window;
++
++/// A list of message rows in a window (arena_ui_kit.c).
++struct UiList {
++  struct Window *window;
++  s16 count, visible, first, cursor;
++  s16 rowHeight, top, textX;
++  s32 labelBase;
++};
++
++/// What UiList_Step saw this frame.
++enum {
++  UI_LIST_NONE,
++  UI_LIST_MOVED,     ///< the hand or the scroll moved: draw again
++  UI_LIST_CHOSEN,    ///< A, or a tap on the chosen row
++  UI_LIST_CANCELLED, ///< B (or Back)
++};
++
++struct Window *UiHeader_Open(void);
++void UiHeader_Draw(struct Window *header, s32 buttons);
++s32 UiHeader_BackX(struct Window *header);
++#ifdef NATIVE
++void UiHeader_Touch(struct Window *header, s32 buttons);
++#else
++#define UiHeader_Touch(header, buttons)
++#endif
++void UiList_Init(struct UiList *list, struct Window *window, s32 count,
++                 s32 labelBase, s32 rowHeight, s32 top, s32 textX, s32 cursor);
++void UiList_Reveal(struct UiList *list);
++void UiList_Draw(struct UiList *list);
++s32 UiList_Step(struct UiList *list);
++
+ #endif
+diff --git a/games/tbs/ld_script.ld b/games/tbs/ld_script.ld
+index 167573fc81..fef98878bd 100644
+--- a/games/tbs/ld_script.ld
++++ b/games/tbs/ld_script.ld
+@@ -82,15 +82,15 @@
+ #define FIELD_SEQUENCE_BANK_START 0x0808a000
+ #define MENU_BANK_START           0x080a1000
+ #define SHOP_BANK_START           0x080b0000
+-#define BATTLE_BANK_START         0x080b7000
+-#define BATTLE_EFFECT_BANK_START  0x080c9d00
+-#define CREDITS_BANK_START        0x080f0000
+-#define TITLE_BANK_START          0x080f2000
+-#define LUCKY_DICE_BANK_START     0x080f4000
+-#define LUCKY_WHEELS_BANK_START   0x080f6000
+-#define SOUND_BANK_START          0x080f9000
+-#define SPRITE_BANK_START         0x08185000
+-#define RESOURCE_DIRECTORY_START  0x08326000
++#define BATTLE_BANK_START         0x080b9000
++#define BATTLE_EFFECT_BANK_START  0x080cbd00
++#define CREDITS_BANK_START        0x080f2000
++#define TITLE_BANK_START          0x080f4000
++#define LUCKY_DICE_BANK_START     0x080f6000
++#define LUCKY_WHEELS_BANK_START   0x080f8000
++#define SOUND_BANK_START          0x080fb000
++#define SPRITE_BANK_START         0x08187000
++#define RESOURCE_DIRECTORY_START  0x08328000
+ #endif
+ 
+ #ifdef OVERLAY
+diff --git a/games/tbs/src/scene/arena_cup_info.inc b/games/tbs/src/scene/arena_cup_info.inc
+index 9d239daa7f..dc12e67443 100644
+--- a/games/tbs/src/scene/arena_cup_info.inc
++++ b/games/tbs/src/scene/arena_cup_info.inc
+@@ -2,66 +2,66 @@
+ // Included by arena_menu.c. Global const data: a scene overlay has no static data of its own.
+ 
+ const struct ArenaCupReward gArenaCup0Rewards[] = {
+-    {2, 2, 0, 0, 0, 10841},
+-    {3, 2, 1, 2, 0, 10843},
+-    {4, 1, 0, 14, 0, 10850},
++    {2, 2, 0, 0, 0, 10842},
++    {3, 2, 1, 2, 0, 10844},
++    {4, 1, 0, 14, 0, 10851},
+     {5, 0, 1, 0, 91, 0},
+     {6, 0, 2, 0, 265, 0},
+-    {7, 1, 3, 22, 0, 10851},
++    {7, 1, 3, 22, 0, 10852},
+ };
+ const struct ArenaCupReward gArenaCup1Rewards[] = {
+-    {2, 2, 2, 3, 0, 10844},
++    {2, 2, 2, 3, 0, 10845},
+     {3, 0, 4, 0, 22, 0},
+-    {4, 2, 3, 3, 0, 10844},
+-    {5, 1, 5, 8, 0, 10855},
++    {4, 2, 3, 3, 0, 10845},
++    {5, 1, 5, 8, 0, 10856},
+     {6, 0, 6, 0, 76, 0},
+ };
+ const struct ArenaCupReward gArenaCup2Rewards[] = {
+-    {1, 2, 4, 5, 0, 10846},
++    {1, 2, 4, 5, 0, 10847},
+     {2, 0, 7, 0, 266, 0},
+-    {3, 1, 8, 23, 0, 10859},
++    {3, 1, 8, 23, 0, 10860},
+     {3, 0, 9, 0, 8, 0},
+-    {4, 2, 5, 2, 0, 10843},
+-    {5, 1, 10, 2, 0, 10860},
++    {4, 2, 5, 2, 0, 10844},
++    {5, 1, 10, 2, 0, 10861},
+     {5, 0, 11, 0, 93, 0},
+ };
+ const struct ArenaCupReward gArenaCup3Rewards[] = {
+-    {1, 2, 6, 1, 0, 10842},
+-    {2, 2, 7, 0, 0, 10841},
++    {1, 2, 6, 1, 0, 10843},
++    {2, 2, 7, 0, 0, 10842},
+     {3, 0, 12, 0, 36, 0},
+-    {4, 1, 13, 10, 0, 10864},
+-    {4, 2, 8, 5, 0, 10846},
+-    {5, 2, 9, 4, 0, 10845},
++    {4, 1, 13, 10, 0, 10865},
++    {4, 2, 8, 5, 0, 10847},
++    {5, 2, 9, 4, 0, 10846},
+     {6, 0, 14, 0, 130, 0},
+-    {7, 2, 10, 4, 0, 10845},
+-    {8, 2, 11, 4, 0, 10845},
++    {7, 2, 10, 4, 0, 10846},
++    {8, 2, 11, 4, 0, 10846},
+ };
+ const struct ArenaCupReward gArenaCup4Rewards[] = {
+-    {1, 2, 12, 2, 0, 10843},
++    {1, 2, 12, 2, 0, 10844},
+     {2, 0, 15, 0, 132, 0},
+-    {3, 2, 13, 0, 0, 10841},
+-    {4, 1, 16, 26, 0, 10868},
+-    {5, 2, 14, 1, 0, 10842},
++    {3, 2, 13, 0, 0, 10842},
++    {4, 1, 16, 26, 0, 10869},
++    {5, 2, 14, 1, 0, 10843},
+     {6, 0, 17, 0, 163, 0},
+ };
+ const struct ArenaCupReward gArenaCup5Rewards[] = {
+-    {1, 2, 15, 2, 0, 10843},
++    {1, 2, 15, 2, 0, 10844},
+     {2, 0, 18, 0, 95, 0},
+     {3, 0, 19, 0, 170, 0},
+-    {3, 2, 16, 0, 0, 10841},
++    {3, 2, 16, 0, 0, 10842},
+     {4, 0, 20, 0, 141, 0},
+     {4, 0, 21, 0, 134, 0},
+-    {4, 2, 17, 3, 0, 10844},
+-    {5, 1, 22, 19, 0, 10872},
++    {4, 2, 17, 3, 0, 10845},
++    {5, 1, 22, 19, 0, 10873},
+     {6, 0, 23, 0, 259, 0},
+-    {7, 1, 24, 13, 0, 10873},
+-    {8, 2, 18, 1, 0, 10842},
++    {7, 1, 24, 13, 0, 10874},
++    {8, 2, 18, 1, 0, 10843},
+ };
+ const struct ArenaCupReward gArenaCup6Rewards[] = {
+     {1, 0, 25, 0, 164, 0},
+     {2, 0, 26, 0, 113, 0},
+     {3, 0, 27, 0, 161, 0},
+-    {4, 1, 28, 27, 0, 10877},
++    {4, 1, 28, 27, 0, 10878},
+     {5, 0, 29, 0, 85, 0},
+     {5, 0, 30, 0, 162, 0},
+     {6, 0, 31, 0, 112, 0},
+@@ -74,38 +74,38 @@ const struct ArenaCupReward gArenaCup6Rewards[] = {
+ const struct ArenaCupReward gArenaCup8Rewards[] = {
+     {1, 0, 37, 0, 151, 0},
+     {2, 0, 38, 0, 267, 0},
+-    {2, 2, 19, 5, 0, 10846},
++    {2, 2, 19, 5, 0, 10847},
+     {3, 0, 39, 0, 268, 0},
+     {4, 0, 40, 0, 24, 0},
+     {5, 0, 41, 0, 96, 0},
+-    {5, 2, 20, 1, 0, 10842},
++    {5, 2, 20, 1, 0, 10843},
+     {6, 0, 42, 0, 98, 0},
+     {7, 0, 43, 0, 50, 0},
+     {8, 0, 44, 0, 83, 0},
+-    {8, 2, 21, 3, 0, 10844},
++    {8, 2, 21, 3, 0, 10845},
+     {9, 0, 45, 0, 11, 0},
+     {10, 0, 46, 0, 38, 0},
+ };
+ 
+ const struct ArenaCupInfo gArenaCupInfo[ARENA_CUP_COUNT] = {
+     // Tret Cup
+-    {8, 2, 0, 15, 6, 0, 0x0, gArenaCup0Rewards, 10847, 10848, 10849, 0x80},
++    {8, 2, 0, 15, 6, 0, 0x0, gArenaCup0Rewards, 10848, 10849, 10850, 0x80},
+     // Mercury Cup
+-    {8, 2, 1, 18, 5, 0, 0x0, gArenaCup1Rewards, 10852, 10853, 10854, 0x80},
++    {8, 2, 1, 18, 5, 0, 0x0, gArenaCup1Rewards, 10853, 10854, 10855, 0x80},
+     // Mogall Cup
+-    {7, 2, 2, 20, 7, 0, 0x0, gArenaCup2Rewards, 10856, 10857, 10858, 0x40},
++    {7, 2, 2, 20, 7, 0, 0x0, gArenaCup2Rewards, 10857, 10858, 10859, 0x40},
+     // Altin Cup
+-    {9, 2, 3, 25, 9, 0, 0x80, gArenaCup3Rewards, 10861, 10862, 10863, 0x100},
++    {9, 2, 3, 25, 9, 0, 0x80, gArenaCup3Rewards, 10862, 10863, 10864, 0x100},
+     // Tolbi Cup
+-    {8, 2, 4, 27, 6, 0, 0x40, gArenaCup4Rewards, 10865, 10866, 10867, 0x80},
++    {8, 2, 4, 27, 6, 0, 0x40, gArenaCup4Rewards, 10866, 10867, 10868, 0x80},
+     // Lunpa Cup
+-    {10, 2, 5, 35, 11, 0, 0x100, gArenaCup5Rewards, 10869, 10870, 10871, 0x200},
++    {10, 2, 5, 35, 11, 0, 0x100, gArenaCup5Rewards, 10870, 10871, 10872, 0x200},
+     // Lighthouse Cup
+-    {10, 2, 6, 50, 12, 0, 0x100, gArenaCup6Rewards, 10874, 10875, 10876, 0x200},
++    {10, 2, 6, 50, 12, 0, 0x100, gArenaCup6Rewards, 10875, 10876, 10877, 0x200},
+     // Boss Rush
+-    {6, 1, 7, 0, 0, 0, 0x0, 0, 10878, 10879, 10880, 0x3f},
++    {6, 1, 7, 0, 0, 0, 0x0, 0, 10879, 10880, 10881, 0x3f},
+     // Crossbone Isle
+-    {10, 3, 7, 0, 13, 0, 0x0, gArenaCup8Rewards, 10881, 10882, 10883, 0x200},
++    {10, 3, 7, 0, 13, 0, 0x0, gArenaCup8Rewards, 10882, 10883, 10884, 0x200},
+ };
+ 
+ const u8 gArenaShopRows[ARENA_MAIN_CUPS + 1][3] = {
+diff --git a/games/tbs/src/shop/arena_class_viewer.c b/games/tbs/src/shop/arena_class_viewer.c
+index e18b0f1fa0..ad16a14044 100644
+--- a/games/tbs/src/shop/arena_class_viewer.c
++++ b/games/tbs/src/shop/arena_class_viewer.c
+@@ -185,10 +185,10 @@ static void ClassViewer_Layout(struct CvLayout *l) {
+   l->psyRowHeight = row;
+   l->infoTop = 0;
+   // [L][R] Line 1/20 ... filter ... Back: the word "Line" when it fits.
+-  l->titleX = 54;
++  l->titleX = UI_HEADER_TITLE_X;
+   l->lineWord = l->inner >= 256;
+   l->filterX = l->titleX + (l->lineWord ? 74 : 40) + 4;
+-  l->backX = l->inner - 40;
++  l->backX = l->inner - 40; // UiHeader_BackX
+ }
+ 
+ static s32 CvWindow_Is(struct Window *window, const struct CvRect *rect) {
+@@ -232,16 +232,6 @@ static void ClassViewer_OpenStage(const struct CvLayout *l, s32 stage,
+   *info = keepInfo;
+ }
+ 
+-/// The touch header's buttons: [L] [R] at the left, Back at the right; the
+-/// title and the filter (or the page) are drawn by the step.
+-static void ClassViewer_DrawHeader(const struct CvLayout *l,
+-                                   struct Window *header) {
+-  WindowSprite_PrepareForRedrawFar(header);
+-  Text_DrawMessageAsTilesFar(MsgArenaUiPrevious, header, 6, 0);
+-  Text_DrawMessageAsTilesFar(MsgArenaUiNext, header, 32, 0);
+-  Text_DrawMessageAsTilesFar(MsgArenaUiBack, header, l->backX + 4, 0);
+-}
+-
+ /// The browse screen: the heading (the character, "Line n/m" and the filter;
+ /// in the classic layout the panel's first row, in the touch layout the
+ /// header), the line's classes in the grid, red where the party's Djinn do not
+@@ -262,7 +252,7 @@ static void ClassViewer_DrawBrowse(const struct CvLayout *l,
+   if (l->touch) {
+     s32 x = l->titleX;
+ 
+-    ClassViewer_DrawHeader(l, header);
++    UiHeader_Draw(header, UI_HEADER_PAGES | UI_HEADER_BACK_BUTTON);
+     if (l->lineWord) {
+       Text_DrawMessageAsTilesFar(MsgArenaCvLine, header, x, 0);
+       x += 34;
+@@ -395,7 +385,7 @@ static void ClassViewer_DrawPsynergy(const struct CvLayout *l,
+   }
+ 
+   if (l->touch) {
+-    ClassViewer_DrawHeader(l, header);
++    UiHeader_Draw(header, UI_HEADER_PAGES | UI_HEADER_BACK_BUTTON);
+     if (pages > 1) {
+       Text_DrawNumberInWindowFar(cursor / perPage + 1, 1, header, l->titleX,
+                                  0);
+@@ -446,17 +436,12 @@ static s32 ClassViewer_Touch(const struct CvLayout *l, struct Window *header,
+   s32 perPage = l->psyColumns * l->psyRows;
+ 
+   if (l->touch && header != 0) {
+-    if (WindowTouch_Cell(header, 0, -8, 26, 24, 1, 1) == 0)
+-      gKeysPressed |= KEY_L;
+-    else if (WindowTouch_Cell(header, 26, -8, 26, 24, 1, 1) == 0)
+-      gKeysPressed |= KEY_R;
+-    else if (stage == 0 &&
+-             WindowTouch_Cell(header, l->filterX, -8, l->backX - l->filterX - 4,
+-                              24, 1, 1) == 0)
++    if (stage == 0 &&
++        WindowTouch_Cell(header, l->filterX, -8, l->backX - l->filterX - 4,
++                         24, 1, 1) == 0)
+       gKeysPressed |= KEY_SELECT;
+-    else if (WindowTouch_Cell(header, l->backX, -8, l->inner - l->backX, 24, 1,
+-                              1) == 0)
+-      gKeysPressed |= KEY_B;
++    else
++      UiHeader_Touch(header, UI_HEADER_PAGES | UI_HEADER_BACK_BUTTON);
+   }
+   if (stage == 0)
+     return WindowTouch_Pick(grid, 0, 8 - (l->rowHeight - 8) / 2,
+@@ -542,9 +527,7 @@ s32 ClassViewer_Run(s32 unitId) {
+   MenuCursor_SetPositionImmediate(&shop->cursor, -32, 112);
+   shop->cursor.anchor = anchor;
+   if (layout.touch)
+-    header = Window_CreateFar(layout.header.x, layout.header.y,
+-                              layout.header.width, layout.header.height,
+-                              WINDOW_FLAG_INSTANT);
++    header = UiHeader_Open();
+   ClassViewer_OpenStage(&layout, 0, &grid, &info);
+   shop->cursorFrames = 12;
+ 
+@@ -725,24 +708,30 @@ s32 ClassViewer_Run(s32 unitId) {
+ /// Topics the mechanics teacher offers, one row of sixteen pixels each.
+ #define MG_TOPIC_COUNT 6
+ 
+-/// Arena romhack: the mechanics teacher's topic list. A window of six rows
+-/// (MsgArenaMechTopic0 on) with the hand on `first`; Up and Down move (and
+-/// wrap), A returns the row, B returns -1. The window closes before returning,
+-/// so the topic's text can be shown. Far-called from the Battle Arena overlay.
++/// Arena romhack: the mechanics teacher's topic list (MsgArenaMechTopic0 on),
++/// a UiList with the hand on `first`: Up and Down move (and wrap), A returns the
++/// row, B returns -1. Classic layout: a 22 by 15 window of 16-pixel rows, as
++/// before; touch layout: a header with Back over a full-width list of
++/// UI_ROW_HEIGHT rows, which scrolls when they do not all fit. The windows
++/// close before returning, so the topic's text can be shown. Far-called from
++/// the Battle Arena overlay.
+ s32 MechanicsGuide_Choose(s32 first) {
+   struct ShopState *shop;
+   struct Window *anchorWindow;
+-  struct Window *list;
++  struct Window *header = 0;
++  struct Window *window;
+   struct WindowSprite *anchor;
+-  s32 cursor = first;
++  struct UiList list;
+   s32 result = -1;
+   s32 redraw = 1;
+-  s32 i;
++  s32 step;
+ 
+   while (gKeysHeld != 0)
+     wait(1);
+   // Let a message window that has just closed finish clearing.
+   wait(30);
++  if (UI_TOUCH_LAYOUT)
++    UiScreen_BeginFullWidth();
+   Shop_InitializeState();
+   shop = gMenuState;
+   anchorWindow = Window_CreateFar(-5, 0, 5, 5, WINDOW_FLAG_INSTANT);
+@@ -752,42 +741,50 @@ s32 MechanicsGuide_Choose(s32 first) {
+   anchor->kind = 0;
+   MenuCursor_SetPositionImmediate(&shop->cursor, -32, 112);
+   shop->cursor.anchor = anchor;
+-  list = Window_CreateFar(4, 2, 22, 15, WINDOW_FLAG_INSTANT);
++  if (UI_TOUCH_LAYOUT) {
++    s32 height = MG_TOPIC_COUNT * UI_ROW_HEIGHT / 8 + 2;
++
++    if (height > 17)
++      height = 17;
++    header = UiHeader_Open();
++    UiHeader_Draw(header, UI_HEADER_BACK_BUTTON);
++    Text_DrawMessageAsTilesFar(MsgArenaUiMechanicsTitle, header, 6, 0);
++    window = Window_CreateFar(0, 3, UI_SCREEN_TILES, height,
++                              WINDOW_FLAG_INSTANT);
++    UiList_Init(&list, window, MG_TOPIC_COUNT, MsgArenaMechTopic0,
++                UI_ROW_HEIGHT, 0, 24, first);
++  } else {
++    window = Window_CreateFar(4, 2, 22, 15, WINDOW_FLAG_INSTANT);
++    UiList_Init(&list, window, MG_TOPIC_COUNT, MsgArenaMechTopic0, 16, 4, 24,
++                first);
++  }
+   shop->cursorFrames = 12;
+ 
+   for (;;) {
+     if (redraw != 0) {
+       redraw = 0;
+-      WindowSprite_PrepareForRedrawFar(list);
+-      for (i = 0; i < MG_TOPIC_COUNT; i++)
+-        Text_DrawMessageAsTilesFar(MsgArenaMechTopic0 + i, list, 24, i * 16 + 8);
+-      MenuCursor_Place(list, 2, cursor * 16 + 8);
++      UiList_Draw(&list);
+     }
+     wait(1);
+-    if ((gKeysPressed & KEY_B) != 0) {
+-      Sound_PlayFar(SE_MENU_CANCEL);
++    UiHeader_Touch(header, UI_HEADER_BACK_BUTTON);
++    step = UiList_Step(&list);
++    if (step == UI_LIST_CANCELLED)
+       break;
+-    }
+-    if ((gKeysPressed & KEY_A) != 0) {
+-      Sound_PlayFar(SE_MENU_CONFIRM);
+-      result = cursor;
++    if (step == UI_LIST_CHOSEN) {
++      result = list.cursor;
+       break;
+     }
+-    if ((gKeysRepeat & KEY_UP) != 0) {
+-      Sound_PlayFar(SE_MENU_CURSOR_MOVE);
+-      cursor = (cursor + MG_TOPIC_COUNT - 1) % MG_TOPIC_COUNT;
+-      redraw = 1;
+-    }
+-    if ((gKeysRepeat & KEY_DOWN) != 0) {
+-      Sound_PlayFar(SE_MENU_CURSOR_MOVE);
+-      cursor = (cursor + 1) % MG_TOPIC_COUNT;
++    if (step == UI_LIST_MOVED)
+       redraw = 1;
+-    }
+   }
+ 
+-  Window_CloseFar(list, 2);
++  Window_CloseFar(window, 2);
++  if (header != 0)
++    Window_CloseFar(header, 2);
+   Window_CloseFar(anchorWindow, 2);
+   wait(1);
++  if (UI_TOUCH_LAYOUT)
++    UiScreen_EndFullWidth();
+   Shop_ReleaseState();
+   return result;
+ }
+diff --git a/games/tbs/src/shop/arena_ui_kit.c b/games/tbs/src/shop/arena_ui_kit.c
+new file mode 100644
+index 0000000000..efca8cb59d
+--- /dev/null
++++ b/games/tbs/src/shop/arena_ui_kit.c
+@@ -0,0 +1,202 @@
++/// @file
++/// Arena romhack: the UI kit's widgets (include/arena/ui_kit.h), built from
++/// the game's own windows, font, hand cursor and the shops' hopping arrows.
++/// - The header: a window across the top of a touch layout with the
++///   buttons [L] [R] and B Back, each pressing its key when tapped.
++/// - The list: rows of messages in a window, the hand on the chosen one, the
++///   shop's arrows when there are more rows than fit; it scrolls.
++// Part of shop.c.
++
++#include "shop_internal.h"
++#include "arena/ui_kit.h"
++
++/// The header's [L] [R] buttons are 26 pixels each from the left; Back the
++/// last 40 pixels of the window's inside.
++#define UI_HEADER_BUTTON 26
++#define UI_HEADER_BACK 40
++
++/// The touch layout's header: a window 3 tiles tall across the top.
++struct Window *UiHeader_Open(void) {
++  return Window_CreateFar(0, 0, UI_SCREEN_TILES, 3, WINDOW_FLAG_INSTANT);
++}
++
++/// Clears the header and draws its buttons: UI_HEADER_PAGES ([L] [R]) and
++/// UI_HEADER_BACK_BUTTON (B Back). A screen draws its title after, from
++/// UI_HEADER_TITLE_X when it has [L] [R].
++void UiHeader_Draw(struct Window *header, s32 buttons) {
++  WindowSprite_PrepareForRedrawFar(header);
++  if (buttons & UI_HEADER_PAGES) {
++    Text_DrawMessageAsTilesFar(MsgArenaUiPrevious, header, 6, 0);
++    Text_DrawMessageAsTilesFar(MsgArenaUiNext, header, 32, 0);
++  }
++  if (buttons & UI_HEADER_BACK_BUTTON)
++    Text_DrawMessageAsTilesFar(MsgArenaUiBack, header,
++                               UiHeader_BackX(header) + 4, 0);
++}
++
++/// Where Back starts, in pixels inside the header.
++s32 UiHeader_BackX(struct Window *header) {
++  return (header->width - 2) * 8 - UI_HEADER_BACK;
++}
++
++#ifdef NATIVE
++/// Touch: a tap on a header button presses its key (L, R, B) for this frame,
++/// so the screen's own key code runs. Each button takes taps over the
++/// header's whole 24 pixels.
++void UiHeader_Touch(struct Window *header, s32 buttons) {
++  s32 backX;
++
++  if (header == 0)
++    return;
++  backX = UiHeader_BackX(header);
++  if ((buttons & UI_HEADER_PAGES) &&
++      WindowTouch_Cell(header, 0, -8, UI_HEADER_BUTTON, 24, 1, 1) == 0)
++    gKeysPressed |= KEY_L;
++  else if ((buttons & UI_HEADER_PAGES) &&
++           WindowTouch_Cell(header, UI_HEADER_BUTTON, -8, UI_HEADER_BUTTON, 24,
++                            1, 1) == 0)
++    gKeysPressed |= KEY_R;
++  else if ((buttons & UI_HEADER_BACK_BUTTON) &&
++           WindowTouch_Cell(header, backX, -8, UI_HEADER_BACK, 24, 1, 1) == 0)
++    gKeysPressed |= KEY_B;
++}
++#endif
++
++/// Sets a list up in `window`: `count` rows, messages labelBase + row, rows of
++/// `rowHeight` pixels from `top` inside the window, the text `textX` in (the
++/// hand sits 22 pixels before it), as many rows as fit showing.
++void UiList_Init(struct UiList *list, struct Window *window, s32 count,
++                 s32 labelBase, s32 rowHeight, s32 top, s32 textX,
++                 s32 cursor) {
++  s32 inside = (window->height - 2) * 8 - top;
++
++  list->window = window;
++  list->count = count;
++  list->labelBase = labelBase;
++  list->rowHeight = rowHeight;
++  list->top = top;
++  list->textX = textX;
++  list->visible = inside / rowHeight;
++  if (list->visible > count)
++    list->visible = count;
++  if (list->visible < 1)
++    list->visible = 1;
++  list->cursor = cursor;
++  list->first = 0;
++  UiList_Reveal(list);
++}
++
++/// Scrolls so the chosen row shows.
++void UiList_Reveal(struct UiList *list) {
++  if (list->cursor < list->first)
++    list->first = list->cursor;
++  if (list->cursor >= list->first + list->visible)
++    list->first = list->cursor - list->visible + 1;
++}
++
++/// The y of a showing row's text (tile text sits on 8-pixel rows), in the
++/// window.
++static s32 UiList_RowY(const struct UiList *list, s32 row) {
++  return list->top + (row - list->first) * list->rowHeight +
++         (list->rowHeight - 8) / 2;
++}
++
++/// Draws the showing rows, the arrows (the shop's own, hopping) when rows are
++/// hidden above or below, and puts the hand on the chosen row.
++void UiList_Draw(struct UiList *list) {
++  struct ShopState *shop = gMenuState;
++  struct Window *window = list->window;
++  s32 arrowX = (window->width - 2) * 8 - 16;
++  s32 row;
++
++  WindowSprite_PrepareForRedrawFar(window);
++  for (row = list->first;
++       row < list->first + list->visible && row < list->count; row++)
++    Text_DrawMessageAsTilesFar(list->labelBase + row, window, list->textX,
++                               UiList_RowY(list, row));
++  if (list->first > 0) {
++    struct WindowSprite *icon = WindowSprite_CreateFar(
++        shop->previousPageIcon, WINDOW_SPRITE_SIZE_16X16, window, arrowX, -8);
++
++    icon->kind = WINDOW_SPRITE_PLAIN;
++    icon->motion = WINDOW_SPRITE_MOTION_HOP_UP;
++    icon->animationStep = 0;
++  }
++  if (list->first + list->visible < list->count) {
++    struct WindowSprite *icon = WindowSprite_CreateFar(
++        shop->nextPageIcon, WINDOW_SPRITE_SIZE_16X16, window, arrowX,
++        (window->height - 2) * 8 - 8);
++
++    icon->kind = WINDOW_SPRITE_PLAIN;
++    icon->motion = WINDOW_SPRITE_MOTION_HOP_DOWN_NEXT_PAGE;
++    icon->animationStep = 0;
++  }
++  MenuCursor_Place(window, list->textX - 22,
++                   UiList_RowY(list, list->cursor));
++}
++
++/// One frame of input: touch (a tap on a row selects it, on the chosen row
++/// chooses it; a tap on an arrow scrolls a page) and keys (Up and Down move
++/// and wrap, A chooses, B cancels), with the shops' sounds. Returns
++/// UI_LIST_CHOSEN, UI_LIST_CANCELLED, UI_LIST_MOVED (redraw) or 0.
++s32 UiList_Step(struct UiList *list) {
++#ifdef NATIVE
++  {
++    struct Window *window = list->window;
++    s32 arrowX = (window->width - 2) * 8 - 20;
++    s32 slot = list->cursor - list->first;
++    s32 showing = list->count - list->first < list->visible
++                      ? list->count - list->first
++                      : list->visible;
++
++    if (list->first > 0 &&
++        WindowTouch_Cell(window, arrowX, -12, 24, 24, 1, 1) == 0) {
++      Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++      list->cursor -= list->visible;
++      if (list->cursor < 0)
++        list->cursor = 0;
++      list->first = list->cursor;
++      return UI_LIST_MOVED;
++    }
++    if (list->first + list->visible < list->count &&
++        WindowTouch_Cell(window, arrowX, (window->height - 2) * 8 - 12, 24, 24,
++                         1, 1) == 0) {
++      Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++      list->first += list->visible;
++      if (list->first > list->count - list->visible)
++        list->first = list->count - list->visible;
++      list->cursor = list->first;
++      return UI_LIST_MOVED;
++    }
++    if (WindowTouch_Pick(window, 0, list->top, arrowX - 4, list->rowHeight, 1,
++                         showing, &slot)) {
++      list->cursor = list->first + slot;
++      return UI_LIST_MOVED;
++    }
++  }
++#endif
++  if ((gKeysPressed & KEY_A) != 0) {
++    Sound_PlayFar(SE_MENU_CONFIRM);
++    return UI_LIST_CHOSEN;
++  }
++  if ((gKeysPressed & KEY_B) != 0) {
++    Sound_PlayFar(SE_MENU_CANCEL);
++    return UI_LIST_CANCELLED;
++  }
++  if ((gKeysRepeat & KEY_UP) != 0) {
++    Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++    list->cursor = (list->cursor + list->count - 1) % list->count;
++    UiList_Reveal(list);
++    return UI_LIST_MOVED;
++  }
++  if ((gKeysRepeat & KEY_DOWN) != 0) {
++    Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++    list->cursor = (list->cursor + 1) % list->count;
++    UiList_Reveal(list);
++    return UI_LIST_MOVED;
++  }
++  return 0;
++}
++
++#undef UI_HEADER_BUTTON
++#undef UI_HEADER_BACK
+diff --git a/games/tbs/src/shop/shop.c b/games/tbs/src/shop/shop.c
+index e824f120b9..b3bf97c96f 100644
+--- a/games/tbs/src/shop/shop.c
++++ b/games/tbs/src/shop/shop.c
+@@ -15,5 +15,6 @@
+ #include "shop_sanctum.c"
+ #include "shop_inn.c"
+ #include "shop_item_picker.c"
++#include "arena_ui_kit.c"
+ #include "arena_shop.c"
+ #include "arena_class_viewer.c"
+diff --git a/games/tbs/text/en.po b/games/tbs/text/en.po
+index 0c44af5d5a..3d4d7350a5 100644
+--- a/games/tbs/text/en.po
++++ b/games/tbs/text/en.po
+@@ -65564,114 +65564,118 @@ msgctxt "MsgArenaUiNext"
+ msgid "10822"
+ msgstr "{button_icon:4}"
+ 
++msgctxt "MsgArenaUiMechanicsTitle"
++msgid "10823"
++msgstr "Battle mechanics"
++
+ # BEGIN GENERATED CUPS (scripts/gen-cups.py; do not edit by hand)
+ 
+ msgctxt "MsgArenaCupName0"
+-msgid "10823"
++msgid "10824"
+ msgstr ""
+ "Tret Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName1"
+-msgid "10824"
++msgid "10825"
+ msgstr ""
+ "Mercury Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName2"
+-msgid "10825"
++msgid "10826"
+ msgstr ""
+ "Mogall Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName3"
+-msgid "10826"
++msgid "10827"
+ msgstr ""
+ "Altin Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName4"
+-msgid "10827"
++msgid "10828"
+ msgstr ""
+ "Tolbi Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName5"
+-msgid "10828"
++msgid "10829"
+ msgstr ""
+ "Lunpa Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName6"
+-msgid "10829"
++msgid "10830"
+ msgstr ""
+ "Lighthouse Cup"
+ 
+ 
+ msgctxt "MsgArenaCupName7"
+-msgid "10830"
++msgid "10831"
+ msgstr ""
+ "Boss Rush"
+ 
+ 
+ msgctxt "MsgArenaCupName8"
+-msgid "10831"
++msgid "10832"
+ msgstr ""
+ "Crossbone Isle"
+ 
+ 
+ msgctxt "MsgArenaCupNext"
+-msgid "10832"
++msgid "10833"
+ msgstr ""
+ "Next cup"
+ 
+ 
+ msgctxt "MsgArenaCupReplay"
+-msgid "10833"
++msgid "10834"
+ msgstr ""
+ "Replay"
+ 
+ 
+ msgctxt "MsgArenaCupSide"
+-msgid "10834"
++msgid "10835"
+ msgstr ""
+ "Side cups"
+ 
+ 
+ msgctxt "MsgArenaCupReplayPrompt"
+-msgid "10835"
++msgid "10836"
+ msgstr ""
+ "Replay which cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupGroupEarly"
+-msgid "10836"
++msgid "10837"
+ msgstr ""
+ "Early cups"
+ 
+ 
+ msgctxt "MsgArenaCupGroupLate"
+-msgid "10837"
++msgid "10838"
+ msgstr ""
+ "Later cups"
+ 
+ 
+ msgctxt "MsgArenaCupSidePrompt"
+-msgid "10838"
++msgid "10839"
+ msgstr ""
+ "Which side cup\n"
+ "will you enter?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaGearReward"
+-msgid "10839"
++msgid "10840"
+ msgstr ""
+ "A find from the\n"
+ "dungeon! It is yours.{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaDjinnNoRoom"
+-msgid "10840"
++msgid "10841"
+ msgstr ""
+ "Your Djinn are full!\n"
+ "Make room, then win\n"
+@@ -65679,56 +65683,56 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaBoostGetHP"
+-msgid "10841"
++msgid "10842"
+ msgstr ""
+ "You can boost\n"
+ "HP once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetPP"
+-msgid "10842"
++msgid "10843"
+ msgstr ""
+ "You can boost\n"
+ "PP once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetAttack"
+-msgid "10843"
++msgid "10844"
+ msgstr ""
+ "You can boost\n"
+ "Attack once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetDefense"
+-msgid "10844"
++msgid "10845"
+ msgstr ""
+ "You can boost\n"
+ "Defense once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetAgility"
+-msgid "10845"
++msgid "10846"
+ msgstr ""
+ "You can boost\n"
+ "Agility once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaBoostGetLuck"
+-msgid "10846"
++msgid "10847"
+ msgstr ""
+ "You can boost\n"
+ "Luck once more!{end_wait}"
+ 
+ 
+ msgctxt "MsgArenaCupConfirm0"
+-msgid "10847"
++msgid "10848"
+ msgstr ""
+ "Enter the\n"
+ "Tret Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared0"
+-msgid "10848"
++msgid "10849"
+ msgstr ""
+ "You cleared the\n"
+ "Tret Cup!\n"
+@@ -65736,7 +65740,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst0"
+-msgid "10849"
++msgid "10850"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65750,7 +65754,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup0DjinnForge"
+-msgid "10850"
++msgid "10851"
+ msgstr ""
+ "You won the Djinni\n"
+ "Forge!\n"
+@@ -65758,7 +65762,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup0DjinnBreeze"
+-msgid "10851"
++msgid "10852"
+ msgstr ""
+ "You won the Djinni\n"
+ "Breeze!\n"
+@@ -65766,14 +65770,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm1"
+-msgid "10852"
++msgid "10853"
+ msgstr ""
+ "Enter the\n"
+ "Mercury Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared1"
+-msgid "10853"
++msgid "10854"
+ msgstr ""
+ "You cleared the\n"
+ "Mercury Cup!\n"
+@@ -65781,7 +65785,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst1"
+-msgid "10854"
++msgid "10855"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65793,7 +65797,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup1DjinnSleet"
+-msgid "10855"
++msgid "10856"
+ msgstr ""
+ "You won the Djinni\n"
+ "Sleet!\n"
+@@ -65801,14 +65805,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm2"
+-msgid "10856"
++msgid "10857"
+ msgstr ""
+ "Enter the\n"
+ "Mogall Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared2"
+-msgid "10857"
++msgid "10858"
+ msgstr ""
+ "You cleared the\n"
+ "Mogall Cup!\n"
+@@ -65816,7 +65820,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst2"
+-msgid "10858"
++msgid "10859"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65828,7 +65832,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup2DjinnZephyr"
+-msgid "10859"
++msgid "10860"
+ msgstr ""
+ "You won the Djinni\n"
+ "Zephyr!\n"
+@@ -65836,7 +65840,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup2DjinnQuartz"
+-msgid "10860"
++msgid "10861"
+ msgstr ""
+ "You won the Djinni\n"
+ "Quartz!\n"
+@@ -65844,14 +65848,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm3"
+-msgid "10861"
++msgid "10862"
+ msgstr ""
+ "Enter the\n"
+ "Altin Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared3"
+-msgid "10862"
++msgid "10863"
+ msgstr ""
+ "You cleared the\n"
+ "Altin Cup!\n"
+@@ -65859,7 +65863,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst3"
+-msgid "10863"
++msgid "10864"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65874,7 +65878,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup3DjinnSpritz"
+-msgid "10864"
++msgid "10865"
+ msgstr ""
+ "You won the Djinni\n"
+ "Spritz!\n"
+@@ -65882,14 +65886,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm4"
+-msgid "10865"
++msgid "10866"
+ msgstr ""
+ "Enter the\n"
+ "Tolbi Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared4"
+-msgid "10866"
++msgid "10867"
+ msgstr ""
+ "You cleared the\n"
+ "Tolbi Cup!\n"
+@@ -65897,7 +65901,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst4"
+-msgid "10867"
++msgid "10868"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65911,7 +65915,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup4DjinnSquall"
+-msgid "10868"
++msgid "10869"
+ msgstr ""
+ "You won the Djinni\n"
+ "Squall!\n"
+@@ -65919,14 +65923,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm5"
+-msgid "10869"
++msgid "10870"
+ msgstr ""
+ "Enter the\n"
+ "Lunpa Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared5"
+-msgid "10870"
++msgid "10871"
+ msgstr ""
+ "You cleared the\n"
+ "Lunpa Cup!\n"
+@@ -65934,7 +65938,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst5"
+-msgid "10871"
++msgid "10872"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65950,7 +65954,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup5DjinnFlash"
+-msgid "10872"
++msgid "10873"
+ msgstr ""
+ "You won the Djinni\n"
+ "Flash!\n"
+@@ -65958,7 +65962,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup5DjinnDew"
+-msgid "10873"
++msgid "10874"
+ msgstr ""
+ "You won the Djinni\n"
+ "Dew!\n"
+@@ -65966,14 +65970,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm6"
+-msgid "10874"
++msgid "10875"
+ msgstr ""
+ "Enter the\n"
+ "Lighthouse Cup?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared6"
+-msgid "10875"
++msgid "10876"
+ msgstr ""
+ "You cleared the\n"
+ "Lighthouse Cup!\n"
+@@ -65981,7 +65985,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst6"
+-msgid "10876"
++msgid "10877"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -65997,7 +66001,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCup6DjinnLuff"
+-msgid "10877"
++msgid "10878"
+ msgstr ""
+ "You won the Djinni\n"
+ "Luff!\n"
+@@ -66005,14 +66009,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm7"
+-msgid "10878"
++msgid "10879"
+ msgstr ""
+ "Enter the\n"
+ "Boss Rush?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared7"
+-msgid "10879"
++msgid "10880"
+ msgstr ""
+ "You cleared the\n"
+ "Boss Rush!\n"
+@@ -66020,7 +66024,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst7"
+-msgid "10880"
++msgid "10881"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+@@ -66028,14 +66032,14 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupConfirm8"
+-msgid "10881"
++msgid "10882"
+ msgstr ""
+ "Enter the\n"
+ "Crossbone Isle?{end_now}"
+ 
+ 
+ msgctxt "MsgArenaCupCleared8"
+-msgid "10882"
++msgid "10883"
+ msgstr ""
+ "You cleared the\n"
+ "Crossbone Isle!\n"
+@@ -66043,7 +66047,7 @@ msgstr ""
+ 
+ 
+ msgctxt "MsgArenaCupFirst8"
+-msgid "10883"
++msgid "10884"
+ msgstr ""
+ "Well done!\n"
+ "You cleared the\n"
+-- 
+2.43.0
+

@@ -354,3 +354,27 @@ Text:          MsgArenaMechText0..5: 4 or 5 pages of at most four lines (about 2
 ```
 
 Pages are edited in `scripts/add-mech-messages.py`. Shots: `mechanics_npc.txt`.
+
+### CV4. The touch layout (patch 0054)
+
+Desktop and phones (`--ui touch`, the default there); the GBA keeps CV2 and CV3
+exactly. One code path: `ClassViewer_Layout` fills the layout, the drawing and
+input read it. The reviewed spec with a mock-up: "Touch-friendly class viewer:
+spec" (claude.ai doc).
+
+```
+Windows (W = the screen's tiles, 30 at 240 and 36 at 288; rows R = --ui-size):
+  Header  (0, 0, W, 3)        [L] [R]  "Line n/m" (the word "Line" from 256 px)
+                              filter tag ... "B Back"; each a 24-pixel tap zone
+  Grid    (0, 3, W, 2R/8+2)   the line: 3 columns, 2 rows of R pixels
+  Detail  (0, 11, W, 9)       as CV2's panel without its heading row: class and
+                              reach, the Djinn band, stats in two columns, Ward
+  Psynergy step: Grid (0, 3, W, 3R/8+2) two columns of three a page; Detail
+  under it: Lv, PP, learned; the character and level; the legend. The header
+  shows the page and the class.
+Input:   taps as keys (header: L, R, Select, B); a tap on a class selects it,
+         a tap on the selected one opens its Psynergy (A). Keys as CV2/CV3.
+Shots:   touch_classviewer_240.txt, touch_classviewer_288.txt;
+         screen_classviewer.txt with --ui classic for the GBA layout.
+```
+

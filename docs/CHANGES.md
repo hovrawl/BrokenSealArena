@@ -950,6 +950,232 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
 - Not verified yet: keyboard and gamepad play in the Windows window (left to
   the owner); soft reset on Windows.
 
+## 48. A wider screen on the desktop build (patch 0048, first slice)
+
+- `--width 240|256|288` (also `3:2`, `16:10`, `16:9`, or `TBS_WIDTH`) picks the
+  desktop build's width at start-up; 160 lines always. The GBA ROM is
+  byte-identical (checked against a build without the patch).
+- `DISPLAY_WIDTH` is a variable in the native build (`io_reg.h` hook), so the
+  code that already goes by it follows: a quick try with nothing else changed
+  showed the lobby and a whole battle already working at 256.
+- The field's layers: their BG maps were 32 tiles (256 px), so anything wider
+  showed the other edge or blank columns while scrolling. Natively they are 64
+  tiles wide, in `gNativeWideMaps`, which a text background reads when its
+  control register has bit 13 set (the affine wrap bit, unused by text
+  backgrounds on the GBA). `field_map_grid.c` takes its map width, stride and
+  screen from macros whose GBA values are the old constants. The camera's
+  focus and bounds use the real width natively.
+- Why the battle backdrop was black at 288: battle shows the backdrop only
+  inside window 0/1, set to `WIN_RANGE(0, DISPLAY_WIDTH)`. The register's edges
+  are 8 bits, so 288 became 32 (and the overflow set the left edge to 1): the
+  backdrop showed in the left 32 pixels only. 256 worked by luck (it wrapped to
+  0, read as full width). Natively `WIN_RANGE` writes a right edge past 255 as
+  240, and the renderer takes a right edge of 240 or more as the screen's edge.
+- Verified (headless, cloud Linux): `wide_lobby.txt` at 240, 256 and 288 (walking
+  round the lobby, the Pause menu), `battle.txt` at all three, `fight.txt` to
+  the win at 240 and 256.
+- Not yet: the window layer (menus, messages, the battle HUD) is still a
+  32-tile map, so at 288 its boxes wrap to the left edge and the battle command
+  row writes past it and crashes. The SDL window uses the width but was not
+  built here (no SDL3 in the cloud container).
+
+## 49. Native: the window layer is 64 tiles wide (desktop only)
+
+- The window layer (BG0: menus, messages, the battle HUD) reads a 64x32 map
+  natively, like the field's layers in 48. `WINDOW_MAP_WIDTH` and
+  `WINDOW_MAP_ROW_SHIFT` (`window.h`) replace the 32 (`BG_SCREEN_WIDTH`, 61
+  places) and the `<< 5` row shifts (6 places) in the window code; on the GBA
+  they are those same values. The `<< 5` shifts left as they were broke the HP
+  row of the battle HUD and some labels at every width, which is how they were
+  found.
+- Crashes only the desktop build had, before this work too: a cursor with no
+  anchor (`MenuCursor_SetPositionImmediate`), and the shops' hidden windows at
+  x = -5, whose borders and erases wrote before the map. Natively those return
+  early.
+- Verified: at 288 the battle command row, the HUD and the manager's shops no
+  longer wrap or crash; `battle.txt`, `fight.txt` and `manager.txt` at 240 and
+  288.
+
+## 50. Native: a UI safe area, so the GBA's screens sit centred
+
+- The GBA's screens were laid out for 240 pixels; stretched across 288 their
+  windows drifted apart. Outside battle the window, screen, menu and shop code
+  (`window.o`, `screens.o`, `menu.o`, `shop.o`, built with `NATIVE_UI_SPACE`)
+  now lays out in 240 pixels centred on the screen: `DISPLAY_WIDTH` there is
+  `gNativeUiWidth`, BG0 scrolls by the offset, and the sprites that code queues
+  and the field figures it places move by it. In battle the safe area is the
+  whole screen. `Screen_SetUiSafeArea` is called where the window system starts
+  for the field and for battle.
+- Verified: the lobby's Pause menu, the manager and its shops at 240, 256 and
+  288 (`wide_lobby.txt`, `manager.txt`): the same layout as at 240, centred.
+- Not yet: in the lobby at 288 the room ends before the screen does (black past
+  the right wall); the battle screens at 288 are wide but not reviewed.
+
+## 51. Native: touch and mouse, first on the icon rows
+
+- One pointer (`native/touch.h`, `native_touch.c`): SDL's mouse (SDL also
+  feeds it from touch) or the headless `touch X Y` script command. Game code
+  asks `Touch_TappedRect` / `Touch_TappedUiRect` whether a rectangle was
+  pressed and let go this frame. Tap targets are at least 24 pixels.
+- The icon rows (`IconMenu_Run`): tap an icon to select it, tap it again to
+  choose it. That covers the manager's menu and its choice of shop.
+- Verified (headless): `touch_manager_240.txt` and `touch_manager_288.txt` tap
+  Items, then Weapons, into the weapon shop. The SDL side builds against the
+  SDL 3.2 headers but was not run here.
+
+## 52. Native: touch on the shops and the Pause menu
+
+- `include/arena/arena_touch.h`: a tap on another choice in a window's grid
+  moves the selection there; a tap on the selected one presses A for that
+  frame, so the screen's own A code runs unchanged. Cells are placed from the
+  window's interior, like its sprites; cells under 24 pixels are widened at
+  the grid's edges (`Touch_TappedUiCell`).
+- Taps now work on the shops' stock row and page arrows, party row and bag
+  grid (buy, sell, the item picker), the arena's shops and member choosers, and
+  the Pause menu. Yes/No and the shop commands are icon rows, so they already
+  did (51). In the SDL build the right mouse button is B.
+- Verified (headless, 240 and 288): `touch_shop_*.txt` (Buy, a weapon, a member:
+  the purchase goes through), `touch_sell_*.txt` (Sell, a member, a bag slot
+  up to the sale's Yes/No), `touch_pause_*.txt` (Change settings).
+- Not yet: the GBA's bag icons are 16 pixels, under the 24-pixel target; the
+  custom screens are where bigger targets come in. No touch "back" except the
+  right mouse button.
+
+## 53. Native: the field Psynergy menu, and tools for building screens
+
+- The field Psynergy menu crashed the desktop build (since 46): it stores
+  through two sprites that do not exist, the second marker
+  (`MenuCursor_Create`'s comment) and the Psynergy cursor before it is made;
+  on the cartridge those stores land in the BIOS. Natively the marker is a
+  sprite no window carries and the cursor's store waits until it exists. The
+  menu now opens and works (seen in the class viewer script's shots).
+- `--screen NAME` / `TBS_SCREEN` / the headless `screen NAME` command open a
+  screen straight from the field (`classviewer`, `mechanics`), so screens can be
+  built and checked without the walk (`screen_classviewer.txt`).
+- The headless build runs `reset` (it starts itself again at the next command,
+  keeping the save), so `save_continue.txt` works natively.
+- Not yet: `class_viewer.txt`'s walk to the scholar stops on the stairs in the
+  native build; the screen is reached with `screen classviewer` instead.
+
+## 54. The UI kit, and the class viewer's touch layout (one code path)
+
+- The owner's direction (2026-11-27): the hack is a port whose source we
+  change towards our goals; everything must feel like Golden Sun ("source
+  accurate"); one UI code path with layouts, not separate desktop screens;
+  GBA byte-identity only as a check on pure refactors (`docs/UI.md`, intents
+  6 to 8). This patch changes the GBA ROM (three new messages, the class
+  viewer reading its layout).
+- `include/arena/ui_kit.h`: the classic layout (always on the GBA) or the
+  touch layout (desktop default; `--ui classic|touch`), touch rows sized by
+  `--ui-size 16|24` (default 24), full-width mode while a touch layout is open.
+- The class viewer now lays itself out from `CvLayout`: classic is the old
+  screen exactly; touch is the reviewed spec (header buttons L, R, filter,
+  Back; the line as a 3 by 2 grid of 24-pixel rows; the detail under it; the
+  Psynergy step with its own windows). Grid movement works for any number of
+  columns. Messages `MsgArenaUiBack`, `MsgArenaUiPrevious`, `MsgArenaUiNext`
+  (`scripts/add-ui-messages.py`, then `gen-cups.py`).
+- Port Makefile: the text object now rebuilds when the GBA build regenerates
+  `messages.inc` (new messages linked as undefined before).
+- Verified (headless): `touch_classviewer_240/288.txt` (tap a class, its
+  Psynergy, Back, next line, filter, Back out), `screen_classviewer.txt` with
+  `--ui classic` at 240 and 288 (same screen as before). The GBA ROM builds;
+  not run on mGBA here.
+
+## 55. The UI kit's header and list; the mechanics list on the kit
+
+- `src/shop/arena_ui_kit.c` (included by `shop.c`): `UiHeader` (the touch
+  header: [L] [R], Back, taps as keys) and `UiList` (message rows, Up and Down
+  with wrap, page scrolling with the shop's arrows, tap to select, tap again
+  to choose). `docs/UI.md` section 3a lists the calls.
+- The mechanics topic list (`MechanicsGuide_Choose`) uses them. Classic is
+  the old window (4, 2, 22, 15) unchanged; touch is a full-width list of
+  24-pixel rows under a "Battle mechanics" header with Back. New message
+  `MsgArenaUiMechanicsTitle` (`add-ui-messages.py` now adds only the missing
+  ones). The class viewer draws its header through the kit.
+- ROM layout: the shop bank overflowed by 0x7d; the English banks from battle
+  onward move up 0x2000 (`GOTCHAS.md`, ROM layout).
+- Verified (headless): `touch_mechanics_240/288.txt` (list, tap a topic, the
+  page-down arrow, Down twice, Back), `screen_mechanics.txt` with
+  `--ui classic` (the old screen; Up wraps to the last topic),
+  `touch_classviewer_240/288.txt` again (unchanged). The GBA ROM builds; not
+  run on mGBA here.
+
+## 56. The member picker's touch layout
+
+- `ItemPicker_ChooseMember` (party manager, scholar): in the touch layout the
+  status and Djinn panels open full width under a header (the panel's name,
+  `MsgArenaCharacters` or the next message; Back), the party strip below as
+  before. Classic is unchanged; the items mode stays classic in both. Djinn
+  figures are placed from the panel window's position.
+- Verified (headless): `touch_picker_240/288.txt` (status panel, tap a member,
+  Back; Djinn panel, tap a member twice to open the Djinn counter, B, Back),
+  `classic_picker.txt` with `--ui classic`. Djinn figures in the panel were
+  not seen (a new game has no Djinn).
+
+## 57. The mechanics library, as the game's menus
+
+- The owner found the text-only topic list not Golden Sun enough. The topics
+  are now laid out as the field Psynergy and Item menus: a name window, the
+  six topics in two columns with an icon each (Weaken, Venus Star, Long
+  Sword, Sol Blade, Sleep, Ragnarok), and a line about the chosen topic along
+  the bottom (`MsgArenaMechHint0` to `5`). Classic: windows stacked at the
+  bottom, 16-pixel rows, the right column 100 pixels on (room for "Physical
+  or magic"). Touch: header with Back, 24-pixel rows across the full width.
+- `UiList` gains grids (`UiList_SetGrid`) and per-entry icons.
+- Verified (headless): `touch_mechanics_240/288.txt`, `screen_mechanics.txt`
+  with `--ui classic`.
+
+## 58. The counters' touch layout
+
+- `ArenaShop_Run` (stat and Djinn counters): in the touch layout a header
+  (the buyer's name, Back) replaces the "What would you like?" prompt; the
+  price, coins, stock row and description windows keep their rows and run
+  the full width (coins at the right edge). Classic is unchanged.
+- Verified (headless): `touch_counter_240/288.txt` (stat counter: tap a stat,
+  tap again for the no-boosts notice, Back; Djinn counter for Garet: tap a
+  Djinni, Back; figures sit on their price tags at both widths),
+  `classic_counter.txt` with `--ui classic`.
+
+## 59. The shops' touch layout: full width and a Back button
+
+- The owner chose to keep the keeper's lines at the top and add a Back
+  button. In the touch layout `Shop_Run` turns the safe area off: coins, the
+  bag, sell and repair prices and the quantity window keep to the right edge
+  (`UI_SCREEN_TILES - width`), the stock row and description lines stretch.
+- `UiBackButton_Open` (kit): a 7 by 3 window with B Back at the top right,
+  and a native touch zone (`Touch_SetBackZone`) that holds B for one frame
+  when tapped (`Keys_Update`), so every screen inside the shop takes it
+  without its own touch code. Upstream hooks: `shop_run.c`, the window
+  rectangles in `shop_buy.c`, `shop_sell.c`, `shop_item_picker.c`,
+  `shop_repair.c`, and `shop_internal.h` including `ui_kit.h`.
+- Verified (headless): `touch_shopback_240/288.txt` (Buy, tap a weapon, Back,
+  Sell, Back, Back out of the shop), `touch_shop_288.txt` with
+  `--ui classic` (the centred layout as before).
+
+## 60. Battle menus by touch
+
+- `include/arena/battle_touch.h` and short hooks in `screens_battle_*.c`,
+  `battle_playback.c` and `battle_playback_queue.c`, all in the touch layout
+  only: command row icons (tap to select, tap the selected one to choose),
+  the Psynergy, Djinn and item lists (rows; page arrows), targets (tap a unit
+  to aim, tap again to confirm; a tap anywhere for an all-units action), a
+  Back button window (B, through `Touch_SetBackZone`) above the portrait in
+  a member's row and at the left of the lists and targets, and a tap
+  anywhere to go on from a battle message.
+- Verified (headless): `touch_battle_240/288.txt` (intro messages by taps,
+  Fight, Psynergy list, pick Earthquake, its targets, Back twice, Attack, aim
+  at another enemy, confirm, Back from Garet to Isaac). The Djinn and item lists
+  were built but not tapped in a run.
+
+## 61. Native: the battle command row's icons
+
+- The command row writes its icons into BG1's map (screen block 31, 32 tiles
+  wide in every build) but indexed it with `WINDOW_MAP_WIDTH`, 64 natively
+  since patch 49, so only the selected icon (a sprite) showed. Now
+  `BG_SCREEN_WIDTH`; the GBA build is unchanged (both 32).
+- Verified (headless): `touch_battle_240/288.txt`, every icon of the Fight
+  and member rows shows.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

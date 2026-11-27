@@ -1,0 +1,56 @@
+From 359862844ae379c461f8941f635591261eb02da9 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 27 Nov 2026 09:22:30 +0000
+Subject: [PATCH] Native: the battle command row's icons show again
+
+The command row writes its icons into BG1's map (screen block 31), a
+32-tile map in every build, but indexed it by WINDOW_MAP_WIDTH, which is
+64 natively (patch 0049), so the icons landed below the map and only the
+selected one (a sprite) showed. It now uses BG_SCREEN_WIDTH. The GBA
+build is unchanged (both are 32 there).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8ykfbWFo924wEqysLhg
+---
+ games/tbs/src/window/screens_battle_command_row.c | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/games/tbs/src/window/screens_battle_command_row.c b/games/tbs/src/window/screens_battle_command_row.c
+index 660916a5e7..9f78a4deb2 100644
+--- a/games/tbs/src/window/screens_battle_command_row.c
++++ b/games/tbs/src/window/screens_battle_command_row.c
+@@ -155,11 +155,13 @@ s32 BattleCommandRow_Run(s32 mode) {
+           for (entryIndex = 0; entryIndex <= 2; entryIndex++) {
+             s32 col;
+             for (col = 0; col <= 2; col++) {
++              // BG1's map is the GBA's 32 tiles wide in every build, not
++              // the windows' (WINDOW_MAP_WIDTH is 64 natively).
+               volatile u16 *vram =
+                   (volatile u16 *)BG_SCREEN_BLOCK(BATTLE_BG1_SCREEN_BLOCK) +
+-                  21 * WINDOW_MAP_WIDTH + WINDOW_X;
++                  21 * BG_SCREEN_WIDTH + WINDOW_X;
+ 
+-              vram[panel * 3 + entryIndex * WINDOW_MAP_WIDTH + (col & 3) -
++              vram[panel * 3 + entryIndex * BG_SCREEN_WIDTH + (col & 3) -
+                    selectionUi->iconCount * 3] =
+                   panel * 16 + entryIndex * 4 + col + COMMAND_ROW_ICON_TILE;
+               *(state->tilemap +
+@@ -183,11 +185,13 @@ s32 BattleCommandRow_Run(s32 mode) {
+           for (entryIndex = 0; entryIndex <= 2; entryIndex++) {
+             s32 col;
+             for (col = 0; col <= 2; col++) {
++              // BG1's map is the GBA's 32 tiles wide in every build, not
++              // the windows' (WINDOW_MAP_WIDTH is 64 natively).
+               volatile u16 *vram =
+                   (volatile u16 *)BG_SCREEN_BLOCK(BATTLE_BG1_SCREEN_BLOCK) +
+-                  21 * WINDOW_MAP_WIDTH + 20;
++                  21 * BG_SCREEN_WIDTH + 20;
+ 
+-              vram[panel * 3 + entryIndex * WINDOW_MAP_WIDTH + (col & 3) -
++              vram[panel * 3 + entryIndex * BG_SCREEN_WIDTH + (col & 3) -
+                    selectionUi->iconCount * 3] =
+                   panel * 16 + entryIndex * 4 + col + COMMAND_ROW_ICON_TILE;
+               *(state->tilemap +
+-- 
+2.43.0
+

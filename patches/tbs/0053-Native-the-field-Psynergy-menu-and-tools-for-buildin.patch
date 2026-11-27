@@ -1,0 +1,409 @@
+From 82172c58f12cf1ffaf9facccfa79243ebcbb7eb8 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 27 Nov 2026 07:22:01 +0000
+Subject: [PATCH] Native: the field Psynergy menu, and tools for building
+ screens
+
+The field Psynergy menu crashed the desktop build: it stores through two
+sprites that are not there (the marker MenuCursor_Create's comment
+describes, and the Psynergy cursor before it is made), which the
+cartridge's BIOS takes. Natively the marker is a sprite no window
+carries, and the cursor's store is skipped until it exists.
+
+For building and checking screens without walking to them:
+--screen NAME (or TBS_SCREEN) and the headless script's "screen NAME"
+open a screen straight from the field (native_dev.c: classviewer,
+mechanics), through a request the field loop takes
+(gNativeScreenRequest). The headless build now runs a script's "reset" by
+starting itself again at the next command, with the save on disk, as the
+mGBA driver resets the console.
+
+The GBA ROM is byte-identical.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8ykfbWFo924wEqysLhg
+---
+ games/tbs/src/field/field_sequence_run.c     | 15 ++++++
+ games/tbs/src/field/field_sequence_walking.c |  9 ++++
+ games/tbs/src/menu/menu_psynergy.c           |  7 ++-
+ games/tbs/src/menu/menu_shared.c             |  9 ++++
+ port/README.md                               | 11 ++++
+ port/include/native/dev.h                    | 23 ++++++++
+ port/src/native_dev.c                        | 57 ++++++++++++++++++++
+ port/src/native_platform.c                   |  2 +
+ port/src/platform_headless.c                 | 57 ++++++++++++++++++--
+ 9 files changed, 186 insertions(+), 4 deletions(-)
+ create mode 100644 port/include/native/dev.h
+ create mode 100644 port/src/native_dev.c
+
+diff --git a/games/tbs/src/field/field_sequence_run.c b/games/tbs/src/field/field_sequence_run.c
+index 65a1280204..3eaaa6ea43 100644
+--- a/games/tbs/src/field/field_sequence_run.c
++++ b/games/tbs/src/field/field_sequence_run.c
+@@ -5,6 +5,9 @@
+ 
+ #include "field_sequence_internal.h"
+ #include "arena_config.h"
++#ifdef NATIVE
++#include "native/dev.h"
++#endif
+ 
+ /// The hazard count's limit each scene starts with, in steps on hazard cells:
+ /// the hazard deals its damage each time the count reaches it.
+@@ -262,6 +265,18 @@ s32 FieldSequence_Run(s32 entrance) {
+             }
+           }
+           state->aButton = 0;
++#ifdef NATIVE
++        } else if (gNativeScreenRequest != 0) {
++          // Desktop tool: a screen opened by name (port/src/native_dev.c).
++          s32 screen = gNativeScreenRequest;
++
++          gNativeScreenRequest = 0;
++          AreaNameWindow_HideFar();
++          Leader_StopMoving();
++          WorldMap_Freeze();
++          NativeDev_OpenScreen(screen);
++          WorldMap_Unfreeze();
++#endif
+         } else if (state->fieldMenu != 0) {
+           // The field menu (in debug mode, B + Select opens the debug flag
+           // editor).
+diff --git a/games/tbs/src/field/field_sequence_walking.c b/games/tbs/src/field/field_sequence_walking.c
+index 790dc2dea5..37ef9a3bdd 100644
+--- a/games/tbs/src/field/field_sequence_walking.c
++++ b/games/tbs/src/field/field_sequence_walking.c
+@@ -4,6 +4,9 @@
+ // Part of field_sequence.c.
+ 
+ #include "field_sequence_internal.h"
++#ifdef NATIVE
++#include "native/dev.h"
++#endif
+ 
+ /// Clears the field's twelve pending requests (see struct FieldState).
+ void Field_ClearRequests(void) {
+@@ -28,6 +31,12 @@ void Field_ClearRequests(void) {
+ s32 Field_CountRequests(void) {
+   struct FieldState *state = gFieldState;
+ 
++#ifdef NATIVE
++  // Desktop tool: a screen opened by name counts once the scene has faded
++  // in (field_sequence_run.c, native/dev.h).
++  if (gNativeScreenRequest != 0 && state->transitionActive != 0)
++    return 1;
++#endif
+   // BUG: a sum can be 0 with requests pending. Field_UpdateWalking raises
+   // FIELD_RAISED_TRIGGER_PARTY_FELL (-1) on the frame a party member falls to
+   // poison, and the step trigger request is the cell's cell behavior, 1 on
+diff --git a/games/tbs/src/menu/menu_psynergy.c b/games/tbs/src/menu/menu_psynergy.c
+index 8719006b44..953d6db94b 100644
+--- a/games/tbs/src/menu/menu_psynergy.c
++++ b/games/tbs/src/menu/menu_psynergy.c
+@@ -340,7 +340,12 @@ s32 PsynergyMenu_SelectPartySlot(s32 partySlot) {
+   icon = menu->sideIcon[partySlot];
+   icon->motion = ICON_SHOWN;
+   icon->animationStep = result;
+-  menu->cursorIcon->motion = ICON_HIDDEN;
++#ifdef NATIVE
++  // Not made yet the first time (PsynergyMenu_SelectAbility makes it); the
++  // cartridge's store lands in the BIOS, the desktop build skips it.
++  if (menu->cursorIcon != NULL)
++#endif
++    menu->cursorIcon->motion = ICON_HIDDEN;
+   menu->tabCounts[partySlot] = menu->memberCount;
+ 
+   if (memberIndex == -1) {
+diff --git a/games/tbs/src/menu/menu_shared.c b/games/tbs/src/menu/menu_shared.c
+index 7265887a23..073d1d9632 100644
+--- a/games/tbs/src/menu/menu_shared.c
++++ b/games/tbs/src/menu/menu_shared.c
+@@ -471,6 +471,15 @@ struct Window *MenuCursor_Create(void *source) {
+   // No screen ever makes a second marker: sideIcon[1] stays NULL, as the
+   // menu state was cleared, and this store and the screens' others through it
+   // land in the BIOS, which ignores them.
++#ifdef NATIVE
++  // The desktop build has no BIOS to take them: a marker no window carries
++  // (so it never draws) takes them instead.
++  if (menu->sideIcon[1] == NULL) {
++    static struct WindowSprite sUnusedMarker;
++
++    menu->sideIcon[1] = &sUnusedMarker;
++  }
++#endif
+   menu->sideIcon[1]->depth = OAM_DEPTH_FRONT;
+   return window;
+ }
+diff --git a/port/README.md b/port/README.md
+index affe002b4b..cd47c6748c 100644
+--- a/port/README.md
++++ b/port/README.md
+@@ -160,3 +160,14 @@ Hooks in upstream files, all under `#ifdef NATIVE` (or `UBFIX`):
+ - The credits' background decoder is a stub; soft reset restarts the process.
+ - 32-bit only (Linux and Windows); 64-bit needs the game's pointer-as-`u32`
+   habits fixed.
++
++### Tools for building screens
++
++- `--screen NAME` (or `TBS_SCREEN=NAME`) opens a screen straight from the
++  field once the scene has faded in, and the headless script command
++  `screen NAME` opens it then: `classviewer` (the scholar's, for Isaac),
++  `mechanics` (the mechanics guide). `native_dev.c` lists them; the field loop
++  takes the request (`gNativeScreenRequest`, `field_sequence_run.c`).
++- The headless build runs a script's `reset` (as the mGBA driver does): it
++  starts itself again with `--resume N` at the command after the reset, with
++  the save on disk, so `save_continue.txt` works.
+diff --git a/port/include/native/dev.h b/port/include/native/dev.h
+new file mode 100644
+index 0000000000..dbcd830c76
+--- /dev/null
++++ b/port/include/native/dev.h
+@@ -0,0 +1,23 @@
++#ifndef NATIVE_DEV_H
++#define NATIVE_DEV_H
++
++/// @file
++/// Desktop tools for building screens (native_dev.c): open a screen straight
++/// from the field, by name (--screen NAME, TBS_SCREEN, or the headless
++/// script's "screen NAME").
++
++enum {
++  NATIVE_SCREEN_NONE,
++  NATIVE_SCREEN_CLASS_VIEWER, ///< "classviewer": the scholar's, for Isaac
++  NATIVE_SCREEN_MECHANICS,    ///< "mechanics": the mechanics guide's topics
++};
++
++/// The screen to open on the next field frame with the player in control, or
++/// NATIVE_SCREEN_NONE; the field loop clears it.
++extern int gNativeScreenRequest;
++
++int NativeDev_ScreenByName(const char *name);
++void NativeDev_ChooseScreen(int argc, char **argv);
++void NativeDev_OpenScreen(int id);
++
++#endif
+diff --git a/port/src/native_dev.c b/port/src/native_dev.c
+new file mode 100644
+index 0000000000..5f9fec948c
+--- /dev/null
++++ b/port/src/native_dev.c
+@@ -0,0 +1,57 @@
++// Opening a screen straight from the field, for building and testing screens
++// without walking to them: `--screen NAME` (or TBS_SCREEN) opens it on the
++// first field frame the player has control, and the headless script command
++// `screen NAME` opens it then. The field loop asks gNativeScreenRequest each
++// frame (field_sequence_run.c) and calls NativeDev_OpenScreen.
++
++#include "native/native.h"
++#include "native/dev.h"
++
++#include <stdlib.h>
++
++int gNativeScreenRequest;
++
++// The screens, by name (all far-call exports of the main image).
++extern int ClassViewer_Run(int unitId);
++extern int MechanicsGuide_Choose(int first);
++
++static const struct {
++  const char *name;
++  int id;
++} sScreens[] = {
++    {"classviewer", NATIVE_SCREEN_CLASS_VIEWER},
++    {"mechanics", NATIVE_SCREEN_MECHANICS},
++};
++
++int NativeDev_ScreenByName(const char *name) {
++  unsigned i;
++
++  for (i = 0; i < sizeof(sScreens) / sizeof(sScreens[0]); i++)
++    if (!strcmp(name, sScreens[i].name))
++      return sScreens[i].id;
++  Native_Log("screen: no screen named %s", name);
++  return 0;
++}
++
++void NativeDev_ChooseScreen(int argc, char **argv) {
++  const char *choice = getenv("TBS_SCREEN");
++  int i;
++
++  for (i = 1; i + 1 < argc; i++)
++    if (!strcmp(argv[i], "--screen"))
++      choice = argv[i + 1];
++  if (choice && *choice)
++    gNativeScreenRequest = NativeDev_ScreenByName(choice);
++}
++
++void NativeDev_OpenScreen(int id) {
++  Native_Log("screen %d", id);
++  switch (id) {
++  case NATIVE_SCREEN_CLASS_VIEWER:
++    ClassViewer_Run(0); // Isaac
++    break;
++  case NATIVE_SCREEN_MECHANICS:
++    MechanicsGuide_Choose(0);
++    break;
++  }
++}
+diff --git a/port/src/native_platform.c b/port/src/native_platform.c
+index 1e9e979946..a066a266e0 100644
+--- a/port/src/native_platform.c
++++ b/port/src/native_platform.c
+@@ -5,6 +5,7 @@
+ 
+ #define _GNU_SOURCE
+ #include "native/native.h"
++#include "native/dev.h"
+ #include "native/overlay.h"
+ 
+ #include <errno.h>
+@@ -459,6 +460,7 @@ int main(int argc, char **argv) {
+   // take their addresses.
+   Native_MapMemory();
+   Screen_ChooseWidth(argc, argv);
++  NativeDev_ChooseScreen(argc, argv);
+   if (Platform_Init(argc, argv) != 0)
+     return 1;
+   Overlay_Snapshot();
+diff --git a/port/src/platform_headless.c b/port/src/platform_headless.c
+index 229559b356..4ed1db38fb 100644
+--- a/port/src/platform_headless.c
++++ b/port/src/platform_headless.c
+@@ -1,7 +1,9 @@
+ /// @file
+ /// The headless platform: no window and no pacing. Input comes from a smoke
+ /// script in the libmgba driver's format (scripts/smoke in the arena repo:
+-/// wait, press, tap, mash, include, shot, peek, poke), and screenshots are
++/// wait, press, tap, mash, include, shot, peek, poke, reset; touch and screen
++/// are ours),
++/// and screenshots are
+ /// PNG files, so the same scripts drive the native build.
+ ///
+ ///   tbs-native [--script FILE] [--shots DIR] [--frames N] [--scale N]
+@@ -11,6 +13,7 @@
+ /// under --shots (default build/native-shots).
+ 
+ #include "native/native.h"
++#include "native/dev.h"
+ 
+ #include <errno.h>
+ #include <stdio.h>
+@@ -18,6 +21,9 @@
+ #include <sys/stat.h>
+ #ifdef _WIN32
+ #include <io.h>
++#include <process.h>
++#else
++#include <unistd.h>
+ #endif
+ 
+ // --- PNG (stored deflate: no zlib needed) ---------------------------------
+@@ -135,7 +141,7 @@ static int Png_Write(const char *path, const u32 *pixels, int width,
+ 
+ // --- the script -----------------------------------------------------------------
+ 
+-enum { CMD_HOLD, CMD_SHOT, CMD_PEEK, CMD_POKE };
++enum { CMD_HOLD, CMD_SHOT, CMD_PEEK, CMD_POKE, CMD_RESET, CMD_SCREEN };
+ 
+ struct Command {
+   int kind;
+@@ -157,6 +163,7 @@ static int sScale = 3;
+ static u32 sFrameLimit = 600;
+ static int sScripted;
+ static const u32 *sLastFrame;
++static char **sArgv; // to start again on a reset
+ 
+ static struct Command *Command_Add(int kind) {
+   if (sCount == sCapacity) {
+@@ -274,6 +281,10 @@ static void Script_Load(const char *path) {
+       c->address = strtoul(arg1, NULL, 16);
+       c->size = strtoul(arg2, NULL, 0);
+       c->value = strtoul(arg3, NULL, 0);
++    } else if (!strcmp(word, "screen") && n >= 2) {
++      Command_Add(CMD_SCREEN)->value = NativeDev_ScreenByName(arg1);
++    } else if (!strcmp(word, "reset")) {
++      Command_Add(CMD_RESET);
+     } else {
+       Native_Log("script: skipping unsupported line: %s", word);
+     }
+@@ -289,6 +300,33 @@ static void Shot(const char *name) {
+     Native_Log("shot %s", path);
+ }
+ 
++/// The console's reset: the game starts again from power on, keeping the save
++/// (already on disk), by starting this program again with the same arguments
++/// and --resume at the command after this one.
++static void Reset(void) {
++  char next[16];
++  char *args[64];
++  int n = 0, i;
++
++  for (i = 0; sArgv[i] && n < 60; i++) {
++    if (!strcmp(sArgv[i], "--resume") && sArgv[i + 1]) {
++      i++;
++      continue;
++    }
++    args[n++] = sArgv[i];
++  }
++  snprintf(next, sizeof(next), "%d", sNext);
++  args[n++] = "--resume";
++  args[n++] = next;
++  args[n] = NULL;
++  Native_Log("reset");
++  fflush(stdout);
++  fflush(stderr);
++  execv(sArgv[0], args);
++  Native_Log("reset: could not start again (%s)", strerror(errno));
++  sDone = 1;
++}
++
+ /// Runs the script up to the next frame that holds keys or waits.
+ static void Script_Step(void) {
+   if (sHoldLeft && --sHoldLeft)
+@@ -329,6 +367,12 @@ static void Script_Step(void) {
+       else
+         *at = c->value;
+       break;
++    case CMD_RESET:
++      Reset();
++      break;
++    case CMD_SCREEN:
++      gNativeScreenRequest = c->value;
++      break;
+     }
+   }
+   sDone = 1;
+@@ -337,8 +381,9 @@ static void Script_Step(void) {
+ // --- the platform -----------------------------------------------------------------
+ 
+ int Platform_Init(int argc, char **argv) {
+-  int i;
++  int i, resume = 0;
+ 
++  sArgv = argv;
+   for (i = 1; i < argc; i++) {
+     if (!strcmp(argv[i], "--script") && i + 1 < argc) {
+       Script_Load(argv[++i]);
+@@ -351,6 +396,10 @@ int Platform_Init(int argc, char **argv) {
+       sScale = atoi(argv[++i]);
+     } else if (!strcmp(argv[i], "--width") && i + 1 < argc) {
+       i++; // Screen_ChooseWidth took it
++    } else if (!strcmp(argv[i], "--screen") && i + 1 < argc) {
++      i++; // NativeDev_ChooseScreen took it
++    } else if (!strcmp(argv[i], "--resume") && i + 1 < argc) {
++      resume = atoi(argv[++i]); // after a script's reset
+     } else {
+       fprintf(stderr,
+               "usage: %s [--script FILE] [--shots DIR] [--frames N] [--scale N] [--width W]\n",
+@@ -358,6 +407,8 @@ int Platform_Init(int argc, char **argv) {
+       return 1;
+     }
+   }
++  if (resume > 0 && resume <= sCount)
++    sNext = resume;
+ #ifdef _WIN32
+   mkdir(sShotDir);
+ #else
+-- 
+2.43.0
+
