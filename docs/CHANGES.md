@@ -14,26 +14,45 @@ languages) is not done; each change below has a switch that turns it off.
 ## Build kit (no patch number)
 
 Not a patch: tooling so that others can build the hack and so releases can be
-cut. `scripts/build.sh` (Linux, macOS, WSL) clones upstream at the pinned commit,
+cut. `scripts/build.sh` (Linux, macOS, Windows in MSYS2) clones upstream at the pinned commit,
 applies `patches/tbs` with `git am`, bootstraps the compilers once, generates the
 git-ignored sprite sheets and builds `tbs-en` with one `ROM_END_tbs`; an existing
-clone (the developer's `~/alchemy`, whose `arena` branch already has the patches
-as commits) is built as it is. `build.ps1` is a thin WSL wrapper. The work
-directory comes from `$ALCHEMY_DIR`, the git-ignored `.alchemy-dir`, or
-`work/alchemy`, in every script (`alchemy-dir.sh`, `alchemy_dir.py`, `wsl.ps1`).
+clone (the developer's `work/alchemy`, whose `arena` branch already has the
+patches as commits) is built as it is. `build.ps1` runs it in MSYS2 (and
+`scripts/build-native.sh` with `-Native`). The work directory comes from
+`$ALCHEMY_DIR`, the git-ignored `.alchemy-dir`, or `work/alchemy`, in every
+script (`alchemy-dir.sh`, `alchemy_dir.py`, `msys2.ps1`).
 `docs/BUILDING.md` gives the raw commands. `scripts/make-release.sh` zips the
 patches, scripts and docs (never a ROM or an asset; it checks) and
 `.github/workflows/release.yml` replaces the `alpha` prerelease with it on every
 push to main. Verified: the kit build in a fresh clone gives a ROM with the same
 SHA-1 as the developer's.
 
+**Windows without WSL (27 Nov 2026).** At the owner's request every build and
+test runs natively on Windows, in [MSYS2](https://www.msys2.org); WSL is no
+longer used (Linux still builds the same way). Why it had been WSL: upstream's
+build is GNU make with Unix shell recipes, `make bootstrap` compiles 2000-era
+compilers that assume POSIX, and the desktop spike was Linux-only.
+`scripts/msys2/env.sh` makes upstream's build work with no change to its files:
+the host tools by UCRT64 GCC with `scripts/msys2/compat.h` force-included
+(`mkdir`, a replacing `rename`) and binary stdio, plus copies without `.exe` for
+make; the compilers by MSYS GCC (POSIX) with a `stab.h` and two libiberty
+switches; a `sha256sum` that prints the Linux format for upstream's source pins;
+git symbolic links made after the clone. `scripts/msys2.ps1` replaces `wsl.ps1`
+for every `.ps1` script (build, smoke, export, upstream); the smoke drivers are
+built with UCRT64's libmgba (`scripts/smoke/env.sh`: Windows `/tmp` is
+`C:\tmp`; DLLs that System32 shadows are copied beside the driver).
+Verified: on Windows the ROM is byte-identical to the WSL build (SHA-1
+`e003f9c9...`), from a fresh clone through `build.ps1` too; `smoke.ps1
+fight.txt` runs on Windows; patch 0047 (below) builds the desktop program.
+
 ## Workflow
 
 | Task | How |
 |---|---|
-| Set up from scratch (WSL) | `bash scripts/build.sh` (clone, patches, compilers, build) |
-| Build | `powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1` (ROM to `build\tbs-en.gba`) |
-| Edit | work in the work directory (`~/alchemy` in WSL), branch `arena`, and commit there |
+| Set up from scratch | `.\build.ps1` on Windows (MSYS2), `bash scripts/build.sh` on Linux (clone, patches, compilers, build) |
+| Build | `powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1` (ROM to `build\tbs-en.gba`; `-Native` for the desktop build) |
+| Edit | work in the work directory (`work/alchemy`), branch `arena`, and commit there (MSYS2's git: it keeps LF) |
 | Save the work | `scripts\export-patches.ps1`, then commit this repo |
 | Try a newer upstream | `scripts\try-upstream.ps1` (trial rebase, build, smoke), then `scripts\update-upstream.ps1 -Apply`; see `docs/WORKFLOW.md` |
 
@@ -889,6 +908,47 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
 - Gaps: no sound (the m4a driver and mixer are ARM); battle effects draw nothing (the canvas
   blitter splices ARM fragments; they are `ret` stubs); null stores the cartridge drops into
   the BIOS crash natively (seen: the field Psynergy menu's missing markers); 32-bit only.
+
+## 47. The desktop build on Windows (patch 0047)
+
+- Patch 0046's port also builds as a 32-bit Windows program (`tbs-native.exe`,
+  needing only system DLLs, plus `SDL3.dll` for the window), with the same
+  `port/Makefile` in MSYS2's MINGW32 shell (`OS=Windows_NT`).
+  `build.ps1 -Native [-Headless]` runs `scripts/build-native.sh`, which also
+  builds on Linux (`--headless`).
+- PE symbols: 32-bit Windows C names start with `_`. The converted and
+  generated assembly gets it after assembling (`objcopy --prefix-symbols=_`),
+  `far_aliases.py` and `overlay_object.py` add it (`SYMBOL_PREFIX`), and
+  `ASM_LINKED_NAME` asks the compiler (`__USER_LABEL_PREFIX__`).
+  `arm2host_s.py --coff` drops `.type`/`.size` and keeps only `.section`'s name.
+- Layout and memory: `-mno-ms-bitfields` (structs as on the GBA); the image at
+  0x08000000 (the ROM range, as Linux's 0x08048000), no relocation, no DEP;
+  the regions mapped with `VirtualAlloc` before the platform loads anything.
+- Windows puts the host stack and heap below EWRAM, which broke two
+  assumptions: the frame wait's stack pointer now reads a fixed address above
+  every region (both systems), and the DMA's null guard is the lowest host
+  address (64 KB on Windows).
+- Overlays: each is linked with a small linker script into one `.text`,
+  `.data` (data and read-only data) and `.bss`, and `objcopy --add-symbol`
+  marks each section's bounds for the table (no ELF `__start_`/`__stop_`
+  symbols); `Native_IsOverlayCode` looks them up. Same on Linux.
+- Also: smoke script paths take either slash; a crash prints its address (for
+  `addr2line`); soft reset restarts through `_execv`.
+- Verified: on Windows, `fight.txt` runs to "Victory! You won 200 coins." and
+  its nine shots are byte-identical to the Linux build's; Linux with the patch
+  gives the same shots again.
+- The window: SDL3 from SDL's MinGW developer package, **delay-loaded**
+  (`build-native.sh` makes a delay-import library from `SDL3.dll`'s exports).
+  Linked normally, SDL3 and the system libraries it pulls in load before
+  `main`, and one of them left a mapped view over 0x02000000, so EWRAM could
+  not be mapped. Delay-loaded, the program starts with only `KERNEL32` and
+  `msvcrt`, as the headless one does. A failed mapping now says what holds the
+  address.
+- Verified, the window: `build.ps1 -Native` gives `build\native\tbs-native.exe`
+  with `SDL3.dll`; it opens a "Broken Seal Arena" window and boots through the
+  title and file screen into the lobby (seen in a screenshot).
+- Not verified yet: keyboard and gamepad play in the Windows window (left to
+  the owner); soft reset on Windows.
 
 ## Planned
 

@@ -17,8 +17,8 @@ already hit), `docs/TESTING.md` (headless smoke tests) and `docs/memory/`.
 ## The one rule
 
 **Never edit the `alchemy/` submodule's files.** It is pinned upstream, kept
-pristine. All changes are commits on the `arena` branch of the WSL working copy
-`~/alchemy` (a clone of upstream), exported to `patches/tbs/` as `git
+pristine. All changes are commits on the `arena` branch of the working copy
+`work/alchemy` (a clone of upstream), exported to `patches/tbs/` as `git
 format-patch` files. Nothing destructive happens to upstream or to a ROM.
 
 ## Layout
@@ -30,30 +30,32 @@ format-patch` files. Nothing destructive happens to upstream or to a ROM.
 | `patches/tla/` | (future) the Lost Age port |
 | `scripts/` | `setup.sh`, `export-patches.ps1`, `update-upstream.ps1`, `smoke.ps1`, `smoke/` |
 | `docs/` | `WORKFLOW`, `CHANGES`, `GOTCHAS`, `TESTING`, `memory/` |
-| `build.ps1` | build in WSL and copy the ROM to `build\tbs-en.gba` |
+| `build.ps1` | build in MSYS2 and copy the ROM to `build\tbs-en.gba` (`-Native`: the desktop build) |
 | `rom/` | the owner's cartridge dump (git-ignored, never committed or published) |
 | `build/` | build output and smoke screenshots (git-ignored) |
 | `.claude/agents/` | subagent definitions for recurring jobs |
 
-The working copy (the "work directory") is `~/alchemy` inside WSL (Ubuntu), named
-in the git-ignored file `.alchemy-dir` in the repo root; every script reads that
-file (or `$ALCHEMY_DIR`; default `work/alchemy`). It builds on WSL's own disk
-(the `/mnt/c` mount is far too slow and breaks file modes). Windows tools reach it
-at `\\wsl.localhost\Ubuntu\home\nathan\alchemy`.
+The working copy (the "work directory") is `work/alchemy` in this repo (git-ignored),
+named in the git-ignored file `.alchemy-dir` in the repo root; every script reads that
+file (or `$ALCHEMY_DIR`; default `work/alchemy`). **Builds run on Windows in MSYS2**
+(`C:\msys64`, no WSL): `build.ps1` and the other `.ps1` scripts run the bash scripts there
+(`scripts/msys2.ps1`), and `scripts/msys2/env.sh` makes upstream's Linux build work
+unchanged (docs/BUILDING.md, "How the Windows build works"). Linux builds the same way
+with `scripts/build.sh`.
 
 ## Everyday loop
 
-1. Edit in `~/alchemy` (branch `arena`). Guard each change behind a switch
+1. Edit in `work/alchemy` (branch `arena`). Guard each change behind a switch
    (`ARENA_BOOT`, `ARENA_LADDER`, `ARENA_TRAINING`, `ARENA_PAUSE_MENU`, all in
    `include/arena_config.h`).
 2. Build: `powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1`
    (a thin wrapper over `scripts/build.sh`, which also builds on Linux and macOS;
    `docs/BUILDING.md`; output `build\tbs-en.gba`; if the emulator holds it open it writes
    `tbs-en.new.gba`). **Check the build log for `***` or the ROM's timestamp;
-   do not trust an exit code echoed through `wsl`.**
+   do not trust an exit code echoed from another shell.**
 3. Smoke-test headless and **look at the screenshots** before saying it works:
    `scripts\smoke.ps1 NAME.txt -Fresh`, then read `build\smoke\shots\sheet.png`.
-4. Commit in `~/alchemy` (message ends with the Co-Authored-By line), run
+4. Commit in `work/alchemy` (message ends with the Co-Authored-By line), run
    `scripts\export-patches.ps1`, update `docs/CHANGES.md`, commit this repo.
 
 Upstream moves: `scripts\update-upstream.ps1` (look), then `-Apply`.

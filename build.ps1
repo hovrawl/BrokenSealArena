@@ -1,27 +1,30 @@
-# Windows wrapper: builds Broken Seal Arena inside WSL with scripts/build.sh and
+# Windows: builds Broken Seal Arena with scripts/build.sh in MSYS2 (no WSL) and
 # leaves the ROM in build\tbs-en.gba (build\tbs-en.new.gba if an emulator holds
 # the first open).
-#   .\build.ps1 [-WorkDir DIR] [-Distro NAME] [-Verify]
-# -WorkDir  where the upstream clone lives, as a path INSIDE WSL (for example
-#           '~/alchemy'). Without it: the file .alchemy-dir in this folder if
-#           there is one, else ~/brokenseal-arena/alchemy in the WSL home. It must
-#           not be under /mnt/c: building on a Windows drive is far too slow and
-#           breaks file modes.
-# -Distro   the WSL distribution (default: your default one).
+#   .\build.ps1 [-WorkDir DIR] [-Verify]          the GBA ROM
+#   .\build.ps1 -Native [-Headless] [-WorkDir DIR] the desktop build, after the ROM:
+#                                                 build\native\tbs-native.exe
+#                                                 (build\native-headless\ with -Headless)
+# -WorkDir  where the upstream clone lives (a Windows path). Without it: the
+#           file .alchemy-dir in this folder if there is one, else work\alchemy.
 # -Verify   also runs upstream's compare (passes only for unmodified source).
-# See docs\BUILDING.md.
-param([string]$WorkDir, [string]$Distro, [switch]$Verify)
+# MSYS2 is looked for at C:\msys64 (or $env:MSYS2_ROOT). See docs\BUILDING.md.
+param([string]$WorkDir, [switch]$Verify, [switch]$Native, [switch]$Headless)
 $ErrorActionPreference = 'Stop'
-$wsl = @(); if ($Distro) { $wsl = @('-d', $Distro) }
-# C:\a\b -> /mnt/c/a/b
-$root = (wsl @wsl -- wslpath -a ($PSScriptRoot.Replace('\', '/'))).Trim()
-if (-not $root) { throw "WSL is not available (see docs\BUILDING.md)" }
-$args2 = @()
-if ($WorkDir) { $args2 += @('--work-dir', $WorkDir) }
-elseif (-not (Test-Path (Join-Path $PSScriptRoot '.alchemy-dir'))) { $args2 += @('--work-dir', '~/brokenseal-arena/alchemy') }
-if ($Verify) { $args2 += '--verify' }
-wsl @wsl -- bash "$root/scripts/build.sh" @args2
+if ($WorkDir) { $env:ALCHEMY_DIR = [System.IO.Path]::GetFullPath($WorkDir) }
+. "$PSScriptRoot\scripts\msys2.ps1"
+
+if ($Native) {
+  $opts = if ($Headless) { '--headless' } else { '' }
+  Invoke-Sh "bash '$ShRoot/scripts/build-native.sh' $opts" -System MINGW32
+  if ($LASTEXITCODE -ne 0) { throw "Native build failed" }
+  $dir = if ($Headless) { 'native-headless' } else { 'native' }
+  Write-Host "Program: $(Join-Path $PSScriptRoot "build\$dir\tbs-native.exe")"
+  return
+}
+
+$opts = if ($Verify) { '--verify' } else { '' }
+Invoke-Sh "bash '$ShRoot/scripts/build.sh' $opts"
 if ($LASTEXITCODE -ne 0) { throw "Build failed" }
-$dest = Join-Path $PSScriptRoot 'build\tbs-en.gba'
 if (Test-Path (Join-Path $PSScriptRoot 'build\tbs-en.new.gba')) { Write-Host "Note: build\tbs-en.new.gba is the newer ROM (the other is in use)." }
-Write-Host "ROM: $dest"
+Write-Host "ROM: $(Join-Path $PSScriptRoot 'build\tbs-en.gba')"

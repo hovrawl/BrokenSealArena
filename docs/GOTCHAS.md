@@ -2,18 +2,34 @@
 
 ## Build and tools
 
-- `make ...; echo rc=$?` through `wsl` printed 0 on a failed build. Check the log
+- `make ...; echo rc=$?` through `wsl` (and the same can happen through MSYS2's bash) printed 0 on a failed build. Check the log
   for `***` and that `out/tbs-en/tbs-en.gba` has a fresh timestamp.
 - After switching `~/alchemy` to a tree with different source files, `make` can
   stop with "No rule to make target ...c, needed by out/tbs-en/deps.mk": the
   generated `out/tbs-en/deps.mk` and `objects.mk` name the last tree's sources.
   Delete both (make rebuilds them). `try-upstream.sh` does this before each build.
-- The whole build is in WSL's own disk (the work directory, `~/alchemy` here). Cloning or building under
-  `/mnt/c` is slow and risks CRLF and file-mode problems.
+- (WSL, before 2026-11-27) The build had to stay on WSL's own disk: under `/mnt/c` it was
+  slow and risked CRLF and file-mode problems. With MSYS2 the work directory is on
+  the Windows disk (`work/alchemy`) and that is fine.
+- Windows, MSYS2: upstream's tools built by MinGW need binary stdio (`binmode.o`),
+  a `rename` that replaces its target (two editions write the same asset at once:
+  "write failed"), and a copy without `.exe` (make's directory cache does not see
+  `ags-graphics.exe` as `ags-graphics`, so asset rules were silently skipped and
+  the assembler said "file not found: ....gbapal"). `scripts/msys2/env.sh`.
+- Windows, MSYS2: MSYS's `sha256sum` prints `hash *name`; upstream's source pins
+  hash `hash  name` listings ("agbcc differs from pret/agbcc"). A wrapper in
+  `scripts/msys2/bin`. The same message also came from the two symbolic links in
+  `alchemy-gcc/agbcc/gcc_arm` checked out as text: they need Developer Mode, and
+  `nativestrict` links need their target to exist, so they are made after the
+  clone. Windows spells them `../x`, so `git status` calls the submodule dirty
+  (`submodule.alchemy-gcc.ignore dirty`).
+- Windows: Python, PowerShell's `Set-Content` and Git for Windows (`autocrlf=true`)
+  all write CRLF. In the work directory, write files with `open(p, 'wb')` or the
+  editor, and use MSYS2's git.
 - `build.ps1` cannot overwrite `build\tbs-en.gba` while an emulator has it open;
   it writes `tbs-en.new.gba` instead.
 - PowerShell to bash quoting: backticks and `$(...)` in a `wsl -- bash -lc '...'`
-  string, unquoted heredocs (`\n` becomes a real newline, backticks run commands),
+  (or `bash.exe -lc`) string, unquoted heredocs (`\n` becomes a real newline, backticks run commands),
   CRLF in PowerShell here-strings, and `wslpath` losing backslashes all bit. Use a
   script file.
 - Do not name a PowerShell variable like a parameter (`$fresh` and `[switch]$Fresh`

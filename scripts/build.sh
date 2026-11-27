@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Builds Broken Seal Arena (English) and leaves the ROM in build/tbs-en.gba.
-# Works on Linux, macOS and inside WSL. See docs/BUILDING.md.
+# Works on Linux, macOS and Windows (in an MSYS2 shell; build.ps1 runs it
+# there). See docs/BUILDING.md.
 #
 #   scripts/build.sh [--work-dir DIR] [--verify] [--help]
 #
@@ -15,6 +16,8 @@
 #   * If it already is a git clone (the developer's own, with the patches as
 #     commits), it is built as it is; its commits are not touched.
 #   * make bootstrap runs once, if the old compilers are not built yet.
+#   * Under MSYS2 the tools and compilers are built as scripts/msys2/env.sh
+#     describes (no change to upstream's files).
 #   * The sprite sheets that are not kept in git are generated, then make runs.
 #
 # SKIP_BOOTSTRAP=1 skips make bootstrap (for checking the patches apply).
@@ -31,6 +34,15 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 # shellcheck source=alchemy-dir.sh
 . "$HERE/alchemy-dir.sh"
+PYTHON=python3
+BSA_GIT_CONFIG=()
+BSA_MAKE_VARS=()
+MSYS2=
+case "$(uname -s)" in
+  MINGW*|MSYS*|UCRT*|CLANG*) MSYS2=1
+    # shellcheck source=msys2/env.sh
+    . "$HERE/msys2/env.sh" ;;
+esac
 
 VERIFY=
 while [ $# -gt 0 ]; do
@@ -68,9 +80,15 @@ if ! git -C "$WORK" rev-parse --git-dir >/dev/null 2>&1; then
   [ -n "$BASE" ] && [ -n "$URL" ] || { echo "Cannot tell which upstream commit to use (no UPSTREAM file, no submodule pin)." >&2; exit 1; }
   say "Cloning upstream $URL at ${BASE:0:10} into $WORK"
   mkdir -p "$(dirname "$WORK")"
-  git clone "$URL" "$WORK"
+  git ${BSA_GIT_CONFIG[@]+"${BSA_GIT_CONFIG[@]}"} clone "$URL" "$WORK"
   git -C "$WORK" checkout -q -b arena "$BASE"
-  git -C "$WORK" submodule update --init --recursive alchemy-gcc
+  git ${BSA_GIT_CONFIG[@]+"${BSA_GIT_CONFIG[@]}"} -C "$WORK" submodule update --init --recursive alchemy-gcc
+  # Windows writes the compiler sources' two links as ../x, not ./../x: the same
+  # files (upstream's source check passes), but git would call them changed.
+  if [ -n "$MSYS2" ]; then
+    bsa_msys2_links "$WORK/alchemy-gcc"
+    git -C "$WORK" config submodule.alchemy-gcc.ignore dirty
+  fi
   git -C "$WORK" config user.name "$(git config --global user.name || echo romhack)"
   git -C "$WORK" config user.email "$(git config --global user.email || echo romhack@localhost)"
   # The generated sheets derive from the game's art: keep them out of git status.
@@ -94,17 +112,19 @@ It downloads their sources from ftp.gnu.org, prints many old-compiler warnings
 (normal), needs about 500 MB, and takes a long time (tens of minutes). It runs
 once; later builds skip it.
 MSG
-  make -C "$WORK" -j"$JOBS" bootstrap
+  [ -z "$MSYS2" ] || bsa_msys2_tools "$WORK" "$JOBS"
+  make -C "$WORK" -j"$JOBS" bootstrap ${BSA_MAKE_VARS[@]+"${BSA_MAKE_VARS[@]}"}
 fi
+[ -z "$MSYS2" ] || bsa_msys2_tools "$WORK" "$JOBS"
 
 say "Generating the sprite sheets (git-ignored, derived from the game's art)"
 SPRITES="$WORK/games/tbs/src/graphics/sprite"
-python3 "$HERE/gen-opponent-sprites.py" "$SPRITES"
-python3 "$HERE/gen-trophy-sprites.py" "$SPRITES"
+"$PYTHON" "$HERE/gen-opponent-sprites.py" "$SPRITES"
+"$PYTHON" "$HERE/gen-trophy-sprites.py" "$SPRITES"
 
 say "make tbs-en ROM_END_tbs=$ROM_END"
-make -C "$WORK" -j"$JOBS" tbs-en ROM_END_tbs="$ROM_END"
-[ -z "$VERIFY" ] || make -C "$WORK" compare-tbs-en
+make -C "$WORK" -j"$JOBS" tbs-en ROM_END_tbs="$ROM_END" ${BSA_MAKE_VARS[@]+"${BSA_MAKE_VARS[@]}"}
+[ -z "$VERIFY" ] || make -C "$WORK" compare-tbs-en ${BSA_MAKE_VARS[@]+"${BSA_MAKE_VARS[@]}"}
 
 mkdir -p "$ROOT/build"
 if cp "$WORK/out/tbs-en/tbs-en.gba" "$ROOT/build/tbs-en.gba" 2>/dev/null; then

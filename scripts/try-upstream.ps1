@@ -14,16 +14,16 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-. "$PSScriptRoot\wsl.ps1"
+. "$PSScriptRoot\msys2.ps1"
 $branch = if ($Game -eq 'tbs') { 'arena' } else { "arena-$Game" }
 & "$PSScriptRoot\check-submodule.ps1"
 $pinned = ((git -C $root ls-files -s alchemy) -split '\s+')[1]
 
-$wslSh = "$WslRoot/scripts/try-upstream.sh"
+$sh = "$ShRoot/scripts/try-upstream.sh"
 
-wsl @WslArgs -- bash -lc "cd '$AlchemyDir' && git fetch -q origin"
+Invoke-Sh "cd '$AlchemyDir' && git fetch -q origin"
 try {
-  wsl @WslArgs -- bash $wslSh run $pinned $Target $branch
+  Invoke-Sh "bash '$sh' run $pinned '$Target' $branch"
   $code = $LASTEXITCODE
   switch ($code) {
     0 { Write-Host "`nResult: builds." }
@@ -44,6 +44,6 @@ try {
     Write-Host "`nLook at the sheets before trusting the trial."
   }
 } finally {
-  wsl @WslArgs -- bash $wslSh restore $branch
+  Invoke-Sh "bash '$sh' restore $branch"
 }
-Write-Host "Report: $(wsl @WslArgs -- wslpath -w ~/try-upstream-report.txt)"
+Write-Host "Report: $(Invoke-Sh 'cygpath -w ~/try-upstream-report.txt' | Select-Object -Last 1)"

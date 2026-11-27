@@ -20,15 +20,19 @@ way. The driver is `scripts/smoke/smoke.c`.
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke.ps1 pause.txt -Fresh
 ```
 
-- Runs `scripts/smoke/<script>` against the work directory's `out/tbs-en/tbs-en.gba` (`~/alchemy` for the developer; `scripts/alchemy-dir.sh`) in WSL
+- Runs `scripts/smoke/<script>` against the work directory's `out/tbs-en/tbs-en.gba` (`work/alchemy`; `scripts/alchemy-dir.sh`) in MSYS2
   (build first with `build.ps1`, which leaves that file in place).
 - Screenshots land in `build\smoke\shots`, with `sheet.png`, all of them on one
   page, which is the cheapest way to look at a run.
-- `-Fresh` deletes the test cartridge save (`/tmp/smokesave` in WSL, not your
+- `-Fresh` deletes the test cartridge save (`C:\tmp\smokesave`; `/tmp/smokesave` on Linux; not your
   emulator's `.sav`); without it a run keeps the last run's save.
 
-One-time setup (WSL): `sudo apt install libmgba-dev python3-pil` (libpng-dev and
-a C compiler are already there for the build).
+One-time setup: on Windows, the MSYS2 package `mingw-w64-ucrt-x86_64-mgba` (the
+rest is there for the build); on Linux, `sudo apt install libmgba-dev python3-pil`.
+On Windows the drivers are Windows programs, so a script's `/tmp/shots/NAME.png`
+is `C:\tmp\shots\NAME.png` (`scripts/smoke/env.sh`). A DLL of the same name
+in System32 shadows MSYS2's (an old `libcrypto-4-x64.dll` there stopped the
+driver from starting); the runner copies such DLLs beside the driver.
 
 ## Script commands (one a line, `#` comments)
 
@@ -133,7 +137,7 @@ Tests (each ends in shots; `build\smoke\shots\sheet.png` shows them all):
 
 These read the built ROM, an unmodified upstream build (`~/alchemy-stock`) and the
 git-ignored `reloaded/` folder; they print counts and differences, never the numbers
-themselves, and write nothing in the repository. Run them in WSL with `python3` (they call
+themselves, and write nothing in the repository. Run them in an MSYS2 UCRT64 shell (or on Linux) with `python3` (they call
 `arm-none-eabi-nm`); `workbook-check.py` also runs on Windows.
 
 - `scripts/port-reloaded-tables.py --check` renders every row of each stock table with the
@@ -162,7 +166,7 @@ themselves, and write nothing in the repository. Run them in WSL with `python3` 
   moves one page. A stray A beside a person starts their talk, so tap, wait and
   shoot, then decide the next key from the picture.
 - Addresses for `peek`: EWRAM variables are in the build's map
-  (`~/alchemy/out/tbs-en/tbs-en.map`).
+  (`work/alchemy/out/tbs-en/tbs-en.map`).
 - The ROM is copied to the save directory first, so the run never touches
   `build\tbs-en.gba` or your own saves.
 

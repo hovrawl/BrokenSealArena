@@ -11,7 +11,7 @@
   actions (pushing, publishing). Do not ask for a GitHub token; `gh` is already
   logged in on their machine.
 - Balance is a separate pass later.
-- Works from Windows; builds run in WSL Ubuntu.
+- Works from Windows; builds run natively in MSYS2 (moved off WSL on 2026-11-27, at the owner's request: "remove WSL for all the builds").
 - Wants interface work to start from written rules and a reviewed spec, not
   trial and error: from-scratch screens first looked wrong (font, no wrapping)
   and only got good by copying existing screens. Reuse parts, review the spec

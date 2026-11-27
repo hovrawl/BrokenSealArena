@@ -1,0 +1,712 @@
+From 504aa71299d1bbcc33fb4420fa7abdf0ef760c24 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 27 Nov 2026 15:51:51 +1100
+Subject: [PATCH] Native: a Windows build (32-bit MinGW)
+
+The native port also builds as a 32-bit Windows program, in MSYS2's
+MINGW32 shell, with the same Makefile (OS=Windows_NT): tbs-native.exe,
+needing only system DLLs (and SDL3.dll for the window).
+
+- PE symbols: 32-bit Windows C names start with an underscore. The
+  generated and converted assembly gets it after assembling (objcopy
+  --prefix-symbols=_); far_aliases.py and overlay_object.py add it
+  (SYMBOL_PREFIX); ASM_LINKED_NAME takes the compiler's
+  __USER_LABEL_PREFIX__. arm2host_s.py --coff drops .type and .size and
+  keeps only .section's name.
+- Layout: -mno-ms-bitfields, so structs match the GBA's. The image is
+  linked at 0x08000000 (the ROM range, as Linux's 0x08048000), without
+  relocation or DEP; the regions are mapped with VirtualAlloc, before the
+  platform loads any library.
+- The host stack and heap are below EWRAM on Windows: the stack pointer
+  the frame wait reads is now a fixed address above every region (on
+  both systems), and the DMA null guard is the lowest host address.
+- Overlays: each is linked with a small script into one .text, .data
+  (data and read-only data) and .bss, and objcopy --add-symbol marks each
+  section's bounds; the table holds them (no ELF __start_/__stop_), and
+  Native_IsOverlayCode looks them up. Same on ELF.
+- The window links SDL3 delay-loaded (README): loaded at start-up, it and
+  the system libraries it pulls in left a mapped view over EWRAM's address.
+  A failed mapping now says what holds the address.
+- Smoke script paths take either slash; a crash prints its address;
+  soft reset restarts through _execv.
+
+Verified: on Windows, fight.txt runs to the win and its nine shots are
+byte-identical to the Linux build's; the Linux build with this change
+gives the same shots again. The Windows window boots into the lobby.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ port/Makefile                 | 42 +++++++++++++--
+ port/README.md                | 38 +++++++++++++-
+ port/include/native/asm.h     | 11 ++--
+ port/include/native/overlay.h |  1 +
+ port/src/native_platform.c    | 98 +++++++++++++++++++++++++++++++----
+ port/src/platform_headless.c  | 23 +++++++-
+ port/tools/arm2host_s.py      | 27 +++++++---
+ port/tools/far_aliases.py     |  7 ++-
+ port/tools/overlay_object.py  | 85 ++++++++++++++++++++----------
+ port/tools/overlay_table.py   | 11 ++--
+ 10 files changed, 283 insertions(+), 60 deletions(-)
+
+diff --git a/port/Makefile b/port/Makefile
+index 23557ead31..46f522925f 100644
+--- a/port/Makefile
++++ b/port/Makefile
+@@ -15,7 +15,32 @@ DEFINE   := TBS_EDITION_EN
+ GBA      := out/$(EDITION)
+ HEADLESS ?= 0
+ BUILD    ?= out/native-$(EDITION)$(if $(filter 1,$(HEADLESS)),-headless)
+-TARGET   := $(BUILD)/tbs-native
++
++# 32-bit Windows (MSYS2's MINGW32 shell): a PE image whose C symbols start
++# with an underscore. The generated assembly gets the prefix after it is
++# assembled (objcopy --prefix-symbols), the overlay and alias scripts take it
++# from SYMBOL_PREFIX, and GCC lays out bitfields as on the GBA, not as MSVC.
++ifeq ($(OS),Windows_NT)
++WINDOWS       := 1
++EXE           := .exe
++SYMBOL_PREFIX := _
++LD_EMULATION  := i386pe
++COFF          := --coff
++TARGET_CFLAGS := -mno-ms-bitfields
++PREFIX_SYMBOLS = objcopy --prefix-symbols=_ $@
++ifeq ($(origin CC),default)
++CC            := gcc
++endif
++else
++EXE           :=
++SYMBOL_PREFIX :=
++LD_EMULATION  := elf_i386
++COFF          :=
++TARGET_CFLAGS :=
++PREFIX_SYMBOLS = @:
++endif
++export SYMBOL_PREFIX LD_EMULATION
++TARGET   := $(BUILD)/tbs-native$(EXE)
+ 
+ CC       ?= gcc
+ AS_HOST  ?= as
+@@ -34,15 +59,22 @@ PLATFORM := port/src/platform_sdl.c
+ PLATFORM_LIBS := $(SDL_LIBS)
+ endif
+ 
+-GAME_CFLAGS := $(ARCH) -std=gnu89 -O2 -g -fno-strict-aliasing -fwrapv -fno-pie \
++GAME_CFLAGS := $(ARCH) $(TARGET_CFLAGS) -std=gnu89 -O2 -g -fno-strict-aliasing -fwrapv -fno-pie \
+                -fno-stack-protector -ffreestanding -nostdinc -fcommon \
+                -DMODERN=1 -DNATIVE=1 -DUBFIX=1 -D$(DEFINE)=1 \
+                -Iport/include -Igames/$(GAME)/include -I$(GBA) -w
+-PORT_CFLAGS := $(ARCH) -std=gnu99 -O2 -g -fno-strict-aliasing -fwrapv -fno-pie \
++PORT_CFLAGS := $(ARCH) $(TARGET_CFLAGS) -std=gnu99 -O2 -g -fno-strict-aliasing -fwrapv -fno-pie \
+                -DNATIVE=1 -D$(DEFINE)=1 -Iport/include -Wall -Wno-unused-function
+ # Routines the game copies to RAM or the stack run there (as jumps back to
+ # the host code), so EWRAM, IWRAM and the stack are executable.
++ifdef WINDOWS
++# The same on Windows: no DEP for the process (no NX-compatible flag), no
++# relocation, and the image at 0x08000000 (the cartridge ROM's range, as the
++# Linux image at 0x08048000 is), clear of the RAM regions.
++LDFLAGS     := $(ARCH) -g -Wl,--image-base=0x08000000 -Wl,--disable-dynamicbase -Wl,--disable-nxcompat
++else
+ LDFLAGS     := $(ARCH) -no-pie -g -z execstack
++endif
+ 
+ .SUFFIXES:
+ .SECONDARY:
+@@ -106,8 +138,9 @@ $(BUILD)/obj/%.o: %.c
+ # Game data in assembly, made host-assembler friendly first.
+ $(BUILD)/obj/%.o: %.s port/tools/arm2host_s.py
+ 	@mkdir -p $(@D)
+-	$(PYTHON) port/tools/arm2host_s.py $< $(@:.o=.host.s) -I $(GBA) --defsym $(DEFINE)=1
++	$(PYTHON) port/tools/arm2host_s.py $< $(@:.o=.host.s) -I $(GBA) --defsym $(DEFINE)=1 $(COFF)
+ 	$(AS_HOST) $(ASARCH) -I $(GBA) -o $@ $(@:.o=.host.s)
++	$(PREFIX_SYMBOLS)
+ # The platform layer.
+ $(BUILD)/port/%.o: port/src/%.c
+ 	@mkdir -p $(@D)
+@@ -139,6 +172,7 @@ $(BUILD)/gen/overlay_table.c: port/tools/overlay_table.py $(GBA)/objects.mk
+ 	$(PYTHON) $< $@ $(OVERLAYS)
+ $(BUILD)/gen/%.o: $(BUILD)/gen/%.s
+ 	$(AS_HOST) $(ASARCH) -o $@ $<
++	$(PREFIX_SYMBOLS)
+ $(BUILD)/gen/%.o: $(BUILD)/gen/%.c
+ 	$(CC) $(PORT_CFLAGS) -c -o $@ $<
+ 
+diff --git a/port/README.md b/port/README.md
+index c429943410..54e799b3fb 100644
+--- a/port/README.md
++++ b/port/README.md
+@@ -29,6 +29,25 @@ out/native-tbs-en-headless/tbs-native --script ../scripts/smoke/battle.txt --sho
+ python3 port/tools/sheet.py build/native-shots   # all shots on one page
+ ```
+ 
++### Windows
++
++In MSYS2's **MINGW32** shell (packages `mingw-w64-i686-gcc` and
++`mingw-w64-i686-binutils`, plus the GBA build's), the same commands make
++`tbs-native.exe`, a 32-bit Windows program that needs no MSYS2 to run:
++
++```sh
++make -f port/Makefile HEADLESS=1
++make -f port/Makefile SDL_CFLAGS=-I$SDL/include SDL_LIBS="-L$SDL/lib -lSDL3"
++```
++
++where `$SDL` is the `i686-w64-mingw32` directory of SDL's MinGW developer
++package (`SDL3-devel-*-mingw`); put its `SDL3.dll` beside the program. Link
++SDL3 **delay-loaded** (a `dlltool --output-delaylib` library, with
++`-ldelayimp`): loaded at start-up, SDL and the system libraries it pulls in
++can take EWRAM's address before `main` maps it. The
++arena repo's `build.ps1 -Native` does all of this. Script paths may use either
++slash.
++
+ The save is `tbs-native.sav` in the working directory (or `$TBS_SAVE`).
+ No ROM is read: everything comes from the repository's sources and assets.
+ 
+@@ -62,6 +81,22 @@ No ROM is read: everything comes from the repository's sources and assets.
+   (its DMA and the game's handler) at line 160.
+ - **The display** (`ppu.c`): modes 0 to 5, text and affine backgrounds,
+   sprites (affine too), windows, blending. No mosaic yet.
++- **Windows** (`OS=Windows_NT`): a PE image, built the same way. The C
++  symbols of 32-bit Windows start with an underscore, so the generated
++  assembly gets one after it is assembled (`objcopy --prefix-symbols=_`), the
++  overlay and alias scripts add it (`SYMBOL_PREFIX`), and
++  `ASM_LINKED_NAME` asks the compiler for its prefix. GCC is told to lay out
++  bitfields as on the GBA (`-mno-ms-bitfields`). The image is linked at
++  0x08000000 (the cartridge ROM's range, as Linux's 0x08048000 is), with no
++  relocation and no DEP, and the regions are mapped with `VirtualAlloc`
++  before anything else loads. The host stack and heap sit below EWRAM there,
++  so the stack pointer the frame wait reads is a fixed address above every
++  region, and the DMA's null guard is the lowest host address. A crash prints
++  its address (for `addr2line`).
++- **Overlay bounds**: each overlay is linked (`ld -r`, with a small script)
++  into one `.text`, one `.data` (data and read-only data, restored at each
++  load) and one `.bss`, and `objcopy --add-symbol` marks each section's start
++  and end for the overlay table, on ELF and PE alike.
+ - `UBFIX` is on: the native build cannot read or write through null the way
+   the cartridge does (into the BIOS), so the guarded versions are used.
+ 
+@@ -79,4 +114,5 @@ Hooks in upstream files, all under `#ifdef NATIVE` (or `UBFIX`):
+   under `UBFIX`). Known: the field Psynergy menu's missing markers
+   (`menu_psynergy.c`, `menu_shared.c`).
+ - The credits' background decoder is a stub; soft reset restarts the process.
+-- 32-bit only; 64-bit needs the game's pointer-as-`u32` habits fixed.
++- 32-bit only (Linux and Windows); 64-bit needs the game's pointer-as-`u32`
++  habits fixed.
+diff --git a/port/include/native/asm.h b/port/include/native/asm.h
+index 24f651362d..2acbb69fb8 100644
+--- a/port/include/native/asm.h
++++ b/port/include/native/asm.h
+@@ -48,13 +48,18 @@ void Native_DmaStart(volatile void *channel, unsigned source,
+ 
+ /// The host keeps its own stack: wait() never moves it. Reading gives an
+ /// address above every GBA region, so the frame wait's stack swap is skipped.
+-#define ASM_STACK_POINTER_GET(variable)                                        \
+-  ((variable) = (void *)__builtin_frame_address(0))
++/// (A fixed one: the host stack can be anywhere, below EWRAM on Windows.)
++#define ASM_STACK_POINTER_GET(variable) ((variable) = (void *)0xfffffff0u)
+ #define ASM_STACK_POINTER_SET(value) ((void)(value))
+ 
+ /// A local pinned to an ARM register is a plain local.
+ #define ASM_REGISTER(declaration, name) declaration
+ #define ASM_NOTHING() ((void)0)
+-#define ASM_LINKED_NAME(symbol, name) extern char symbol[] __asm__(name)
++/// A C name for an assembly symbol: with the target's C symbol prefix (an
++/// underscore on 32-bit Windows), as the compiler would spell it.
++#define NATIVE_STRINGIFY_(x) #x
++#define NATIVE_STRINGIFY(x) NATIVE_STRINGIFY_(x)
++#define ASM_LINKED_NAME(symbol, name)                                          \
++  extern char symbol[] __asm__(NATIVE_STRINGIFY(__USER_LABEL_PREFIX__) name)
+ 
+ #endif
+diff --git a/port/include/native/overlay.h b/port/include/native/overlay.h
+index 55eb6d3001..5294e98be7 100644
+--- a/port/include/native/overlay.h
++++ b/port/include/native/overlay.h
+@@ -9,6 +9,7 @@ struct NativeOverlay {
+   const char *name;
+   unsigned resourceId;
+   void (*entry[6])(void);
++  char *textStart, *textEnd;
+   char *dataStart, *dataEnd;
+   char *bssStart, *bssEnd;
+ };
+diff --git a/port/src/native_platform.c b/port/src/native_platform.c
+index 7c540bed66..721f8ed659 100644
+--- a/port/src/native_platform.c
++++ b/port/src/native_platform.c
+@@ -11,13 +11,40 @@
+ #include <stdarg.h>
+ #include <stdio.h>
+ #include <stdlib.h>
++#ifdef _WIN32
++#include <process.h>
++#include <windows.h>
++#else
+ #include <sys/mman.h>
+ #include <unistd.h>
++#endif
+ 
+ u32 gNativeFrame;
+ 
+ // --- memory ------------------------------------------------------------------
+ 
++#ifdef _WIN32
++static void MapRegion(u32 base, u32 size) {
++  // Reserved and committed at the GBA address (64 KB granularity; the image
++  // is linked at 0x08000000, clear of these regions).
++  void *at = VirtualAlloc((void *)(uintptr_t)base, size,
++                          MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
++
++  if (at != (void *)(uintptr_t)base) {
++    // Say what holds the address (a DLL, or which allocation).
++    MEMORY_BASIC_INFORMATION info;
++    char owner[MAX_PATH] = "";
++    DWORD error = GetLastError();
++
++    VirtualQuery((void *)(uintptr_t)base, &info, sizeof(info));
++    GetModuleFileNameA((HMODULE)info.AllocationBase, owner, sizeof(owner));
++    Native_Fatal("cannot map 0x%08x (%u bytes): error %lu; taken by 0x%08x+0x%x "
++                 "(state 0x%lx, type 0x%lx) %s",
++                 base, size, error, (u32)(uintptr_t)info.AllocationBase,
++                 (u32)info.RegionSize, info.State, info.Type, owner);
++  }
++}
++#else
+ static void MapRegion(u32 base, u32 size) {
+   u32 length = (size + 4095) & ~4095u;
+   void *at = mmap((void *)(uintptr_t)base, length,
+@@ -28,6 +55,7 @@ static void MapRegion(u32 base, u32 size) {
+     Native_Fatal("cannot map 0x%08x (%u bytes): %s", base, length,
+                  strerror(errno));
+ }
++#endif
+ 
+ void Native_MapMemory(void) {
+   // RWX: the game copies routines into EWRAM and IWRAM and runs them there
+@@ -40,25 +68,45 @@ void Native_MapMemory(void) {
+   MapRegion(OAM_BASE, OAM_SIZE);
+ }
+ 
+-extern char __executable_start[], etext[];
+-extern char __start_native_overlay_text[] __attribute__((weak));
+-extern char __stop_native_overlay_text[] __attribute__((weak));
++// The image's code: from its start to the end of its text section (the
++// overlays' code is linked into the same section).
++#ifdef _WIN32
++extern char __ImageBase[];
++#define IMAGE_START __ImageBase
++#else
++extern char __executable_start[];
++#define IMAGE_START __executable_start
++#endif
++extern char etext[];
+ 
+ int Native_IsCode(u32 address) {
+-  if (address >= (u32)(uintptr_t)__executable_start &&
++  if (address >= (u32)(uintptr_t)IMAGE_START &&
+       address < (u32)(uintptr_t)etext)
+     return 1;
+   return Native_IsOverlayCode(address);
+ }
+ 
+ int Native_IsOverlayCode(unsigned address) {
+-  return __start_native_overlay_text != NULL &&
+-         address >= (u32)(uintptr_t)__start_native_overlay_text &&
+-         address < (u32)(uintptr_t)__stop_native_overlay_text;
++  int i;
++
++  for (i = 0; i < gNativeOverlayCount; i++) {
++    const struct NativeOverlay *o = &gNativeOverlays[i];
++
++    if (address >= (u32)(uintptr_t)o->textStart &&
++        address < (u32)(uintptr_t)o->textEnd)
++      return 1;
++  }
++  return 0;
+ }
+ 
+ // --- DMA -----------------------------------------------------------------------
+ 
++#ifdef _WIN32
++#define LOWEST_HOST_ADDRESS 0x00010000u // Windows maps nothing below 64 KB
++#else
++#define LOWEST_HOST_ADDRESS 0x02000000u
++#endif
++
+ #define DMA_ENABLE_BIT 0x80000000u
+ #define DMA_REPEAT_BIT (1u << 25)
+ #define DMA_WORDS_BIT (1u << 26)
+@@ -98,7 +146,9 @@ static void Dma_Transfer(int n) {
+   case 2: stepSrc = 0; break;
+   default: stepSrc = size; break;
+   }
+-  if (src < 0x02000000u || dst < 0x02000000u)
++  // Below the lowest host address: the BIOS or a null pointer the cartridge
++  // would have read (Windows puts the stack and heap below EWRAM, Linux above).
++  if (src < LOWEST_HOST_ADDRESS || dst < LOWEST_HOST_ADDRESS)
+     Native_Fatal("DMA%d from 0x%08x to 0x%08x (control 0x%08x)", n, src, dst,
+                  control);
+   if (size == 4) {
+@@ -295,7 +345,16 @@ static char **sArgv;
+ void Native_SoftReset(void) {
+   Native_Log("soft reset: restarting");
+   Platform_Shutdown();
++#ifdef _WIN32
++  {
++    char self[MAX_PATH];
++
++    if (GetModuleFileNameA(NULL, self, sizeof(self)))
++      _execv(self, (const char *const *)sArgv);
++  }
++#else
+   execv("/proc/self/exe", sArgv);
++#endif
+   Native_Fatal("cannot restart: %s", strerror(errno));
+ }
+ 
+@@ -373,11 +432,32 @@ void Native_Fatal(const char *format, ...) {
+ 
+ void System_Initialize(void);
+ 
++#ifdef _WIN32
++/// A crash: where it happened, for addr2line (Windows has no core dump).
++static LONG WINAPI Native_Crash(EXCEPTION_POINTERS *info) {
++  EXCEPTION_RECORD *r = info->ExceptionRecord;
++
++  fprintf(stderr, "[%6u] crash: exception 0x%08lx at 0x%08x", gNativeFrame,
++          r->ExceptionCode, (u32)(uintptr_t)r->ExceptionAddress);
++  if (r->ExceptionCode == EXCEPTION_ACCESS_VIOLATION && r->NumberParameters >= 2)
++    fprintf(stderr, " (%s 0x%08x)", r->ExceptionInformation[0] ? "write" : "read",
++            (u32)r->ExceptionInformation[1]);
++  fprintf(stderr, ", stack from 0x%08x\n", (u32)info->ContextRecord->Esp);
++  fflush(stderr);
++  return EXCEPTION_EXECUTE_HANDLER;
++}
++#endif
++
+ int main(int argc, char **argv) {
+   sArgv = argv;
++#ifdef _WIN32
++  SetUnhandledExceptionFilter(Native_Crash);
++#endif
++  // The GBA regions first, before the platform loads libraries that could
++  // take their addresses.
++  Native_MapMemory();
+   if (Platform_Init(argc, argv) != 0)
+     return 1;
+-  Native_MapMemory();
+   Overlay_Snapshot();
+   IO_REG16(REG_KEYINPUT_OFFSET) = 0x3ff;
+   // System_Entry: the stacks are the host's; the game starts here and never
+diff --git a/port/src/platform_headless.c b/port/src/platform_headless.c
+index 10adf1818e..239edcf69f 100644
+--- a/port/src/platform_headless.c
++++ b/port/src/platform_headless.c
+@@ -16,6 +16,9 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <sys/stat.h>
++#ifdef _WIN32
++#include <io.h>
++#endif
+ 
+ // --- PNG (stored deflate: no zlib needed) ---------------------------------
+ 
+@@ -191,10 +194,22 @@ static u16 Keys_Parse(const char *s) {
+   return keys;
+ }
+ 
++/// The last directory separator in `path` (Windows takes either slash).
++static const char *LastSlash(const char *path) {
++  const char *slash = strrchr(path, '/');
++#ifdef _WIN32
++  const char *back = strrchr(path, '\\');
++
++  if (back && (!slash || back > slash))
++    slash = back;
++#endif
++  return slash;
++}
++
+ static void Script_Load(const char *path) {
+   FILE *f = fopen(path, "r");
+   char line[512], dir[512];
+-  const char *slash = strrchr(path, '/');
++  const char *slash = LastSlash(path);
+ 
+   if (!f)
+     Native_Fatal("cannot open script %s", path);
+@@ -234,7 +249,7 @@ static void Script_Load(const char *path) {
+         snprintf(sub, sizeof(sub), "%s/%s", dir, arg1);
+       Script_Load(sub);
+     } else if (!strcmp(word, "shot") && n >= 2) {
+-      const char *base = strrchr(arg1, '/');
++      const char *base = LastSlash(arg1);
+ 
+       Command_Add(CMD_SHOT)->path = strdup(base ? base + 1 : arg1);
+     } else if (!strcmp(word, "peek") && n >= 3) {
+@@ -326,7 +341,11 @@ int Platform_Init(int argc, char **argv) {
+       return 1;
+     }
+   }
++#ifdef _WIN32
++  mkdir(sShotDir);
++#else
+   mkdir(sShotDir, 0777);
++#endif
+   return 0;
+ }
+ 
+diff --git a/port/tools/arm2host_s.py b/port/tools/arm2host_s.py
+index adfa82ab6b..60a6143351 100644
+--- a/port/tools/arm2host_s.py
++++ b/port/tools/arm2host_s.py
+@@ -7,7 +7,11 @@ directives (.arm, .thumb, .syntax, .thumb_func) are dropped; .word becomes
+ .4byte (on x86 .word is two bytes). Code (an ARM or Thumb instruction) is
+ refused: those files have C replacements under port/src.
+ 
+-usage: arm2host_s.py INPUT OUTPUT [-I DIR]... [--defsym NAME=VALUE]...
++For a PE-COFF host (32-bit Windows, --coff), ELF-only directives are
++dropped (.type, .size) and .section keeps only its name, as data ("b" for
++@nobits).
++
++usage: arm2host_s.py INPUT OUTPUT [-I DIR]... [--defsym NAME=VALUE]... [--coff]
+ """
+ import os, re, sys
+ 
+@@ -34,8 +38,9 @@ def strip_comment(line):
+     return ''.join(out).rstrip()
+ 
+ class Converter:
+-    def __init__(self, includes):
++    def __init__(self, includes, coff=False):
+         self.includes = includes
++        self.coff = coff
+         self.macros = set()
+ 
+     def find(self, name, here):
+@@ -77,7 +82,15 @@ class Converter:
+                 if label.strip():
+                     out.append(label)
+                 continue
+-            if d == '.section':
++            if self.coff and d in ('.type', '.size'):
++                if label.strip():
++                    out.append(label)
++                continue
++            if d == '.section' and self.coff:
++                parts = [p.strip() for p in rest.split(',')]
++                nobits = any('nobits' in p for p in parts[1:])
++                rest = ' ' + parts[0] + (', "b"' if nobits else ', "d"')
++            elif d == '.section':
+                 rest = rest.replace('%nobits', '@nobits').replace('%progbits', '@progbits')
+             if d == '.type':
+                 rest = rest.replace('%function', '@function').replace('%object', '@object')
+@@ -89,10 +102,12 @@ class Converter:
+ def main():
+     args = sys.argv[1:]
+     inp, outp = args[0], args[1]
+-    includes, defsyms = [], []
++    includes, defsyms, coff = [], [], False
+     i = 2
+     while i < len(args):
+-        if args[i] == '-I':
++        if args[i] == '--coff':
++            coff = True; i += 1
++        elif args[i] == '-I':
+             includes.append(args[i + 1]); i += 2
+         elif args[i] == '--defsym':
+             defsyms.append(args[i + 1]); i += 2
+@@ -100,7 +115,7 @@ def main():
+             raise SystemExit(f'unknown argument {args[i]}')
+     out = [f'\t.set {d.replace("=", ", ")}' for d in defsyms]
+     try:
+-        Converter(includes).convert(inp, out)
++        Converter(includes, coff).convert(inp, out)
+     except ValueError as e:
+         raise SystemExit(str(e))
+     tmp = outp + '.tmp'
+diff --git a/port/tools/far_aliases.py b/port/tools/far_aliases.py
+index 29b6cd9067..f9fc78f1fc 100644
+--- a/port/tools/far_aliases.py
++++ b/port/tools/far_aliases.py
+@@ -6,12 +6,15 @@ fixed address (src/gamepak/far_call/*.s: `export NameFar, Name`), and an
+ overlay calls the main image through its import table (imports.inc: `export
+ Name, TargetFar`). The native build links everything into one image, so
+ NameFar is simply another name for Name (a linker script of PROVIDEs), and an import whose name differs
+-from its target is an alias of the target.
++from its target is an alias of the target. Names carry SYMBOL_PREFIX (from
++the environment: '_' for 32-bit Windows, whose C symbols start with one).
+ 
+ usage: far_aliases.py OUTPUT.ld FAR_CALL_DIR IMPORTS.inc
+ """
+ import glob, os, re, sys
+ 
++PREFIX = os.environ.get('SYMBOL_PREFIX', '')
++
+ def exports(path):
+     for raw in open(path):
+         m = re.match(r'\s*export\s+(\w+)\s*,\s*(\w+)', raw.split('@')[0])
+@@ -34,7 +37,7 @@ def main():
+         return t if t == n or t in seen else resolve(t, seen + (n,))
+     out = ['/* Written by port/tools/far_aliases.py: do not edit. */']
+     for name in sorted(aliases):
+-        out.append(f'PROVIDE({name} = {resolve(name)});')
++        out.append(f'PROVIDE({PREFIX}{name} = {PREFIX}{resolve(name)});')
+     open(output, 'w').write('\n'.join(out) + '\n')
+ 
+ main()
+diff --git a/port/tools/overlay_object.py b/port/tools/overlay_object.py
+index 59a546e051..6334e582fd 100644
+--- a/port/tools/overlay_object.py
++++ b/port/tools/overlay_object.py
+@@ -4,15 +4,20 @@
+ On the GBA every overlay is linked at 0x2008000 and unpacked there when its
+ scene starts, so all 96 define the same six entry points (Scene_Initialize
+ and the rest) and many share helper names. Natively they all live in one
+-image, so each overlay is linked on its own (ld -r), then:
++image, so each overlay is linked on its own (ld -r) into three sections:
+ 
+-  * every global it defines becomes local, except the six entry points,
+-    which are renamed NAME_Scene_Initialize and so on;
+-  * its code goes into section native_overlay_text (the task list asks
+-    whether a routine is overlay code);
+-  * its data and read-only data go into native_overlay_data_NAME, which the
+-    loader restores each time the overlay is loaded (scenes write into their
+-    own tables), and its BSS into native_overlay_bss_NAME, which it clears.
++  * .text, its code;
++  * .data, its data and read-only data, which the loader restores each time
++    the overlay is loaded (scenes write into their own tables);
++  * .bss, which the loader clears.
++
++Then every global it defines becomes local, except the six entry points,
++which are renamed NAME_Scene_Initialize and so on, and symbols are added at
++the start and end of each section (__start_native_overlay_text_NAME,
++__stop_native_overlay_text_NAME, and the same for data and bss) for the
++overlay table. The same steps work for ELF (Linux) and PE-COFF (Windows):
++set LD_EMULATION (elf_i386 or i386pe) and SYMBOL_PREFIX ('' or '_', the
++C symbol prefix of the target).
+ 
+ usage: overlay_object.py NAME OUTPUT.o INPUT.o...
+ """
+@@ -22,41 +27,65 @@ ENTRY = ['Scene_Initialize', 'Scene_GetEntrances', 'Scene_GetExits',
+          'Scene_GetActorPlacements', 'Scene_GetTriggers', 'Scene_GetExitRegions']
+ LD = os.environ.get('LD_HOST', 'ld')
+ OBJCOPY = os.environ.get('OBJCOPY_HOST', 'objcopy')
++OBJDUMP = os.environ.get('OBJDUMP_HOST', 'objdump')
+ NM = os.environ.get('NM_HOST', 'nm')
+ EMULATION = os.environ.get('LD_EMULATION', 'elf_i386')
++PREFIX = os.environ.get('SYMBOL_PREFIX', '')
++
++# Every input section into one of the three (COFF calls read-only data
++# .rdata, ELF .rodata; .overlays is the overlay's own table data).
++SCRIPT = '''SECTIONS {
++  .text : { *(.text .text.* .text$*) }
++  .data : { *(.data .data.* .data$* .rodata .rodata.* .rdata .rdata$* .overlays) }
++  .bss : { *(.bss .bss.* .bss$* COMMON) }
++}
++'''
+ 
+ def run(*args):
+     subprocess.run(args, check=True)
+ 
++def section_sizes(path):
++    sizes = {}
++    lines = subprocess.run([OBJDUMP, '-h', path], check=True,
++                           capture_output=True, text=True).stdout.split('\n')
++    for line in lines:
++        parts = line.split()
++        if len(parts) >= 7 and parts[0].isdigit():
++            sizes[parts[1]] = int(parts[2], 16)
++    return sizes
++
+ def main():
+     name, output, inputs = sys.argv[1], sys.argv[2], sys.argv[3:]
++    script = output + '.lds'
+     tmp = output + '.ld.o'
+-    run(LD, '-m', EMULATION, '-r', '-d', '-o', tmp, *inputs)
++    with open(script, 'w') as f:
++        f.write(SCRIPT)
++    # With a script, ld -r on PE must be told to write an object, not an image.
++    oformat = ['--oformat', 'pe-i386'] if EMULATION == 'i386pe' else []
++    run(LD, '-m', EMULATION, '-r', '-d', '-T', script, *oformat, '-o', tmp, *inputs)
+     symbols = subprocess.run([NM, '-g', '--defined-only', tmp], check=True,
+                              capture_output=True, text=True).stdout.split('\n')
+     defined = [line.split()[-1] for line in symbols if len(line.split()) == 3]
+     args = [OBJCOPY]
++    entries = {PREFIX + e: e for e in ENTRY}
+     for sym in defined:
+-        if sym in ENTRY:
+-            args += ['--redefine-sym', f'{sym}={name}_{sym}']
++        if sym in entries:
++            args += ['--redefine-sym', f'{sym}={PREFIX}{name}_{entries[sym]}']
+         else:
+             args += ['--localize-symbol', sym]
+-    data = f'native_overlay_data_{name}'
+-    bss = f'native_overlay_bss_{name}'
+-    sections = subprocess.run(['objdump', '-h', tmp], check=True,
+-                              capture_output=True, text=True).stdout.split('\n')
+-    for line in sections:
+-        parts = line.split()
+-        if len(parts) < 7 or not parts[0].isdigit():
+-            continue
+-        sec = parts[1]
+-        if sec.startswith('.text'):
+-            args += ['--rename-section', f'{sec}=native_overlay_text,alloc,load,readonly,code,contents']
+-        elif sec.startswith('.rodata') or sec.startswith('.data') or sec == '.overlays':
+-            args += ['--rename-section', f'{sec}={data},alloc,load,data,contents']
+-        elif sec.startswith('.bss') or sec == 'COMMON':
+-            args += ['--rename-section', f'{sec}={bss},alloc']
+-    run(*args, tmp, output)
+-    os.remove(tmp)
++    run(*args, tmp, output + '.local.o')
++    sizes = section_sizes(output + '.local.o')
++    args = [OBJCOPY]
++    for kind in ('text', 'data', 'bss'):
++        size = sizes.get('.' + kind, 0)
++        if '.' + kind not in sizes:
++            # An empty section: give it one so the bounds have a home.
++            args += ['--add-section', f'.{kind}={os.devnull}']
++        for edge, offset in (('start', 0), ('stop', size)):
++            args += ['--add-symbol',
++                     f'{PREFIX}__{edge}_native_overlay_{kind}_{name}=.{kind}:{offset},global']
++    run(*args, output + '.local.o', output)
++    for path in (script, tmp, output + '.local.o'):
++        os.remove(path)
+ 
+ main()
+diff --git a/port/tools/overlay_table.py b/port/tools/overlay_table.py
+index 4b414e8d66..fbd469bfa5 100644
+--- a/port/tools/overlay_table.py
++++ b/port/tools/overlay_table.py
+@@ -1,8 +1,8 @@
+ #!/usr/bin/env python3
+ """Write the native build's overlay table: for each scene overlay, its
+ resource number (OverlayId_NAME, from gamepak/resource_directory.s), its six
+-entry points and the bounds of its data and BSS sections
+-(port/tools/overlay_object.py names them).
++entry points and the bounds of its code, data and BSS (symbols that
++port/tools/overlay_object.py adds at each section's start and end).
+ 
+ usage: overlay_table.py OUTPUT.c NAME...
+ """
+@@ -19,14 +19,15 @@ def main():
+         out.append(f'extern char OverlayId_{n}[];')
+         for e in ENTRY:
+             out.append(f'extern void {n}_{e}(void);')
+-        for kind in ('data', 'bss'):
+-            out.append(f'extern char __start_native_overlay_{kind}_{n}[] __attribute__((weak));')
+-            out.append(f'extern char __stop_native_overlay_{kind}_{n}[] __attribute__((weak));')
++        for kind in ('text', 'data', 'bss'):
++            out.append(f'extern char __start_native_overlay_{kind}_{n}[];')
++            out.append(f'extern char __stop_native_overlay_{kind}_{n}[];')
+     out.append('')
+     out.append('const struct NativeOverlay gNativeOverlays[] = {')
+     for n in names:
+         entries = ', '.join(f'{n}_{e}' for e in ENTRY)
+         out.append(f'  {{"{n}", (unsigned)OverlayId_{n}, {{{entries}}},')
++        out.append(f'   __start_native_overlay_text_{n}, __stop_native_overlay_text_{n},')
+         out.append(f'   __start_native_overlay_data_{n}, __stop_native_overlay_data_{n},')
+         out.append(f'   __start_native_overlay_bss_{n}, __stop_native_overlay_bss_{n}}},')
+     out.append('};')
+-- 
+2.56.1
+
