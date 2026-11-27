@@ -1,0 +1,28 @@
+# Wide screen: walk round the lobby (the camera scrolls), then open the Pause
+# menu. Run with --width 240, 256 and 288.
+wait 900
+press A 2
+poke 0x0200013C 1 1
+wait 60
+tap A
+wait 40
+tap A
+wait 40
+tap A
+wait 60
+shot /tmp/shots/wl0.png
+press U 80
+shot /tmp/shots/wl1.png
+press L 60
+shot /tmp/shots/wl2.png
+press R 120
+shot /tmp/shots/wl3.png
+press U 80
+shot /tmp/shots/wl4.png
+press D 80
+press L 60
+tap T
+wait 60
+shot /tmp/shots/wl5.png
+tap B
+wait 60

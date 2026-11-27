@@ -1,0 +1,692 @@
+From 6b77e9c272f62b6d7a870d22b631e7aca516f0a9 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Fri, 27 Nov 2026 06:40:00 +0000
+Subject: [PATCH] Native: a wider screen (16:10 and 16:9), first slice
+
+The desktop build picks its screen width at start-up: --width 240, 256
+or 288 (3:2, 16:10, about 16:9), or TBS_WIDTH. The GBA build is
+unchanged (byte-identical ROM).
+
+- DISPLAY_WIDTH is the variable gNativeDisplayWidth in the native build
+  (io_reg.h), so code that already goes by it follows. The renderer's
+  buffers are sized for the widest screen and draw the chosen width.
+- The field's three layers draw into 64-tile-wide maps: a text background
+  whose control register has bit 13 set (unused by text backgrounds on the
+  GBA) reads a native wide map instead of VRAM (native/wide_map.h).
+  field_map_grid.c takes its map width, stride and screen from macros
+  that keep the GBA's values.
+- The camera's focus and bounds use the screen's width natively.
+- Window registers hold 8-bit edges, so WIN_RANGE(0, 288) had wrapped to
+  32 pixels and hid the battle backdrop past x=32. Natively WIN_RANGE
+  writes a right edge past 255 as 240, and the display takes a right edge
+  of 240 or more as the screen's edge.
+
+Not yet: the window layer (menus, messages, battle HUD) is 32 tiles wide;
+at 288 its boxes wrap and the battle command row crashes.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8ykfbWFo924wEqysLhg
+---
+ games/tbs/include/system/io_reg.h    | 13 +++++
+ games/tbs/src/field/field_internal.h |  5 ++
+ games/tbs/src/field/field_map_grid.c | 80 ++++++++++++++++++----------
+ port/README.md                       | 19 +++++++
+ port/include/native/native.h         | 11 +++-
+ port/include/native/wide_map.h       | 24 +++++++++
+ port/src/native_platform.c           |  5 +-
+ port/src/native_screen.c             | 41 ++++++++++++++
+ port/src/platform_headless.c         |  6 ++-
+ port/src/platform_sdl.c              |  8 +--
+ port/src/ppu.c                       | 64 ++++++++++++++--------
+ 11 files changed, 219 insertions(+), 57 deletions(-)
+ create mode 100644 port/include/native/wide_map.h
+ create mode 100644 port/src/native_screen.c
+
+diff --git a/games/tbs/include/system/io_reg.h b/games/tbs/include/system/io_reg.h
+index 8201eafe39..1069544017 100644
+--- a/games/tbs/include/system/io_reg.h
++++ b/games/tbs/include/system/io_reg.h
+@@ -88,7 +88,13 @@ enum DisplayControl {
+ #define REG_BG3Y (*(volatile s32 *)0x0400003c)  ///< BG3: origin y
+ 
+ /// The screen's size in pixels.
++#ifdef NATIVE
++// The desktop build picks its width at start-up (port/src/native_screen.c).
++extern int gNativeDisplayWidth;
++#define DISPLAY_WIDTH gNativeDisplayWidth
++#else
+ #define DISPLAY_WIDTH 240
++#endif
+ #define DISPLAY_HEIGHT 160
+ /// The screen's size in 8-pixel tiles.
+ #define DISPLAY_TILE_WIDTH (DISPLAY_WIDTH / 8)
+@@ -101,7 +107,14 @@ enum DisplayControl {
+ #define REG_WIN1V (*(volatile u16 *)0x04000046) ///< window 1, top and bottom
+ /// A REG_WINxH or REG_WINxV value: the window covers start up to, but not
+ /// including, end.
++#ifdef NATIVE
++// A window register holds 8-bit edges; on the desktop's wider screen a right
++// edge past 255 (the screen's width) is written as 240, which the display
++// takes as the screen's right edge (port/src/ppu.c).
++#define WIN_RANGE(start, end) (((start) << 8) | ((end) > 255 ? 240 : (end)))
++#else
+ #define WIN_RANGE(start, end) (((start) << 8) | (end))
++#endif
+ #define REG_WININ (*(volatile u16 *)0x04000048)  ///< what windows 0 and 1 show
+ #define REG_WINOUT (*(volatile u16 *)0x0400004a) ///< what the rest shows
+ 
+diff --git a/games/tbs/src/field/field_internal.h b/games/tbs/src/field/field_internal.h
+index 544b7660ac..26d8df8e0f 100644
+--- a/games/tbs/src/field/field_internal.h
++++ b/games/tbs/src/field/field_internal.h
+@@ -71,6 +71,11 @@ enum {
+   FIELD_VIEW_WIDTH = toFIXED(240),   ///< the screen's width
+   FIELD_VIEW_HEIGHT = toFIXED(160)   ///< the screen's height
+ };
++#ifdef NATIVE
++// The desktop build's screen can be wider (port/src/native_screen.c).
++#define FIELD_VIEW_FOCUS_X toFIXED(DISPLAY_WIDTH / 2)
++#define FIELD_VIEW_WIDTH toFIXED(DISPLAY_WIDTH)
++#endif
+ 
+ /// Sprite ids the field's own code creates actors of.
+ enum {
+diff --git a/games/tbs/src/field/field_map_grid.c b/games/tbs/src/field/field_map_grid.c
+index d40c3b9c9d..ea1ae485ad 100644
+--- a/games/tbs/src/field/field_map_grid.c
++++ b/games/tbs/src/field/field_map_grid.c
+@@ -15,20 +15,40 @@
+ /// The map's 128 by 128 cells, each read whole as its word (a struct
+ /// MapGridCell's four bytes).
+ #define MAPGRID_CELL_WORDS ((u32 *)Ram_MapGridCellBuffer)
++#ifdef NATIVE
++// The desktop build can be wider than 256 pixels, so its layers' BG maps are
++// 64 tiles wide (port/include/native/wide_map.h).
++#include "native/wide_map.h"
++#define MAPGRID_SCREEN_WIDTH NATIVE_WIDE_MAP_WIDTH
++#define MAPGRID_SCREEN_ROW_SHIFT 6
++#define MAPGRID_LAYER_SCREEN(layer) NATIVE_WIDE_MAP(5 + (layer))
++#define MAPGRID_BGCNT BGCNT_NATIVE_WIDE
++#define MAPGRID_VISIBLE_WIDTH (DISPLAY_WIDTH / 16 + 1)
++#else
++/// A layer's BG map's width in tiles, its map, and the BG control bits it
++/// adds.
++#define MAPGRID_SCREEN_WIDTH BG_SCREEN_WIDTH
++#define MAPGRID_SCREEN_ROW_SHIFT 5 ///< log2 of MAPGRID_SCREEN_WIDTH
++#define MAPGRID_LAYER_SCREEN(layer)                                            \
++  (BG_SCREEN_BLOCK(5) + (layer) * MAPGRID_LAYER_SCREEN_BYTES)
++#define MAPGRID_BGCNT 0
+ /// A layer's visible area in cells: the screen's 15 by 10, and the row and
+ /// column partly scrolled in.
+ #define MAPGRID_VISIBLE_WIDTH 16
++#endif
+ #define MAPGRID_VISIBLE_HEIGHT 12
+ /// The bytes between one layer's BG map and the next, from screen block 5.
+-#define MAPGRID_LAYER_SCREEN_BYTES 2048
++#define MAPGRID_LAYER_SCREEN_BYTES (MAPGRID_SCREEN_WIDTH * 64)
+ /// A layer's BG map in cells, 16 by 16 (32 by 32 tiles), and the bytes of one
+ /// row of its tiles.
+ #define MAPGRID_SCREEN_CELLS 16
+-#define MAPGRID_SCREEN_ROW_BYTES 64
++#define MAPGRID_SCREEN_COLUMN_CELLS (MAPGRID_SCREEN_WIDTH / 2)
++#define MAPGRID_SCREEN_ROW_BYTES (MAPGRID_SCREEN_WIDTH * 2)
+ /// A cell's top tile row or left tile column in a layer's BG map, even,
+ /// wrapping at the map's 32; its row as tile entries from the map's start.
+ #define MAPGRID_SCREEN_TILE_MASK (BG_SCREEN_WIDTH - 2)
+-#define MAPGRID_SCREEN_ROW_MASK (MAPGRID_SCREEN_TILE_MASK * BG_SCREEN_WIDTH)
++#define MAPGRID_SCREEN_COLUMN_MASK (MAPGRID_SCREEN_WIDTH - 2)
++#define MAPGRID_SCREEN_ROW_MASK (MAPGRID_SCREEN_TILE_MASK * MAPGRID_SCREEN_WIDTH)
+ /// The cell tiles drawn down a column as the view scrolls sideways: the
+ /// screen's 10 rows of cells and the one partly scrolled in.
+ #define MAPGRID_COLUMN_CELLS 11
+@@ -309,13 +329,13 @@ s32 MapGrid_LoadMap(s32 index) {
+   if (grid->enabled[2] != 0)
+     grid->flags |= DISPCNT_BG1_ON;
+   control = grid->enabled[0] | BGCNT_CHAR_BASE(mapHeader->charBase[0]) |
+-            BGCNT_SCREEN_BASE(5);
++            BGCNT_SCREEN_BASE(5) | MAPGRID_BGCNT;
+   REG_BG3CNT = control;
+   Io_Write16(grid->enabled[1] | BGCNT_CHAR_BASE(mapHeader->charBase[1]) |
+-                 BGCNT_SCREEN_BASE(6),
++                 BGCNT_SCREEN_BASE(6) | MAPGRID_BGCNT,
+              &REG_BG2CNT);
+   Io_Write16(grid->enabled[2] | BGCNT_CHAR_BASE(mapHeader->charBase[2]) |
+-                 BGCNT_SCREEN_BASE(7),
++                 BGCNT_SCREEN_BASE(7) | MAPGRID_BGCNT,
+              &REG_BG1CNT);
+   // A set FLAG_KEEP_LAYER_GRAPHICS skips loading the graphics once, and is
+   // cleared.
+@@ -386,16 +406,16 @@ void MapGrid_CenterOnFollowedPoint(void) {
+ /// BG map (screen block 5 + layer), starting at tile (tileX, tileY); the BG map
+ /// wraps every 32 tiles.
+ void MapGrid_RenderCellTilesRow(u32 layer, s32 tileX, s32 tileY) {
+-  u8 *screenMap = BG_SCREEN_BLOCK(5) + layer * MAPGRID_LAYER_SCREEN_BYTES;
++  u8 *screenMap = MAPGRID_LAYER_SCREEN(layer);
+   u32 sourceRow = ((tileY / 2) & (MAPGRID_SIZE - 1)) * MAPGRID_SIZE;
+-  u32 screenRowOffset = (tileY & MAPGRID_SCREEN_TILE_MASK) * BG_SCREEN_WIDTH;
++  u32 screenRowOffset = (tileY & MAPGRID_SCREEN_TILE_MASK) * MAPGRID_SCREEN_WIDTH;
+   u32 sourceColumn = (tileX / 2) & (MAPGRID_SIZE - 1);
+-  u32 screenColumnOffset = tileX & MAPGRID_SCREEN_TILE_MASK;
++  u32 screenColumnOffset = tileX & MAPGRID_SCREEN_COLUMN_MASK;
+   u32 cellTilesIndex;
+ 
+   // A cell's tiles are 2x2, so the BG map's tile row and column are kept
+   // even and wrap at 32; the grid wraps at 128 cells.
+-  for (cellTilesIndex = 0; cellTilesIndex < MAPGRID_SCREEN_CELLS;
++  for (cellTilesIndex = 0; cellTilesIndex < MAPGRID_SCREEN_COLUMN_CELLS;
+        cellTilesIndex++) {
+     u32 *cell = MAPGRID_CELL_WORDS;
+ 
+@@ -403,18 +423,18 @@ void MapGrid_RenderCellTilesRow(u32 layer, s32 tileX, s32 tileY) {
+     MapGrid_CopyCellTilesToScreen(cell, screenMap, screenRowOffset,
+                                   screenColumnOffset);
+     sourceColumn = (sourceColumn + 1) & (MAPGRID_SIZE - 1);
+-    screenColumnOffset = (screenColumnOffset + 2) & MAPGRID_SCREEN_TILE_MASK;
++    screenColumnOffset = (screenColumnOffset + 2) & MAPGRID_SCREEN_COLUMN_MASK;
+   }
+ }
+ 
+ /// Draws the cell tiles of a column of 11 of a layer's cells, one tile wide,
+ /// into its BG map, starting at tile (tileX, tileY).
+ void MapGrid_RenderCellTilesColumn(u32 layer, s32 tileX, s32 tileY) {
+-  u8 *screenMap = BG_SCREEN_BLOCK(5) + layer * MAPGRID_LAYER_SCREEN_BYTES;
++  u8 *screenMap = MAPGRID_LAYER_SCREEN(layer);
+   u32 sourceRow = ((tileY / 2) & (MAPGRID_SIZE - 1)) * MAPGRID_SIZE;
+-  u32 screenRowOffset = (tileY & MAPGRID_SCREEN_TILE_MASK) * BG_SCREEN_WIDTH;
++  u32 screenRowOffset = (tileY & MAPGRID_SCREEN_TILE_MASK) * MAPGRID_SCREEN_WIDTH;
+   u32 sourceColumn = (tileX / 2) & (MAPGRID_SIZE - 1);
+-  u32 screenColumnOffset = tileX & MAPGRID_SCREEN_TILE_MASK;
++  u32 screenColumnOffset = tileX & MAPGRID_SCREEN_COLUMN_MASK;
+   u32 tileHalf = tileX & 1;
+   u32 cellTilesIndex;
+ 
+@@ -430,7 +450,7 @@ void MapGrid_RenderCellTilesColumn(u32 layer, s32 tileX, s32 tileY) {
+     sourceRow =
+         (sourceRow + MAPGRID_SIZE) & ((MAPGRID_SIZE - 1) * MAPGRID_SIZE);
+     screenRowOffset =
+-        (screenRowOffset + 2 * BG_SCREEN_WIDTH) & MAPGRID_SCREEN_ROW_MASK;
++        (screenRowOffset + 2 * MAPGRID_SCREEN_WIDTH) & MAPGRID_SCREEN_ROW_MASK;
+   }
+ }
+ 
+@@ -574,13 +594,13 @@ void MapGrid_SetCameraCenter(FIXED x, FIXED y) {
+       // Divided by 8 pixels in 16.16, x and y become tiles.
+       x /= toFIXED(8);
+       y /= toFIXED(8);
+-      screenMap = BG_SCREEN_BLOCK(5) + layerIndex * MAPGRID_LAYER_SCREEN_BYTES;
++      screenMap = MAPGRID_LAYER_SCREEN(layerIndex);
+       sourceRow = ((y / 2) & (MAPGRID_SIZE - 1)) * MAPGRID_SIZE;
+-      screenRowOffset = (y & MAPGRID_SCREEN_TILE_MASK) * BG_SCREEN_WIDTH;
++      screenRowOffset = (y & MAPGRID_SCREEN_TILE_MASK) * MAPGRID_SCREEN_WIDTH;
+       for (cellTilesRow = 0; cellTilesRow < rows / 2; cellTilesRow++) {
+         sourceColumn = (x / 2) & (MAPGRID_SIZE - 1);
+-        screenColumnOffset = x & MAPGRID_SCREEN_TILE_MASK;
+-        for (cellTilesColumn = 0; cellTilesColumn < MAPGRID_SCREEN_CELLS;
++        screenColumnOffset = x & MAPGRID_SCREEN_COLUMN_MASK;
++        for (cellTilesColumn = 0; cellTilesColumn < MAPGRID_SCREEN_COLUMN_CELLS;
+              cellTilesColumn++) {
+           u32 *cell = MAPGRID_CELL_WORDS;
+ 
+@@ -589,12 +609,12 @@ void MapGrid_SetCameraCenter(FIXED x, FIXED y) {
+                                         screenColumnOffset);
+           sourceColumn = (sourceColumn + 1) & (MAPGRID_SIZE - 1);
+           screenColumnOffset =
+-              (screenColumnOffset + 2) & MAPGRID_SCREEN_TILE_MASK;
++              (screenColumnOffset + 2) & MAPGRID_SCREEN_COLUMN_MASK;
+         }
+         sourceRow =
+             (sourceRow + MAPGRID_SIZE) & ((MAPGRID_SIZE - 1) * MAPGRID_SIZE);
+         screenRowOffset =
+-            (screenRowOffset + 2 * BG_SCREEN_WIDTH) & MAPGRID_SCREEN_ROW_MASK;
++            (screenRowOffset + 2 * MAPGRID_SCREEN_WIDTH) & MAPGRID_SCREEN_ROW_MASK;
+       }
+     }
+   }
+@@ -617,7 +637,7 @@ struct MapGridTilePosition {
+ /// visibleLayer.
+ #define MAPGRID_REDRAW_COPIED_CELL(cellX, cellY)                               \
+   visibleLayer = visibleLayers;                                                \
+-  place = row << 5;                                                            \
++  place = row << MAPGRID_SCREEN_ROW_SHIFT;                                     \
+   place += column;                                                             \
+   offset = place * 4;                                                          \
+   do {                                                                         \
+@@ -627,7 +647,7 @@ struct MapGridTilePosition {
+         visibleLayer->y + MAPGRID_VISIBLE_HEIGHT > (cellY)) {                  \
+       u8 *screen, *cellTiles;                                                  \
+                                                                                \
+-      screen = BG_SCREEN_BLOCK(5);                                             \
++      screen = MAPGRID_LAYER_SCREEN(0);                                        \
+       screen += offset;                                                        \
+       bytes = cellTilesId * 8;                                                 \
+       cellTiles = Ram_CellTiles;                                               \
+@@ -635,7 +655,7 @@ struct MapGridTilePosition {
+       *(u32 *)screen = *(u32 *)cellTiles;                                      \
+       cellTiles = Ram_CellTiles + 4;                                           \
+       cellTiles += bytes;                                                      \
+-      screen = BG_SCREEN_BLOCK(5) + MAPGRID_SCREEN_ROW_BYTES;                  \
++      screen = MAPGRID_LAYER_SCREEN(0) + MAPGRID_SCREEN_ROW_BYTES;             \
+       screen += offset;                                                        \
+       *(u32 *)screen = *(u32 *)cellTiles;                                      \
+       break;                                                                   \
+@@ -675,7 +695,7 @@ void MapGrid_CopyCellTilesIndicesRect(s32 sourceX, s32 sourceY, u32 dstX,
+ 
+       *destinationCells =
+           (*destinationCells & MAPGRID_ATTRIBUTE_MASK) | cellTilesId;
+-      column = x & (MAPGRID_SCREEN_CELLS - 1);
++      column = x & (MAPGRID_SCREEN_COLUMN_CELLS - 1);
+       destinationCells++;
+       i = 0;
+       row = y & (MAPGRID_SCREEN_CELLS - 1);
+@@ -745,7 +765,7 @@ void MapGrid_CopyCellTilesCellsRect(s32 sourceX, s32 sourceY, s32 width,
+ 
+       *destinationCells = cell;
+       cellTilesId = cell & MAPGRID_CELL_TILES_ID_MASK;
+-      column = x & (MAPGRID_SCREEN_CELLS - 1);
++      column = x & (MAPGRID_SCREEN_COLUMN_CELLS - 1);
+       destinationCells++;
+       i = 0;
+       row = y & (MAPGRID_SCREEN_CELLS - 1);
+@@ -813,7 +833,7 @@ void MapGrid_CopyCellIndexRect(s32 sourceX, s32 sourceY, s32 width, s32 height,
+ 
+       *destinationCells =
+           (*destinationCells & MAPGRID_ATTRIBUTE_MASK) | cellTilesId;
+-      column = x & (MAPGRID_SCREEN_CELLS - 1);
++      column = x & (MAPGRID_SCREEN_COLUMN_CELLS - 1);
+       destinationCells++;
+       i = 0;
+       row = y & (MAPGRID_SCREEN_CELLS - 1);
+@@ -844,5 +864,11 @@ void MapGrid_SetShownLayers(u32 layerFlags) {
+ #undef MAPGRID_LAYER_SCREEN_BYTES
+ #undef MAPGRID_SCREEN_CELLS
+ #undef MAPGRID_SCREEN_ROW_BYTES
++#undef MAPGRID_SCREEN_WIDTH
++#undef MAPGRID_SCREEN_ROW_SHIFT
++#undef MAPGRID_LAYER_SCREEN
++#undef MAPGRID_BGCNT
++#undef MAPGRID_SCREEN_COLUMN_CELLS
++#undef MAPGRID_SCREEN_COLUMN_MASK
+ #undef MAPGRID_RESOURCE
+ #undef MAPGRID_REDRAW_COPIED_CELL
+diff --git a/port/README.md b/port/README.md
+index 54e799b3fb..52731cefd8 100644
+--- a/port/README.md
++++ b/port/README.md
+@@ -20,6 +20,25 @@ The SDL3 build needs a **32-bit** SDL3 that `pkg-config sdl3` finds (or pass
+ Backspace (Select), A and S (L and R); hold Tab to fast-forward; Escape quits.
+ A gamepad works too.
+ 
++### Screen width
++
++`--width 240|256|288` (or `3:2`, `16:10`, `16:9`; or `TBS_WIDTH`) picks the
++screen's width at start-up; 160 lines always. The game reads it as
++`DISPLAY_WIDTH`, which is a variable in the native build. What follows it:
++
++- The field's layers draw into 64-tile-wide maps (`native/wide_map.h`): a
++  text background with BGCNT bit 13 set (the affine wrap bit, unused by text
++  backgrounds) reads its map from `gNativeWideMaps` instead of VRAM.
++- The camera centres on the leader across the whole width
++  (`FIELD_VIEW_FOCUS_X`, `FIELD_VIEW_WIDTH`).
++- Window registers keep 8-bit edges; `WIN_RANGE` writes a right edge past
++  255 as 240, and the display takes a right edge of 240 or more as the
++  screen's edge (the battle backdrop's window had wrapped to 32 pixels).
++
++Not yet: the window layer (menus, messages, the battle HUD) is still 32
++tiles wide, so at 288 its boxes wrap and the battle command row crashes.
++256 plays through.
++
+ The headless build takes the arena repo's smoke scripts (`scripts/smoke/*.txt`:
+ `wait`, `press`, `tap`, `mash`, `include`, `shot`, `peek`, `poke`) and writes
+ the shots as PNG files:
+diff --git a/port/include/native/native.h b/port/include/native/native.h
+index 48b8a8db4d..070b5f67ba 100644
+--- a/port/include/native/native.h
++++ b/port/include/native/native.h
+@@ -42,9 +42,18 @@ typedef uint64_t u64;
+ #define IO_REG16(offset) (*(volatile u16 *)(uintptr_t)(IO_BASE + (offset)))
+ #define IO_REG32(offset) (*(volatile u32 *)(uintptr_t)(IO_BASE + (offset)))
+ 
+-#define GBA_WIDTH 240
++/// The screen: 160 lines as on the GBA, and a width chosen at start-up
++/// (`--width`, or `TBS_WIDTH`): 240 (3:2, the GBA's), 256 (16:10) or 288
++/// (about 16:9). The game reads it as DISPLAY_WIDTH.
++#define SCREEN_MAX_WIDTH 288
++extern int gNativeDisplayWidth;
++#define SCREEN_WIDTH gNativeDisplayWidth
+ #define GBA_HEIGHT 160
+ 
++/// Takes `--width N` (or 3:2, 16:10, 16:9) from the command line, else
++/// TBS_WIDTH, and sets the screen width; call before the game starts.
++void Screen_ChooseWidth(int argc, char **argv);
++
+ /// Maps the regions; call before any game code runs.
+ void Native_MapMemory(void);
+ 
+diff --git a/port/include/native/wide_map.h b/port/include/native/wide_map.h
+new file mode 100644
+index 0000000000..1d3a4e58c7
+--- /dev/null
++++ b/port/include/native/wide_map.h
+@@ -0,0 +1,24 @@
++#ifndef NATIVE_WIDE_MAP_H
++#define NATIVE_WIDE_MAP_H
++
++/// @file
++/// Wide BG maps for the desktop build. A GBA text background's map is 32 or 64
++/// tiles wide in 2 KB screen blocks of VRAM, and VRAM has no room for the
++/// field's three layers at 64 tiles. On the desktop a text background whose
++/// control register has bit 13 set (unused by text backgrounds on the GBA:
++/// it is the affine wrap bit) reads its map from gNativeWideMaps instead:
++/// 64 by 32 tiles, row after row, chosen by the register's screen base. The
++/// bit lives in the register, so a screen that sets up its own backgrounds
++/// leaves it behind without clearing anything.
++
++#define BGCNT_NATIVE_WIDE 0x2000
++#define NATIVE_WIDE_MAP_WIDTH 64
++#define NATIVE_WIDE_MAP_HEIGHT 32
++
++extern unsigned short gNativeWideMaps[32][NATIVE_WIDE_MAP_WIDTH *
++                                         NATIVE_WIDE_MAP_HEIGHT];
++
++/// Screen base `base`'s wide map, as bytes.
++#define NATIVE_WIDE_MAP(base) ((unsigned char *)gNativeWideMaps[base])
++
++#endif
+diff --git a/port/src/native_platform.c b/port/src/native_platform.c
+index 721f8ed659..9dc72bd13e 100644
+--- a/port/src/native_platform.c
++++ b/port/src/native_platform.c
+@@ -261,7 +261,7 @@ typedef void (*InterruptHandler)(void);
+ extern InterruptHandler gIrqHandlers[14];
+ 
+ static int sInInterrupt;
+-static u32 sFrame[GBA_WIDTH * GBA_HEIGHT];
++static u32 sFrame[SCREEN_MAX_WIDTH * GBA_HEIGHT];
+ 
+ /// Raises interrupt `irq` (its IE/IF bit number): calls its handler when the
+ /// game has it enabled, as the resident dispatcher does.
+@@ -315,7 +315,7 @@ static void Display_Line(int line) {
+       Irq_Raise(0);
+   }
+   if (line < GBA_HEIGHT)
+-    Ppu_RenderLine(line, sFrame + line * GBA_WIDTH);
++    Ppu_RenderLine(line, sFrame + line * SCREEN_WIDTH);
+   IO_REG16(REG_DISPSTAT_OFFSET) |= 2;
+   if (line < GBA_HEIGHT)
+     Dma_Run(TIMING_HBLANK);
+@@ -456,6 +456,7 @@ int main(int argc, char **argv) {
+   // The GBA regions first, before the platform loads libraries that could
+   // take their addresses.
+   Native_MapMemory();
++  Screen_ChooseWidth(argc, argv);
+   if (Platform_Init(argc, argv) != 0)
+     return 1;
+   Overlay_Snapshot();
+diff --git a/port/src/native_screen.c b/port/src/native_screen.c
+new file mode 100644
+index 0000000000..639b7d659c
+--- /dev/null
++++ b/port/src/native_screen.c
+@@ -0,0 +1,41 @@
++// The screen's width. The GBA's is 240; the desktop build can be wider so a
++// 16:10 or 16:9 window fills with game rather than black bars. The game reads
++// the width as DISPLAY_WIDTH (io_reg.h), so the camera and the windows that
++// already go by it follow; the rest is fixed screen by screen.
++
++#include <stdlib.h>
++#include <string.h>
++
++#include "native/native.h"
++
++int gNativeDisplayWidth = 240;
++
++static int Width_Parse(const char *text) {
++  int width;
++
++  if (!strcmp(text, "3:2"))
++    return 240;
++  if (!strcmp(text, "16:10"))
++    return 256;
++  if (!strcmp(text, "16:9"))
++    return 288;
++  width = atoi(text);
++  if (width < 240 || width > SCREEN_MAX_WIDTH || width % 8) {
++    Native_Log("width %s: use 240 (3:2), 256 (16:10) or 288 (16:9); "
++               "keeping 240",
++               text);
++    return 240;
++  }
++  return width;
++}
++
++void Screen_ChooseWidth(int argc, char **argv) {
++  const char *choice = getenv("TBS_WIDTH");
++  int i;
++
++  for (i = 1; i + 1 < argc; i++)
++    if (!strcmp(argv[i], "--width"))
++      choice = argv[i + 1];
++  if (choice && *choice)
++    gNativeDisplayWidth = Width_Parse(choice);
++}
+diff --git a/port/src/platform_headless.c b/port/src/platform_headless.c
+index 239edcf69f..f038ea54b3 100644
+--- a/port/src/platform_headless.c
++++ b/port/src/platform_headless.c
+@@ -274,7 +274,7 @@ static void Shot(const char *name) {
+   char path[1024];
+ 
+   snprintf(path, sizeof(path), "%s/%s", sShotDir, name);
+-  if (sLastFrame && Png_Write(path, sLastFrame, GBA_WIDTH, GBA_HEIGHT, sScale) == 0)
++  if (sLastFrame && Png_Write(path, sLastFrame, SCREEN_WIDTH, GBA_HEIGHT, sScale) == 0)
+     Native_Log("shot %s", path);
+ }
+ 
+@@ -334,9 +334,11 @@ int Platform_Init(int argc, char **argv) {
+       sFrameLimit = strtoul(argv[++i], NULL, 0);
+     } else if (!strcmp(argv[i], "--scale") && i + 1 < argc) {
+       sScale = atoi(argv[++i]);
++    } else if (!strcmp(argv[i], "--width") && i + 1 < argc) {
++      i++; // Screen_ChooseWidth took it
+     } else {
+       fprintf(stderr,
+-              "usage: %s [--script FILE] [--shots DIR] [--frames N] [--scale N]\n",
++              "usage: %s [--script FILE] [--shots DIR] [--frames N] [--scale N] [--width W]\n",
+               argv[0]);
+       return 1;
+     }
+diff --git a/port/src/platform_sdl.c b/port/src/platform_sdl.c
+index bd8cca71ab..6a21b9e208 100644
+--- a/port/src/platform_sdl.c
++++ b/port/src/platform_sdl.c
+@@ -36,7 +36,7 @@ int Platform_Init(int argc, char **argv) {
+     Native_Log("SDL_Init: %s", SDL_GetError());
+     return 1;
+   }
+-  if (!SDL_CreateWindowAndRenderer("Broken Seal Arena", GBA_WIDTH * scale,
++  if (!SDL_CreateWindowAndRenderer("Broken Seal Arena", SCREEN_WIDTH * scale,
+                                    GBA_HEIGHT * scale,
+                                    SDL_WINDOW_RESIZABLE |
+                                        (fullscreen ? SDL_WINDOW_FULLSCREEN : 0),
+@@ -44,10 +44,10 @@ int Platform_Init(int argc, char **argv) {
+     Native_Log("SDL_CreateWindowAndRenderer: %s", SDL_GetError());
+     return 1;
+   }
+-  SDL_SetRenderLogicalPresentation(sRenderer, GBA_WIDTH, GBA_HEIGHT,
++  SDL_SetRenderLogicalPresentation(sRenderer, SCREEN_WIDTH, GBA_HEIGHT,
+                                    SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
+   sTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_XRGB8888,
+-                               SDL_TEXTUREACCESS_STREAMING, GBA_WIDTH,
++                               SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH,
+                                GBA_HEIGHT);
+   if (!sTexture) {
+     Native_Log("SDL_CreateTexture: %s", SDL_GetError());
+@@ -87,7 +87,7 @@ static void Events_Poll(void) {
+ void Platform_Present(const u32 *frame) {
+   const bool *keys;
+ 
+-  SDL_UpdateTexture(sTexture, NULL, frame, GBA_WIDTH * 4);
++  SDL_UpdateTexture(sTexture, NULL, frame, SCREEN_WIDTH * 4);
+   SDL_SetRenderDrawColor(sRenderer, 0, 0, 0, 255);
+   SDL_RenderClear(sRenderer);
+   SDL_RenderTexture(sRenderer, sTexture, NULL, NULL);
+diff --git a/port/src/ppu.c b/port/src/ppu.c
+index fa18076424..cc342f4193 100644
+--- a/port/src/ppu.c
++++ b/port/src/ppu.c
+@@ -10,6 +10,9 @@
+ /// yet: mosaic, and the sprite-priority quirk between overlapping sprites.
+ 
+ #include "native/native.h"
++#include "native/wide_map.h"
++
++unsigned short gNativeWideMaps[32][NATIVE_WIDE_MAP_WIDTH * NATIVE_WIDE_MAP_HEIGHT];
+ 
+ #define REG16(offset) (*(volatile u16 *)(uintptr_t)(IO_BASE + (offset)))
+ #define REG32(offset) (*(volatile u32 *)(uintptr_t)(IO_BASE + (offset)))
+@@ -22,11 +25,11 @@
+ 
+ enum { LAYER_BG0, LAYER_BG1, LAYER_BG2, LAYER_BG3, LAYER_OBJ, LAYER_BD };
+ 
+-static u16 sBg[4][GBA_WIDTH];
+-static u16 sObj[GBA_WIDTH];
+-static u8 sObjPriority[GBA_WIDTH];
+-static u8 sObjSemi[GBA_WIDTH];
+-static u8 sObjWindow[GBA_WIDTH];
++static u16 sBg[4][SCREEN_MAX_WIDTH];
++static u16 sObj[SCREEN_MAX_WIDTH];
++static u8 sObjPriority[SCREEN_MAX_WIDTH];
++static u8 sObjSemi[SCREEN_MAX_WIDTH];
++static u8 sObjWindow[SCREEN_MAX_WIDTH];
+ 
+ /// The affine backgrounds' internal reference points, which step by PB and
+ /// PD each line and reload when the game writes the registers.
+@@ -54,15 +57,23 @@ static void Bg_Text(int bg, int y) {
+   u32 py = (y + vofs) & (tall ? 511 : 255);
+   int x;
+ 
+-  for (x = 0; x < GBA_WIDTH; x++) {
+-    u32 px = (x + hofs) & (wide ? 511 : 255);
++  const u16 *wideMap = (control & BGCNT_NATIVE_WIDE)
++                            ? gNativeWideMaps[(control >> 8) & 31]
++                            : NULL;
++
++  for (x = 0; x < SCREEN_WIDTH; x++) {
++    u32 px = (x + hofs) & (wide || wideMap ? 511 : 255);
+     u32 block = 0, entry, tx, ty, index;
+ 
+-    if (px >= 256)
+-      block += 1;
+-    if (py >= 256)
+-      block += wide ? 2 : 1;
+-    entry = map[block * 1024 + ((py & 255) >> 3) * 32 + ((px & 255) >> 3)];
++    if (wideMap) {
++      entry = wideMap[((py & 255) >> 3) * NATIVE_WIDE_MAP_WIDTH + (px >> 3)];
++    } else {
++      if (px >= 256)
++        block += 1;
++      if (py >= 256)
++        block += wide ? 2 : 1;
++      entry = map[block * 1024 + ((py & 255) >> 3) * 32 + ((px & 255) >> 3)];
++    }
+     tx = px & 7;
+     ty = py & 7;
+     if (entry & 0x400)
+@@ -96,7 +107,7 @@ static void Bg_Affine(int bg, int y) {
+   int x;
+ 
+   (void)y;
+-  for (x = 0; x < GBA_WIDTH; x++, cx += pa, cy += pc) {
++  for (x = 0; x < SCREEN_WIDTH; x++, cx += pa, cy += pc) {
+     s32 px = cx >> 8, py = cy >> 8;
+     u32 index;
+ 
+@@ -122,7 +133,7 @@ static void Bg_Bitmap(int mode, int y) {
+   int x;
+ 
+   (void)y;
+-  for (x = 0; x < GBA_WIDTH; x++, cx += pa, cy += pc) {
++  for (x = 0; x < SCREEN_WIDTH; x++, cx += pa, cy += pc) {
+     s32 px = cx >> 8, py = cy >> 8;
+ 
+     if (px < 0 || py < 0 || px >= width || py >= height) {
+@@ -149,7 +160,7 @@ static void Obj_Line(int y) {
+   const u8 *objTiles = VRAM + 0x10000;
+   int i, x;
+ 
+-  for (x = 0; x < GBA_WIDTH; x++) {
++  for (x = 0; x < SCREEN_WIDTH; x++) {
+     sObj[x] = TRANSPARENT;
+     sObjPriority[x] = 4;
+     sObjSemi[x] = 0;
+@@ -184,7 +195,7 @@ static void Obj_Line(int y) {
+     if (row < 0 || row >= boxH)
+       continue;
+     sx = a1 & 511;
+-    if (sx >= 240)
++    if (sx >= SCREEN_WIDTH)
+       sx -= 512;
+     if (tile < tileBase)
+       continue;
+@@ -201,7 +212,7 @@ static void Obj_Line(int y) {
+       s32 tx, ty;
+       u32 index, tileNumber, at;
+ 
+-      if (screen < 0 || screen >= GBA_WIDTH)
++      if (screen < 0 || screen >= SCREEN_WIDTH)
+         continue;
+       if (affine) {
+         s32 dx = x - boxW / 2, dy = row - boxH / 2;
+@@ -252,6 +263,17 @@ static int InRange(u32 value, u32 start, u32 end) {
+   return value >= start || value < end;
+ }
+ 
++/// A window's horizontal span: as InRange, but a right edge at or past the
++/// GBA's 240 reaches the right edge of a wider screen (WIN_RANGE in io_reg.h
++/// writes a wider right edge as 240).
++static int InWindowSpan(u32 x, u16 edges) {
++  u32 start = edges >> 8, end = edges & 255;
++
++  if (start < end && end >= 240)
++    end = SCREEN_WIDTH;
++  return InRange(x, start, end);
++}
++
+ static u16 Blend(u16 top, u16 bottom, u32 eva, u32 evb) {
+   u32 r = ((top & 31) * eva + (bottom & 31) * evb) >> 4;
+   u32 g = (((top >> 5) & 31) * eva + ((bottom >> 5) & 31) * evb) >> 4;
+@@ -308,7 +330,7 @@ void Ppu_RenderLine(int y, u32 *line) {
+     }
+   }
+   if (dispcnt & 0x80) {
+-    for (x = 0; x < GBA_WIDTH; x++)
++    for (x = 0; x < SCREEN_WIDTH; x++)
+       line[x] = 0xffffff;
+     goto step;
+   }
+@@ -330,7 +352,7 @@ void Ppu_RenderLine(int y, u32 *line) {
+   }
+   Obj_Line(y);
+ 
+-  for (x = 0; x < GBA_WIDTH; x++) {
++  for (x = 0; x < SCREEN_WIDTH; x++) {
+     u32 mask = 0x3f; // BG0-3, OBJ, effects
+     u16 top = backdrop, second = backdrop;
+     int topLayer = LAYER_BD, secondLayer = LAYER_BD;
+@@ -342,11 +364,11 @@ void Ppu_RenderLine(int y, u32 *line) {
+       u16 winin = REG16(0x48), winout = REG16(0x4a);
+ 
+       if ((dispcnt & 0x2000) &&
+-          InRange(x, REG16(0x40) >> 8, REG16(0x40) & 255) &&
++          InWindowSpan(x, REG16(0x40)) &&
+           InRange(y, REG16(0x44) >> 8, REG16(0x44) & 255))
+         mask = winin & 0x3f;
+       else if ((dispcnt & 0x4000) &&
+-               InRange(x, REG16(0x42) >> 8, REG16(0x42) & 255) &&
++               InWindowSpan(x, REG16(0x42)) &&
+                InRange(y, REG16(0x46) >> 8, REG16(0x46) & 255))
+         mask = (winin >> 8) & 0x3f;
+       else if ((dispcnt & 0x8000) && sObjWindow[x])
+-- 
+2.43.0
+

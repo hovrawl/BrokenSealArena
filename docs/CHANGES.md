@@ -950,6 +950,35 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
 - Not verified yet: keyboard and gamepad play in the Windows window (left to
   the owner); soft reset on Windows.
 
+## 48. A wider screen on the desktop build (patch 0048, first slice)
+
+- `--width 240|256|288` (also `3:2`, `16:10`, `16:9`, or `TBS_WIDTH`) picks the
+  desktop build's width at start-up; 160 lines always. The GBA ROM is
+  byte-identical (checked against a build without the patch).
+- `DISPLAY_WIDTH` is a variable in the native build (`io_reg.h` hook), so the
+  code that already goes by it follows: a quick try with nothing else changed
+  showed the lobby and a whole battle already working at 256.
+- The field's layers: their BG maps were 32 tiles (256 px), so anything wider
+  showed the other edge or blank columns while scrolling. Natively they are 64
+  tiles wide, in `gNativeWideMaps`, which a text background reads when its
+  control register has bit 13 set (the affine wrap bit, unused by text
+  backgrounds on the GBA). `field_map_grid.c` takes its map width, stride and
+  screen from macros whose GBA values are the old constants. The camera's
+  focus and bounds use the real width natively.
+- Why the battle backdrop was black at 288: battle shows the backdrop only
+  inside window 0/1, set to `WIN_RANGE(0, DISPLAY_WIDTH)`. The register's edges
+  are 8 bits, so 288 became 32 (and the overflow set the left edge to 1): the
+  backdrop showed in the left 32 pixels only. 256 worked by luck (it wrapped to
+  0, read as full width). Natively `WIN_RANGE` writes a right edge past 255 as
+  240, and the renderer takes a right edge of 240 or more as the screen's edge.
+- Verified (headless, cloud Linux): `wide_lobby.txt` at 240, 256 and 288 (walking
+  round the lobby, the Pause menu), `battle.txt` at all three, `fight.txt` to
+  the win at 240 and 256.
+- Not yet: the window layer (menus, messages, the battle HUD) is still a
+  32-tile map, so at 288 its boxes wrap to the left edge and the battle command
+  row writes past it and crashes. The SDL window uses the width but was not
+  built here (no SDL3 in the cloud container).
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.
