@@ -1448,6 +1448,35 @@ it and a copy of its edge at the far right.
   (the item commands); the shots after each choice show the same choices as
   before. The other touch scripts give the same shots as before.
 
+## 72. Native: a tap skips the intro and goes on from the title
+
+Nathan: "touch during startup doesnt skip the intro nor gets passed the title
+screen".
+
+- While the title scene runs (`gNativeTitleScene`, set by `Screen_UseGbaWidth`
+  from 70), `Keys_Update` turns any tap into A and Start, which the logos, the
+  intro and the title read. No game hook. Verified with taps only (73).
+
+## 73. Save: the file list takes taps
+
+Nathan: "touch doesnt work on the save menu".
+
+- `FileList_SelectFile` (`screens_save.c`), the list of files behind the file
+  screen's Continue (and its other modes) and the Pause menu's Save: a tap on
+  a file the mode allows selects it, a tap on the selected file chooses it
+  (rows of 16 pixels, `WindowTouch_Cell`). The overwrite question is the Yes
+  and No icon row, which already takes taps; a tap on the background backs
+  out (64). GBA ROM byte-identical.
+- Smoke scripts, taps only (the Pause menu opened with Start):
+  `touch_boot_new_240.txt` (fresh save: logos and file screen by taps, New
+  Game, the greeter's lines by taps in a corner, Pause, Save, the first file
+  selected and chosen: "Your game was saved."; again: "OK to save over this
+  file?", Yes tapped, saved) and `touch_boot_continue_240.txt` (with a copy of
+  a save: logos, intro and title by taps, Continue, the file: Isaac in the
+  lobby). Looked at each shot. The other touch scripts give the same shots.
+- Not checked: the file screen's Copy and Erase (the same list, so they should
+  take taps too).
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.
@@ -1456,7 +1485,3 @@ it and a copy of its edge at the far right.
 - Stock arena resets the party to Isaac, Garet, Ivan and Mia on a save load.
 - Characters beyond the four (needs CHILD sprites), other editions, and the Lost
   Age port.
-
-## 72. Native: a tap skips the intro and goes on from the title
-
-- While the title scene runs (`gNativeTitleScene`, set by `Screen_UseGbaWidth`), `Keys_Update` turns any tap into A and Start. Verified headless with taps only: with a save, logos, intro and title to the file screen; with no save, through to the arena greeter. Not done yet: the file screen's file list (Continue, then the file) and the Pause menu's save slots do not take taps.

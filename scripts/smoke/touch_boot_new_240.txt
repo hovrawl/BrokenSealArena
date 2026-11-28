@@ -1,0 +1,79 @@
+# Power-on to the lobby by taps only, with no save (run with --ui touch
+# --width 240 and a fresh TBS_SAVE): the logos and the file screen go by on
+# taps, New Game starts, the greeter's lines go by on taps (in a corner, away from her:
+# a tap near the middle would talk to her again). Then the Pause menu
+# (Start, the one key) and Save by taps: Save (tap, tap), the first file (tap:
+# chosen), saved; again, the first file now has data, so Yes to save over it.
+wait 60
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 200
+shot /tmp/shots/n0.png
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 60
+shot /tmp/shots/n1.png
+tap T
+wait 60
+touch 120 57
+wait 20
+touch 120 57
+wait 90
+shot /tmp/shots/n2.png
+touch 120 32
+wait 30
+shot /tmp/shots/n3.png
+touch 120 32
+wait 150
+shot /tmp/shots/n4.png
+touch 20 20
+wait 60
+touch 20 20
+wait 60
+shot /tmp/shots/n5.png
+tap T
+wait 60
+touch 120 57
+wait 20
+touch 120 57
+wait 90
+touch 120 32
+wait 30
+touch 120 32
+wait 120
+shot /tmp/shots/n6.png
+touch 98 148
+wait 20
+touch 98 148
+wait 150
+shot /tmp/shots/n7.png

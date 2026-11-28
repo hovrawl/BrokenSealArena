@@ -1,0 +1,53 @@
+From db68eab00aa0e23cf44b2a98f99da946b6d342d5 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sat, 28 Nov 2026 13:17:17 +1100
+Subject: [PATCH] Save: the file list takes taps
+
+FileList_SelectFile, behind the file screen's Continue and the Pause
+menu's Save: a tap on a file the mode allows selects it, a tap on the
+selected one chooses it. Desktop build only.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/window/screens_save.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/games/tbs/src/window/screens_save.c b/games/tbs/src/window/screens_save.c
+index 46760c0fbe..e7971f8325 100644
+--- a/games/tbs/src/window/screens_save.c
++++ b/games/tbs/src/window/screens_save.c
+@@ -1126,6 +1126,31 @@ s32 FileList_SelectFile(s32 selectedFile, s32 menuMode) {
+ #endif
+     MenuTitle_Bob(modePicture);
+     wait(1);
++#ifdef NATIVE
++    // Arena romhack: a tap on a file the mode allows selects it, a tap on the
++    // selected one chooses it (A); rows of 16 pixels across the list.
++    {
++      s32 tapped = WindowTouch_Cell(fileList, 0, 0, 26 * 8, 16, 1,
++                                    SAVE_FILE_COUNT);
++
++      if (tapped == selectedFile) {
++        gKeysPressed |= KEY_A;
++      } else if (tapped >= 0 &&
++                 (menuMode == FILE_LIST_SAVE ||
++                  !(save->summary[tapped].level == 0 ||
++                    (menuMode == FILE_LIST_CONTINUE &&
++                     save->summary[tapped].sendFlag != 0) ||
++                    (menuMode == FILE_LIST_BATTLE &&
++                     save->summary[tapped].djinnCount == 0) ||
++                    (menuMode == FILE_LIST_CLEARED &&
++                     save->summary[tapped].sendFlag == 0)))) {
++        Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++        selectedFile = tapped;
++        summaryDirty = 1;
++        trophyPage = 0;
++      }
++    }
++#endif
+     // Up and down move to the previous or next file the mode allows; saving
+     // allows every file, an empty one too.
+     if (gKeysRepeat & KEY_UP) {
+-- 
+2.56.1
+

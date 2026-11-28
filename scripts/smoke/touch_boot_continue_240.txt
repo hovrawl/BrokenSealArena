@@ -1,0 +1,24 @@
+# Power-on to the lobby by taps only, with a save (run with --ui touch
+# --width 240 and TBS_SAVE a copy of a save with one file): the logos, the
+# intro and the title go by on taps (A and Start); on the file screen tap
+# Continue (selected: chosen), then the file (selected: chosen): the lobby.
+wait 60
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 40
+touch 20 20
+wait 140
+shot /tmp/shots/k0.png
+touch 84 148
+wait 60
+shot /tmp/shots/k1.png
+touch 120 32
+wait 300
+shot /tmp/shots/k2.png

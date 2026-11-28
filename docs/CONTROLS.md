@@ -50,6 +50,9 @@ SDL feeds a touch screen to the game as the mouse, so the two work the same:
 - **Back:** the **Back** button at the top right (shops, class viewer,
   mechanics) or beside a battle menu presses B. The **right mouse button** is
   always B.
+- **At start-up,** tap to skip the logos and the intro and to go on from the
+  title. On the file screen and the Save list, tap a file to select it and tap
+  it again to choose it; Yes and No are icons, as in the other menus.
 - **In battle, double tap and hold** to speed through messages, like holding
   B: tap, then put the finger straight back down near the same spot and keep
   it there. B is held until you lift it. A quick double tap (both taps short)
