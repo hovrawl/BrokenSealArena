@@ -1477,6 +1477,34 @@ Nathan: "touch doesnt work on the save menu".
 - Not checked: the file screen's Copy and Erase (the same list, so they should
   take taps too).
 
+## 74. Native: a finger-sized pager on paged lists
+
+Nathan: "Can we make the pager bigger" (the field Item list's small arrows and
+page numbers on the window's top border).
+
+- `UiPager` (`arena_ui_kit.c`, `ui_kit.h`), touch layout only: while a paged
+  list is open (`UiPager_Open` and `_Close` around the battle Psynergy, Item,
+  Djinn and Summon lists and the field menu's Psynergy and item lists), the
+  item menu's 16 by 16 up and down arrows (`gMenu_ArrowTiles`, drawn for the
+  window sprites' palette) show as the UI kit's lists page: the up arrow
+  (previous page) over the small left arrow on the top border, the down arrow
+  (next page) at the window's bottom right. Each takes taps over 24 by 24;
+  the small arrows and page numbers stay as they were.
+- Battle lists: `BattleTouch_List` steps it and turns a tap into Left or
+  Right. Field lists: `MENU_TOUCH_LIST` steps it, turns the page itself (with
+  the row kept on the page) and returns 2, and the list redraws the page
+  (before, the field lists' page arrows took no taps).
+- Tried first: the shops' arrows (`gShop_UpArrowTiles`): drawn for the shop's
+  palette, green elsewhere; and the Djinn menu's arrows: diagonal. Hopping
+  arrows took the up arrow into the window above, so they stay still.
+  Not done: a tap on a page number to jump to it.
+- GBA ROM byte-identical; `--ui classic` shots identical.
+- Verified (headless): `touch_pager_battle_240.txt` (Isaac's Psynergy, two
+  pages: the down arrow shows page 2, Cure; the up arrow page 1) and
+  `touch_pager_field_240.txt` (Garet's items, two pages: the down arrow shows
+  Herb, the up arrow the first page). Other touch scripts: the same shots,
+  apart from the arrows where a paged list is open.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

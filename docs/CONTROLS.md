@@ -50,6 +50,9 @@ SDL feeds a touch screen to the game as the mouse, so the two work the same:
 - **Back:** the **Back** button at the top right (shops, class viewer,
   mechanics) or beside a battle menu presses B. The **right mouse button** is
   always B.
+- **Paged lists** (battle and field menu lists with more than one page): tap
+  the big up arrow beside the page numbers for the previous page, the big
+  down arrow at the list's bottom right for the next.
 - **At start-up,** tap to skip the logos and the intro and to go on from the
   title. On the file screen and the Save list, tap a file to select it and tap
   it again to choose it; Yes and No are icons, as in the other menus.

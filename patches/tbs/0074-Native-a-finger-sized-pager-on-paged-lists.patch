@@ -1,0 +1,395 @@
+From b00cadb38b981cbf61c10acb37721af396eab091 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sat, 28 Nov 2026 13:33:59 +1100
+Subject: [PATCH] Native: a finger-sized pager on paged lists
+
+In the touch layout the battle lists and the field menu's Psynergy and
+item lists show the item menu's 16 by 16 arrows as the UI kit's lists
+page: up (previous page) over the small left arrow on the top border,
+down (next page) at the bottom right, each taking taps over 24 by 24.
+The field lists' pages now turn by touch. GBA ROM unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/arena/battle_touch.h        |  10 ++
+ games/tbs/include/arena/menu_touch.h          |  34 +++++-
+ games/tbs/include/arena/ui_kit.h              |  19 ++++
+ games/tbs/src/menu/menu_item.c                |  11 +-
+ games/tbs/src/menu/menu_psynergy.c            |  11 +-
+ games/tbs/src/shop/arena_ui_kit.c             | 105 ++++++++++++++++++
+ .../src/window/screens_battle_djinn_menu.c    |   2 +
+ .../tbs/src/window/screens_battle_item_menu.c |   2 +
+ .../src/window/screens_battle_psynergy_menu.c |   2 +
+ .../src/window/screens_battle_summon_menu.c   |   2 +
+ 10 files changed, 192 insertions(+), 6 deletions(-)
+
+diff --git a/games/tbs/include/arena/battle_touch.h b/games/tbs/include/arena/battle_touch.h
+index e820edfc50..3e80e0ec92 100644
+--- a/games/tbs/include/arena/battle_touch.h
++++ b/games/tbs/include/arena/battle_touch.h
+@@ -107,6 +107,16 @@ static inline void BattleTouch_List(struct Window *window, s32 pageRows,
+     return;
+   if (rows > pageRows)
+     rows = pageRows;
++  {
++    // The pager's finger-sized arrows over the small ones (ui_kit.h).
++    s32 turn = UiPager_Step(pages, window->width - pages - 3,
++                            window->width - 2);
++
++    if (turn != 0) {
++      gKeysRepeat |= turn < 0 ? KEY_LEFT : KEY_RIGHT;
++      return;
++    }
++  }
+   if (pages > 1) {
+     // The arrows sit on the border row, one tile each; taps reach 24 pixels.
+     if (WindowTouch_Cell(window, (window->width - pages - 3) * 8, -8, 8, 8, 1,
+diff --git a/games/tbs/include/arena/menu_touch.h b/games/tbs/include/arena/menu_touch.h
+index 950459efd8..30c31ba3b8 100644
+--- a/games/tbs/include/arena/menu_touch.h
++++ b/games/tbs/include/arena/menu_touch.h
+@@ -26,11 +26,37 @@
+   ((list).entryCount - (list).page * LIST_PAGE_SIZE > LIST_PAGE_SIZE           \
+        ? LIST_PAGE_SIZE                                                        \
+        : (list).entryCount - (list).page * LIST_PAGE_SIZE)
+-/// A tap on a row of a PagedList's page (moves list.row, or presses A).
++/// The page arrows' tile columns (PagedList_DrawPageNumbers, numbers ending
++/// at PAGE_NUMBERS_RIGHT) for `pages` pages.
++#define MENU_TOUCH_PAGER_LEFT(pages) (PAGE_NUMBERS_RIGHT - (pages) - 1)
++#define MENU_TOUCH_PAGER_RIGHT PAGE_NUMBERS_RIGHT
++/// A tap on a row of a PagedList's page (moves list.row, or presses A): 1;
++/// a tap on the pager's arrows (UiPager, ui_kit.h) turns the page as Left
++/// and Right do: 2, for the caller to redraw it; else 0. Always 0 on the GBA.
++#ifndef NATIVE
++#define MENU_TOUCH_LIST(list) 0
++#else
+ #define MENU_TOUCH_LIST(list)                                                  \
+-  MenuTouch_PickCell(MENU_TOUCH_LIST_LEFT, MENU_TOUCH_LIST_TOP,                \
+-                     MENU_TOUCH_LIST_WIDTH, MENU_LIST_ROW_HEIGHT, 1,           \
+-                     MENU_TOUCH_LIST_ROWS(list), &(list).row)
++  ({                                                                           \
++    s32 pages_ = ((list).entryCount + LIST_PAGE_SIZE - 1) / LIST_PAGE_SIZE;    \
++    s32 turn_ = UiPager_Step(pages_, MENU_TOUCH_PAGER_LEFT(pages_),            \
++                             MENU_TOUCH_PAGER_RIGHT);                          \
++    s32 result_ = 0;                                                           \
++    if (turn_ != 0) {                                                          \
++      Sound_PlayFar(SE_MENU_CURSOR_MOVE);                                      \
++      (list).page = ((list).page + turn_ + pages_) % pages_;                   \
++      if ((list).row >= MENU_TOUCH_LIST_ROWS(list))                            \
++        (list).row = MENU_TOUCH_LIST_ROWS(list) - 1;                           \
++      result_ = 2;                                                             \
++    } else if (MenuTouch_PickCell(MENU_TOUCH_LIST_LEFT, MENU_TOUCH_LIST_TOP,   \
++                                  MENU_TOUCH_LIST_WIDTH, MENU_LIST_ROW_HEIGHT, \
++                                  1, MENU_TOUCH_LIST_ROWS(list),               \
++                                  &(list).row)) {                              \
++      result_ = 1;                                                             \
++    }                                                                          \
++    result_;                                                                   \
++  })
++#endif
+ 
+ /// The item commands (Use, Equip, Details over Give, Remove, Drop): rows 8
+ /// pixels apart (the text at 32 and 40), columns taken as 46 pixels from 96.
+diff --git a/games/tbs/include/arena/ui_kit.h b/games/tbs/include/arena/ui_kit.h
+index 9dd3f5a361..9872d44f31 100644
+--- a/games/tbs/include/arena/ui_kit.h
++++ b/games/tbs/include/arena/ui_kit.h
+@@ -74,6 +74,25 @@ void UiHeader_Touch(struct Window *header, s32 buttons);
+ #endif
+ struct Window *UiBackButton_Open(void);
+ void UiBackButton_Close(struct Window *button);
++/// The pager of a paged list (its page numbers between two small arrows on
++/// the window's top border), finger-sized in the touch layout, as the UI
++/// kit's lists page: the item menu's 16 by 16 arrows, the up arrow (the
++/// previous page) over the small left arrow and the down arrow (the next) at
++/// the window's bottom right, each taking taps over 24 by 24. One list at a
++/// time: open it with the list's window, step it each frame with the page
++/// count and the two small arrows' tile columns (in the window's interior),
++/// close it before the window.
++/// UiPager_Step returns -1 or 1 when an arrow was tapped, else 0. Nothing in
++/// the classic layout or on the GBA.
++#ifdef NATIVE
++void UiPager_Open(struct Window *window);
++s32 UiPager_Step(s32 pages, s32 leftColumn, s32 rightColumn);
++void UiPager_Close(void);
++#else
++#define UiPager_Open(window)
++#define UiPager_Step(pages, leftColumn, rightColumn) 0
++#define UiPager_Close()
++#endif
+ void UiList_Init(struct UiList *list, struct Window *window, s32 count,
+                  s32 labelBase, s32 rowHeight, s32 top, s32 textX, s32 cursor);
+ void UiList_SetGrid(struct UiList *list, s32 columns, s32 columnWidth);
+diff --git a/games/tbs/src/menu/menu_item.c b/games/tbs/src/menu/menu_item.c
+index 4a9f40109e..c66c3bc605 100644
+--- a/games/tbs/src/menu/menu_item.c
++++ b/games/tbs/src/menu/menu_item.c
+@@ -2803,6 +2803,7 @@ s32 ItemMenu_RunList(s32 sideIndex) {
+   menu->equipPreview = result;
+   Window_UpdateOrCreate(&menu->listWindow, 13, 3, 17, 14, WINDOW_FLAG_INSTANT);
+   window = menu->listWindow;
++  UiPager_Open(window); // Arena romhack: the list's pager (ui_kit.h)
+   done = 0;
+ 
+   while (done == 0 && GameFlag_GetFar(FLAG_MENU_START_PRESSED) == 0) {
+@@ -2878,8 +2879,15 @@ s32 ItemMenu_RunList(s32 sideIndex) {
+       if (moved == -1) {
+         changed = 0;
+       }
+-      if (MENU_TOUCH_LIST(state)) // Arena romhack: a tap on a row
++      switch (MENU_TOUCH_LIST(state)) { // Arena romhack: a tap on a row
++      case 2: // or on the pager, which turned the page
++        redraw = 1;
++        changed = 1;
++        break;
++      case 1:
+         changed = 1;
++        break;
++      }
+ 
+       if ((gKeysPressed & KEY_A) != 0 &&
+           menu->items[state.selectedIndex] != 0) {
+@@ -2933,6 +2941,7 @@ s32 ItemMenu_RunList(s32 sideIndex) {
+   menu->selectedIndexByMember[menu->sideMember[sideIndex]] =
+       state.selectedIndex;
+   menu->selectedItems[sideIndex] = result;
++  UiPager_Close();
+   if (GameFlag_GetFar(FLAG_MENU_START_PRESSED) != 0) {
+     result = -1;
+   }
+diff --git a/games/tbs/src/menu/menu_psynergy.c b/games/tbs/src/menu/menu_psynergy.c
+index d324b24be5..530308174a 100644
+--- a/games/tbs/src/menu/menu_psynergy.c
++++ b/games/tbs/src/menu/menu_psynergy.c
+@@ -1068,6 +1068,7 @@ s32 PsynergyMenu_RunList(s32 sideIndex) {
+   menu->sideIcon[sideIndex]->motion = ICON_HIDDEN;
+   Window_UpdateOrCreate(&menu->listWindow, 13, 3, 17, 14, WINDOW_FLAG_INSTANT);
+   window = menu->listWindow;
++  UiPager_Open(window); // Arena romhack: the list's pager (ui_kit.h)
+   done = 0;
+ 
+   while (done == 0 && GameFlag_GetFar(FLAG_MENU_START_PRESSED) == 0) {
+@@ -1135,8 +1136,15 @@ s32 PsynergyMenu_RunList(s32 sideIndex) {
+         changed = 0;
+       }
+       // Arena romhack: a tap on a row of the page (menu_touch.h).
+-      if (MENU_TOUCH_LIST(state))
++      switch (MENU_TOUCH_LIST(state)) {
++      case 2: // the pager turned the page
++        redraw = 1;
++        changed = 1;
++        break;
++      case 1:
+         changed = 1;
++        break;
++      }
+ 
+       // Select shows the shortcut help while held, for field Psynergy.
+       if (menu->mode == PSYNERGY_MODE_USE) {
+@@ -1273,6 +1281,7 @@ s32 PsynergyMenu_RunList(s32 sideIndex) {
+   menu->sideRow[sideIndex] = state.selectedIndex;
+   menu->selectedIndexByMember[menu->memberIds[sideIndex]] = state.selectedIndex;
+   menu->sideAction[sideIndex] = result;
++  UiPager_Close();
+   if (GameFlag_GetFar(FLAG_MENU_START_PRESSED) != 0) {
+     result = -1;
+   }
+diff --git a/games/tbs/src/shop/arena_ui_kit.c b/games/tbs/src/shop/arena_ui_kit.c
+index c89d62664c..fb975d0560 100644
+--- a/games/tbs/src/shop/arena_ui_kit.c
++++ b/games/tbs/src/shop/arena_ui_kit.c
+@@ -88,6 +88,111 @@ void UiBackButton_Close(struct Window *button) {
+   Window_CloseFar(button, 2);
+ }
+ 
++#ifdef NATIVE
++/// The item menu's arrows (gMenu_ArrowTiles: the small up arrow, then the up
++/// and down arrows, 16 by 16 and 128 bytes each), drawn for the window
++/// sprites' palette, which every screen with a paged list loads.
++extern u8 gMenu_ArrowTiles[];
++#define PAGER_UP_ARROW_TILES (gMenu_ArrowTiles + 128)
++#define PAGER_DOWN_ARROW_TILES (gMenu_ArrowTiles + 256)
++
++/// The pager (ui_kit.h): one list at a time, so its state is here.
++static struct {
++  struct Window *window;
++  s32 slots[2]; ///< VRAM cache entries: the up arrow, the down arrow
++  struct WindowSprite *arrows[2];
++  s32 x[2], y[2]; ///< the arrows' places, in pixels from the interior
++} sPager;
++
++void UiPager_Open(struct Window *window) {
++  sPager.window = 0;
++  if (!UI_TOUCH_LAYOUT || window == 0)
++    return;
++  sPager.slots[0] = VramCache_FindFreeEntry();
++  if (sPager.slots[0] >= VRAM_CACHE_ENTRY_COUNT)
++    return;
++  VramCache_Load(sPager.slots[0], 128, PAGER_UP_ARROW_TILES);
++  sPager.slots[1] = VramCache_FindFreeEntry();
++  if (sPager.slots[1] >= VRAM_CACHE_ENTRY_COUNT) {
++    VramCache_FreeEntry(sPager.slots[0]);
++    return;
++  }
++  VramCache_Load(sPager.slots[1], 128, PAGER_DOWN_ARROW_TILES);
++  sPager.window = window;
++  sPager.arrows[0] = sPager.arrows[1] = 0;
++  sPager.x[0] = sPager.x[1] = -1;
++}
++
++/// Shows arrow `which` (0 up, 1 down) at (x, y) from the window's interior,
++/// still (a hop would take the up arrow into the window above).
++static void UiPager_Place(s32 which, s32 x, s32 y) {
++  struct WindowSprite *arrow = sPager.arrows[which];
++
++  if (arrow == 0) {
++    arrow = WindowSprite_CreateFar(sPager.slots[which],
++                                   WINDOW_SPRITE_SIZE_16X16, sPager.window, x,
++                                   y);
++    if (arrow == 0)
++      return;
++    arrow->kind = WINDOW_SPRITE_PLAIN;
++    arrow->depth = 250;
++    sPager.arrows[which] = arrow;
++  } else if (x != sPager.x[which]) {
++    // Moved (the page count changed): x and the OAM word's x, as
++    // WindowSprite_Create sets them.
++    s32 screenX = (x + sPager.window->x * 8 + 8) & OBJ_X_MASK;
++    u32 *word = (u32 *)&arrow->sprite.oam;
++
++    arrow->x = screenX;
++    *word = (*word & ~OBJ_X(OBJ_X_MASK)) | OBJ_X(screenX);
++  }
++  sPager.x[which] = x;
++  sPager.y[which] = y;
++  arrow->motion = WINDOW_SPRITE_MOTION_STILL;
++}
++
++s32 UiPager_Step(s32 pages, s32 leftColumn, s32 rightColumn) {
++  struct Window *window = sPager.window;
++  s32 i;
++
++  (void)rightColumn;
++  if (window == 0)
++    return 0;
++  if (pages <= 1) {
++    for (i = 0; i < 2; i++)
++      if (sPager.arrows[i] != 0)
++        sPager.arrows[i]->motion = WINDOW_SPRITE_MOTION_HIDDEN;
++    return 0;
++  }
++  // The up arrow over the small left one on the top border (the tile before
++  // it too), the down arrow at the bottom right inside.
++  if (sPager.arrows[0] == 0 || sPager.x[0] != leftColumn * 8 - 8 ||
++      sPager.arrows[0]->motion == WINDOW_SPRITE_MOTION_HIDDEN) {
++    UiPager_Place(0, leftColumn * 8 - 8, -12);
++    UiPager_Place(1, (window->width - 2) * 8 - 16,
++                  (window->height - 2) * 8 - 8);
++  }
++  for (i = 0; i < 2; i++)
++    if (WindowTouch_Cell(window, sPager.x[i] - 4, sPager.y[i] - 4, 24, 24, 1,
++                         1) == 0)
++      return i == 0 ? -1 : 1;
++  return 0;
++}
++
++void UiPager_Close(void) {
++  s32 i;
++
++  if (sPager.window == 0)
++    return;
++  for (i = 0; i < 2; i++) {
++    if (sPager.arrows[i] != 0)
++      sPager.arrows[i]->motion = WINDOW_SPRITE_MOTION_HIDDEN;
++    VramCache_FreeEntry(sPager.slots[i]);
++  }
++  sPager.window = 0;
++}
++#endif
++
+ /// Sets a list up in `window`: `count` rows, messages labelBase + row, rows of
+ /// `rowHeight` pixels from `top` inside the window, the text `textX` in (the
+ /// hand sits 22 pixels before it), as many rows as fit showing.
+diff --git a/games/tbs/src/window/screens_battle_djinn_menu.c b/games/tbs/src/window/screens_battle_djinn_menu.c
+index bbc7f0f7fc..9e051a7682 100644
+--- a/games/tbs/src/window/screens_battle_djinn_menu.c
++++ b/games/tbs/src/window/screens_battle_djinn_menu.c
+@@ -97,6 +97,7 @@ s32 BattleDjinnMenu_Run(s32 member, s32 unused) {
+                              BATTLE_LIST_WINDOW_HEIGHT(BATTLE_LIST_ROWS),
+                              MENU_WINDOW_FLAGS);
+   back = BattleTouch_OpenBack(BATTLE_BACK_LIST_X, BATTLE_BACK_LIST_Y);
++  UiPager_Open(listWindow); // Arena romhack: the list's pager (ui_kit.h)
+   BATTLE_MENU_GET_CURSOR(firstEntry, selectedRow, preferredRow);
+   unit = Unit_GetFar(member);
+ 
+@@ -547,6 +548,7 @@ s32 BattleDjinnMenu_Run(s32 member, s32 unused) {
+   VramCache_FreeEntry(cursorSlot);
+   Window_Close(messageWindow, 1);
+   Window_Close(previewWindow, 1);
++  UiPager_Close();
+   BattleTouch_CloseBack(back);
+   Window_Close(listWindow, 1);
+   Window_MarkVisibleTextTiles();
+diff --git a/games/tbs/src/window/screens_battle_item_menu.c b/games/tbs/src/window/screens_battle_item_menu.c
+index fb3cc871cd..d349b2565d 100644
+--- a/games/tbs/src/window/screens_battle_item_menu.c
++++ b/games/tbs/src/window/screens_battle_item_menu.c
+@@ -81,6 +81,7 @@ s32 BattleItemMenu_Run(s32 member, u16 *entries, s32 count) {
+       Window_Create(15, 9, 15, BATTLE_LIST_WINDOW_HEIGHT(BATTLE_LIST_ROWS),
+                     MENU_WINDOW_FLAGS);
+   back = BattleTouch_OpenBack(BATTLE_BACK_LIST_X, BATTLE_BACK_LIST_Y);
++  UiPager_Open(window); // Arena romhack: the list's pager (ui_kit.h)
+ 
+   for (i = 0; i < BATTLE_LIST_ROWS; i++) {
+     s32 y = BATTLE_LIST_TILE_Y(i);
+@@ -318,6 +319,7 @@ s32 BattleItemMenu_Run(s32 member, u16 *entries, s32 count) {
+   }
+ 
+   Window_Close(messageWindow, 1);
++  UiPager_Close();
+   BattleTouch_CloseBack(back);
+   Window_Close(window, 1);
+   wait(1);
+diff --git a/games/tbs/src/window/screens_battle_psynergy_menu.c b/games/tbs/src/window/screens_battle_psynergy_menu.c
+index e00e0188bd..b8e25dd285 100644
+--- a/games/tbs/src/window/screens_battle_psynergy_menu.c
++++ b/games/tbs/src/window/screens_battle_psynergy_menu.c
+@@ -49,6 +49,7 @@ s32 BattlePsynergyMenu_Run(s32 unitId, u16 *actions, s32 count) {
+   window = Window_Create(9, 9, 21, BATTLE_LIST_WINDOW_HEIGHT(BATTLE_LIST_ROWS),
+                          MENU_WINDOW_FLAGS);
+   back = BattleTouch_OpenBack(BATTLE_BACK_LIST_X, BATTLE_BACK_LIST_Y);
++  UiPager_Open(window); // Arena romhack: the list's pager (ui_kit.h)
+ 
+   for (i = 0; i < BATTLE_LIST_ROWS; i++) {
+     s32 y = BATTLE_LIST_TILE_Y(i);
+@@ -288,6 +289,7 @@ s32 BattlePsynergyMenu_Run(s32 unitId, u16 *actions, s32 count) {
+     wait(1);
+   }
+ 
++  UiPager_Close();
+   BattleTouch_CloseBack(back);
+   Window_Close(messageWindow, 1);
+   Window_Close(window, 1);
+diff --git a/games/tbs/src/window/screens_battle_summon_menu.c b/games/tbs/src/window/screens_battle_summon_menu.c
+index 95d6dc45ea..9c7b23afc7 100644
+--- a/games/tbs/src/window/screens_battle_summon_menu.c
++++ b/games/tbs/src/window/screens_battle_summon_menu.c
+@@ -65,6 +65,7 @@ s32 BattleSummonMenu_Run(s32 unusedA, s32 unusedB, const u8 *standby) {
+                          BATTLE_LIST_WINDOW_HEIGHT(SUMMON_LIST_ROWS),
+                          MENU_WINDOW_FLAGS);
+   back = BattleTouch_OpenBack(BATTLE_BACK_LIST_X, BATTLE_BACK_LIST_Y);
++  UiPager_Open(window); // Arena romhack: the list's pager (ui_kit.h)
+ 
+   // Icon sprites for each row.
+   for (index = 0; index < SUMMON_LIST_ROWS; index++) {
+@@ -370,6 +371,7 @@ s32 BattleSummonMenu_Run(s32 unusedA, s32 unusedB, const u8 *standby) {
+   VramCache_FreeEntry((u16)cursorHandle);
+   Window_Close(counts, 1);
+   Window_Close(description, 1);
++  UiPager_Close();
+   BattleTouch_CloseBack(back);
+   Window_Close(window, 1);
+   wait(1);
+-- 
+2.56.1
+

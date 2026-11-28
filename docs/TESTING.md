@@ -76,7 +76,7 @@ script). The touch scripts are `touch_*_240.txt` and `touch_*_288.txt`: `touch_w
 drag to walk and run, tap to talk, taps through messages), `touch_fieldmenu` and
 `touch_fielditems` (Select's menu), `touch_djinn_240` and `touch_lists_240` (the battle Djinn,
 Summon and item lists), `touch_backtap_240` and `touch_backtap_battle_240` (a
-tap on the background goes back), `touch_iconedge_240` (an icon row tap near the boundary), `touch_boot_new_240` and `touch_boot_continue_240` (power-on to the lobby and saving, taps only; the second needs a copy of a save as TBS_SAVE), `touch_bhold_240` and `touch_bhold_control_240` (double tap and hold for B in battle), `touch_talkto_240` (tap the attendant from
+tap on the background goes back), `touch_iconedge_240` (an icon row tap near the boundary), `touch_boot_new_240` and `touch_boot_continue_240` (power-on to the lobby and saving, taps only; the second needs a copy of a save as TBS_SAVE), `touch_pager_battle_240` and `touch_pager_field_240` (page turns by the pager's arrows), `touch_bhold_240` and `touch_bhold_control_240` (double tap and hold for B in battle), `touch_talkto_240` (tap the attendant from
 below and to the side: Isaac turns, her menu opens), and the shop, manager, Pause, picker, mechanics, counter, class viewer
 and battle ones.
 
