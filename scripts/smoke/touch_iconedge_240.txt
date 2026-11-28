@@ -1,0 +1,13 @@
+# An icon row's tap goes to the icon under it (run with --ui touch --width
+# 240): the manager's row with Characters (the first, enlarged) selected, a tap
+# on Djinn's left edge (x 78, just past the halfway point 76 between the two
+# icons; Characters' old 40-pixel target reached 84): Djinn is selected and
+# nothing opens. A second tap there opens Djinn.
+include to_manager.txt
+shot /tmp/shots/e0.png
+touch 78 148
+wait 20
+shot /tmp/shots/e1.png
+touch 78 148
+wait 120
+shot /tmp/shots/e2.png

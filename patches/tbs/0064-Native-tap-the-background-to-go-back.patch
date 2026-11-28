@@ -1,0 +1,224 @@
+From 141562fc263a80b3f6a9721a491a97631c94e68b Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sat, 28 Nov 2026 09:10:07 +1100
+Subject: [PATCH] Native: tap the background to go back
+
+A tap no screen used that lands on the background holds B for one
+frame, like a phone back gesture: no open window within 4 pixels
+(ArenaWindow_Covers, from the window slots) and only BG1-BG3 or the
+backdrop in front in the last frame drawn (Ppu_IsBackground). Closes
+the icon rows, the field menu and Pause, and takes battle lists back
+to the command row. Desktop build only; the GBA ROM is unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/window/arena_icon_menu.c | 24 +++++++++++++++++++++
+ port/README.md                         | 10 +++++++++
+ port/include/native/native.h           |  5 +++++
+ port/include/native/touch.h            |  6 ++++++
+ port/src/native_platform.c             |  2 +-
+ port/src/native_touch.c                | 29 ++++++++++++++++++++++++++
+ port/src/ppu.c                         | 18 +++++++++++++++-
+ 7 files changed, 92 insertions(+), 2 deletions(-)
+
+diff --git a/games/tbs/src/window/arena_icon_menu.c b/games/tbs/src/window/arena_icon_menu.c
+index ff00f6ced7..f029567b0c 100644
+--- a/games/tbs/src/window/arena_icon_menu.c
++++ b/games/tbs/src/window/arena_icon_menu.c
+@@ -57,4 +57,28 @@ s32 IconMenu_TouchedIcon(void) {
+   }
+   return -1;
+ }
++
++/// Desktop and touch: 1 when an open window covers pixel (x, y) of the UI's
++/// safe area, or
++/// lies within `margin` pixels of it (native/touch.h's background taps). Some
++/// screens draw parts of a window on another layer (the battle Djinn list),
++/// so the pixel's layer alone does not tell.
++int ArenaWindow_Covers(int x, int y, int margin) {
++  struct WindowState *state = WINDOW_STATE;
++  s32 i;
++
++  if (state == 0)
++    return 0;
++  for (i = 0; i < WINDOW_COUNT; i++) {
++    const struct Window *window = &state->windows[i];
++    s32 left = window->x * 8;
++    s32 top = window->y * 8;
++
++    if ((window->flags & WINDOW_FLAG_OPEN) && window->width != 0 &&
++        x >= left - margin && x < left + window->width * 8 + margin &&
++        y >= top - margin && y < top + window->height * 8 + margin)
++      return 1;
++  }
++  return 0;
++}
+ #endif
+diff --git a/port/README.md b/port/README.md
+index 0fb7a22db5..d3caa5988d 100644
+--- a/port/README.md
++++ b/port/README.md
+@@ -80,6 +80,16 @@ message on and a held finger hurries its text (`window_messages.c`,
+ (X0, Y0), slides to (X1, Y1) over six frames, holds there N frames and lets go.
+ The arena repo's `docs/CONTROLS.md` lists every key, button and option.
+ 
++A tap that no screen used is a background tap when it lands on the background
++at both ends of the press (`Touch_BackgroundTapped`): no open window within 4
++pixels (`ArenaWindow_Covers`, from the window slots) and, in the last frame
++drawn, only BG1 to BG3 or the backdrop in front there (`Ppu_IsBackground`,
++which keeps each pixel's front layer: not BG0, the window layer, and not a
++sprite). The key update then holds B for one frame, a frame after the tap, so
++every screen goes back as a phone's back gesture does. Both checks are
++needed: the battle Djinn list shows an affine BG2 in front of part of its
++window.
++
+ The headless build takes the arena repo's smoke scripts (`scripts/smoke/*.txt`:
+ `wait`, `press`, `tap`, `mash`, `include`, `shot`, `peek`, `poke`) and writes
+ the shots as PNG files:
+diff --git a/port/include/native/native.h b/port/include/native/native.h
+index 7f146cae66..bb08995944 100644
+--- a/port/include/native/native.h
++++ b/port/include/native/native.h
+@@ -81,6 +81,11 @@ int Native_IsCode(u32 address);
+ /// The software display: draws line `y` of the current registers and VRAM
+ /// into `line` (240 pixels, 0x00RRGGBB).
+ void Ppu_RenderLine(int y, u32 *line);
++/// 1 when the last frame showed background at screen pixel (x, y): a field or
++/// battle background layer (BG1 to BG3) or the backdrop in front, not the
++/// window layer (BG0: menus, messages, the battle HUD) or a sprite (icons,
++/// cursors, people, units). Off screen is not background.
++int Ppu_IsBackground(int x, int y);
+ 
+ /// The platform (SDL or headless).
+ int Platform_Init(int argc, char **argv);
+diff --git a/port/include/native/touch.h b/port/include/native/touch.h
+index 63fdd65910..072bbc830c 100644
+--- a/port/include/native/touch.h
++++ b/port/include/native/touch.h
+@@ -46,5 +46,11 @@ int Touch_Held(int *x, int *y);
+ void Touch_SetBackZone(int x, int y, int width, int height);
+ /// Called by the frame's key update: 1 when the Back zone was tapped.
+ int Touch_BackTapped(void);
++/// Called by the frame's key update: 1 when last frame's tap was used by no
++/// screen and landed on the background (Ppu_IsBackground: no window and no
++/// sprite there, nor within a few pixels), like a phone's back gesture: it
++/// holds B for one frame. The B comes a frame after the tap, which no one
++/// notices; a drag is never a tap, so steering never goes back.
++int Touch_BackgroundTapped(void);
+ 
+ #endif
+diff --git a/port/src/native_platform.c b/port/src/native_platform.c
+index 065c052d81..c519d5344b 100644
+--- a/port/src/native_platform.c
++++ b/port/src/native_platform.c
+@@ -284,7 +284,7 @@ static void Keys_Update(void) {
+   u16 pressed = Platform_ReadKeys() & 0x3ff;
+ 
+   Touch_Update();
+-  if (Touch_BackTapped())
++  if (Touch_BackTapped() || Touch_BackgroundTapped())
+     pressed |= 0x0002; // B
+   u16 keycnt = IO_REG16(REG_KEYCNT_OFFSET);
+ 
+diff --git a/port/src/native_touch.c b/port/src/native_touch.c
+index ec94b2885b..d34950572a 100644
+--- a/port/src/native_touch.c
++++ b/port/src/native_touch.c
+@@ -35,10 +35,37 @@ static void Drag_Follow(void) {
+   }
+ }
+ 
++// A tap no game code used up last frame, on the background (BackgroundAround)
++// at both ends: Touch_BackgroundTapped.
++static int sBackgroundTap;
++
++// The margin round a background tap that must be background too, so a tap
++// that just misses an icon or a window's edge does not go back.
++#define BACKGROUND_MARGIN 4
++
++// The game's window code (arena_icon_menu.c): an open window covers the pixel
++// (safe area coordinates).
++int ArenaWindow_Covers(int x, int y, int margin);
++
++static int BackgroundAround(int px, int py) {
++  int x, y;
++
++  if (ArenaWindow_Covers(px - gNativeUiOffset, py, BACKGROUND_MARGIN))
++    return 0;
++  for (y = py - BACKGROUND_MARGIN; y <= py + BACKGROUND_MARGIN; y++)
++    for (x = px - BACKGROUND_MARGIN; x <= px + BACKGROUND_MARGIN; x++)
++      if (!Ppu_IsBackground(x, y))
++        return 0;
++  return 1;
++}
++
+ void Touch_Update(void) {
+   int x, y;
+   int down = Platform_ReadPointer(&x, &y);
+ 
++  // sReleased still set: last frame's tap was not used by any screen.
++  sBackgroundTap = sReleased && BackgroundAround(sX, sY) &&
++                   BackgroundAround(sPressX, sPressY);
+   sReleased = 0;
+   if (down && !sDown) {
+     sPressX = sAnchorX = x;
+@@ -105,6 +132,8 @@ int Touch_BackTapped(void) {
+          Touch_TappedRect(sBackX, sBackY, sBackWidth, sBackHeight);
+ }
+ 
++int Touch_BackgroundTapped(void) { return sBackgroundTap; }
++
+ int Touch_Held(int *x, int *y) {
+   *x = sX;
+   *y = sY;
+diff --git a/port/src/ppu.c b/port/src/ppu.c
+index c4ba9b53e7..4fadb172b5 100644
+--- a/port/src/ppu.c
++++ b/port/src/ppu.c
+@@ -30,6 +30,8 @@ static u16 sObj[SCREEN_MAX_WIDTH];
+ static u8 sObjPriority[SCREEN_MAX_WIDTH];
+ static u8 sObjSemi[SCREEN_MAX_WIDTH];
+ static u8 sObjWindow[SCREEN_MAX_WIDTH];
++// The front layer of each pixel of the last frame drawn (Ppu_IsBackground).
++static u8 sTopLayer[GBA_HEIGHT][SCREEN_MAX_WIDTH];
+ 
+ /// The affine backgrounds' internal reference points, which step by PB and
+ /// PD each line and reload when the game writes the registers.
+@@ -331,8 +333,11 @@ void Ppu_RenderLine(int y, u32 *line) {
+     }
+   }
+   if (dispcnt & 0x80) {
+-    for (x = 0; x < SCREEN_WIDTH; x++)
++    for (x = 0; x < SCREEN_WIDTH; x++) {
+       line[x] = 0xffffff;
++      if (y < GBA_HEIGHT)
++        sTopLayer[y][x] = LAYER_BG0; // forced blank: not background
++    }
+     goto step;
+   }
+   for (bg = 0; bg < 4; bg++) {
+@@ -409,6 +414,8 @@ void Ppu_RenderLine(int y, u32 *line) {
+     }
+     (void)topPriority;
+     (void)secondPriority;
++    if (y < GBA_HEIGHT)
++      sTopLayer[y][x] = topLayer;
+     colour = top;
+     if (topLayer == LAYER_OBJ && sObjSemi[x] &&
+         (bldcnt & (0x100 << secondLayer))) {
+@@ -435,3 +442,12 @@ step:
+     sRefY[k] += (s16)REG16(0x26 + k * 16);
+   }
+ }
++
++int Ppu_IsBackground(int x, int y) {
++  int layer;
++
++  if (x < 0 || x >= SCREEN_WIDTH || y < 0 || y >= GBA_HEIGHT)
++    return 0;
++  layer = sTopLayer[y][x];
++  return layer != LAYER_BG0 && layer != LAYER_OBJ;
++}
+-- 
+2.56.1
+

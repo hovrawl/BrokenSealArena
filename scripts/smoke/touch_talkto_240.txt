@@ -1,0 +1,46 @@
+# Tap a person to face and talk to them (run with --ui touch --width 240): walk
+# below and a little right of the attendant (as touch_walk_240), step right so
+# Isaac faces away, then tap her figure: he turns to her and her menu opens.
+# She stands 34 pixels off, across her counter: past A's reach (32), in a tap's.
+wait 900
+touch 30 30
+wait 40
+touch 200 40
+wait 40
+touch 120 80
+wait 40
+touch 120 80
+wait 60
+touch 120 80
+wait 40
+touch 120 80
+wait 40
+touch 120 80
+wait 60
+touch 120 80
+wait 40
+touch 120 80
+wait 60
+drag 120 100 120 80 34
+drag 140 80 120 80 38
+drag 120 116 120 80 34
+drag 140 80 120 80 6
+drag 120 100 120 80 6
+drag 100 80 120 80 4
+wait 30
+shot /tmp/shots/p0.png
+touch 100 55
+wait 150
+shot /tmp/shots/p2.png
+# back out with a tap on the background, then tap the old man across the room
+# (out of reach: nothing happens), then the floor near the middle with no one
+# ahead in reach: the field menu, as before
+touch 150 110
+wait 90
+shot /tmp/shots/p3.png
+touch 195 40
+wait 60
+shot /tmp/shots/p4.png
+touch 100 110
+wait 90
+shot /tmp/shots/p5.png

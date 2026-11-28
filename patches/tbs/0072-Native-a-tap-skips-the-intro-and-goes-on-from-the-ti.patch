@@ -1,0 +1,64 @@
+From 94770db66d2f26367a2006093bb5e93b3d42ee79 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sat, 28 Nov 2026 10:28:44 +1100
+Subject: [PATCH] Native: a tap skips the intro and goes on from the title
+
+While the title scene runs (the logos, the intro and the title) a tap
+anywhere is A and Start, which skip the logos and the intro and go on
+from the title. Desktop build only.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ port/include/native/native.h | 3 +++
+ port/src/native_platform.c   | 4 ++++
+ port/src/native_screen.c     | 4 ++++
+ 3 files changed, 11 insertions(+)
+
+diff --git a/port/include/native/native.h b/port/include/native/native.h
+index 99a6183e73..68f9cbef4f 100644
+--- a/port/include/native/native.h
++++ b/port/include/native/native.h
+@@ -56,6 +56,9 @@ extern int gNativeOutputWidth;
+ /// The black margin either side of the game's picture in the frame.
+ #define OUTPUT_MARGIN ((OUTPUT_WIDTH - SCREEN_WIDTH) / 2)
+ void Screen_UseGbaWidth(int on);
++/// 1 while the title scene runs (the logos, the intro and the title): there a
++/// tap anywhere is Start and A, which skip the intro and go on from the title.
++extern int gNativeTitleScene;
+ #define GBA_HEIGHT 160
+ 
+ /// Takes `--width N` (or 3:2, 16:10, 16:9) from the command line, else
+diff --git a/port/src/native_platform.c b/port/src/native_platform.c
+index 6608f1ec2f..7c51df7d07 100644
+--- a/port/src/native_platform.c
++++ b/port/src/native_platform.c
+@@ -284,6 +284,10 @@ static void Keys_Update(void) {
+   u16 pressed = Platform_ReadKeys() & 0x3ff;
+ 
+   Touch_Update();
++  // The title scene: a tap skips the logos and the intro and goes on from
++  // the title, as Start (and A) do.
++  if (gNativeTitleScene && Touch_TappedRect(0, 0, 0x7fff, 0x7fff))
++    pressed |= 0x0009; // A and Start
+   if (Touch_BackTapped() || Touch_BackgroundTapped() || Touch_BHeld())
+     pressed |= 0x0002; // B
+   u16 keycnt = IO_REG16(REG_KEYCNT_OFFSET);
+diff --git a/port/src/native_screen.c b/port/src/native_screen.c
+index eae086137f..b00b7b9b82 100644
+--- a/port/src/native_screen.c
++++ b/port/src/native_screen.c
+@@ -79,7 +79,11 @@ void Screen_SetUiSafeArea(int on) {
+   gNativeUiOffset = (gNativeDisplayWidth - gNativeUiWidth) / 2;
+ }
+ 
++// 1 while the title scene runs (Screen_UseGbaWidth): a tap is Start then.
++int gNativeTitleScene;
++
+ void Screen_UseGbaWidth(int on) {
++  gNativeTitleScene = on;
+   gNativeDisplayWidth = on ? 240 : gNativeOutputWidth;
+   Screen_SetUiSafeArea(1);
+ }
+-- 
+2.56.1
+

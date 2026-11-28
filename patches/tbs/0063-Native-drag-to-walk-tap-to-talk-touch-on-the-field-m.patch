@@ -1,0 +1,712 @@
+From 3b04bf4446e7ac4e8ce247b47ba719c0198869fa Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 27 Nov 2026 21:37:55 +0000
+Subject: [PATCH] Native: drag to walk, tap to talk, touch on the field menu
+
+Touch for the desktop build (and later the phone builds) beyond the arena's
+own screens:
+
+- Drags (native/touch.h, native_touch.c): a press that moves
+  TOUCH_DRAG_START (8) pixels is a drag and is never a tap. Touch_Drag gives
+  its heading and distance from a centre that trails the finger by at most
+  TOUCH_DRAG_REACH (40): a virtual stick wherever the finger went down.
+- The field (include/arena/field_touch.h): a drag steers the leader in any
+  direction (FIELD_TOUCH_STEER in Actor_UpdatePlayerControl, the drag's
+  heading in place of the pad's), and past TOUCH_DRAG_RUN (28) runs; a tap
+  in the 96-pixel square round the middle of the safe area, where the camera
+  keeps the leader, presses A (talk, check: Field_CheckConfiguredKeys).
+- Messages: a tap anywhere moves one on (Text_CheckTextDismissed), and a
+  finger held down hurries its text and pauses as a held button does.
+- The field menu (include/arena/menu_touch.h): the party row of the
+  Psynergy, Item and Status screens and the Psynergy target picker, the
+  Psynergy and item lists, and the item commands take taps: a tap selects,
+  a tap on the selection presses A, as on every other menu.
+- The battle Summon list takes taps and has the lists' Back button
+  (BattleTouch_List, BattleTouch_OpenBack), as the Psynergy, Djinn and item
+  lists do.
+- The headless build's `drag X0 Y0 X1 Y1 N` script command.
+
+Keys and the pad work as before. The GBA ROM has none of it: the hooks are
+empty macros there.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ta8yjRdqf92zfRQjJVu8H
+---
+ games/tbs/include/arena/field_touch.h         | 68 +++++++++++++++
+ games/tbs/include/arena/menu_touch.h          | 86 +++++++++++++++++++
+ games/tbs/src/field/field_player_control.c    |  6 +-
+ games/tbs/src/menu/menu_item.c                | 13 +++
+ games/tbs/src/menu/menu_psynergy.c            |  8 ++
+ games/tbs/src/menu/menu_status.c              |  5 ++
+ .../src/window/screens_battle_summon_menu.c   |  5 ++
+ games/tbs/src/window/window_messages.c        |  6 +-
+ games/tbs/src/window/window_typing.c          |  3 +-
+ port/README.md                                | 22 ++++-
+ port/include/native/touch.h                   | 13 +++
+ port/src/native_platform.c                    |  1 +
+ port/src/native_touch.c                       | 56 +++++++++++-
+ port/src/platform_headless.c                  | 36 ++++++--
+ port/src/platform_sdl.c                       |  6 +-
+ 15 files changed, 315 insertions(+), 19 deletions(-)
+ create mode 100644 games/tbs/include/arena/field_touch.h
+ create mode 100644 games/tbs/include/arena/menu_touch.h
+
+diff --git a/games/tbs/include/arena/field_touch.h b/games/tbs/include/arena/field_touch.h
+new file mode 100644
+index 0000000000..6c06c17048
+--- /dev/null
++++ b/games/tbs/include/arena/field_touch.h
+@@ -0,0 +1,68 @@
++#ifndef GUARD_ARENA_FIELD_TOUCH_H
++#define GUARD_ARENA_FIELD_TOUCH_H
++
++/// @file
++/// Touch in the field for the desktop and phone builds (native/touch.h):
++/// drag anywhere to walk (a virtual stick where the finger went down; far
++/// from its centre runs), tap near the middle of the screen, where the leader
++/// stands, to talk to or check what is in front (A), tap anywhere to move a
++/// message on, and hold a finger down to hurry its text, as a held button. Keys
++/// and the pad work as before; the GBA build has none of it (the macros below
++/// are empty there).
++
++#ifdef NATIVE
++#include "native/touch.h"
++
++/// The tap zone for A in the field: 96 by 96 pixels round the middle of the
++/// UI's 240 by 160 safe area, which the camera keeps on the leader.
++#define FIELD_TOUCH_ACT_X 72
++#define FIELD_TOUCH_ACT_Y 32
++#define FIELD_TOUCH_ACT_SIZE 96
++
++/// Player control's heading: a drag's way when one is steering (and, far
++/// from its centre, the run speed and animation), else `keyHeading`, the
++/// pad's. A statement expression, so the speed constants are
++/// field_player_control.c's.
++#define FIELD_TOUCH_STEER(actor, keyHeading, animation)                        \
++  ({                                                                           \
++    int touchHeading_, touchDistance_;                                         \
++    s32 heading_ = (keyHeading);                                               \
++    if (Touch_Drag(&touchHeading_, &touchDistance_)) {                         \
++      heading_ = touchHeading_;                                                \
++      if (touchDistance_ >= TOUCH_DRAG_RUN) {                                  \
++        (actor)->speedLimit = FIELD_RUN_SPEED;                                 \
++        (actor)->acceleration = FIELD_ACCELERATION;                            \
++        (animation) = ANIM_LEADER_RUN;                                         \
++      }                                                                        \
++    }                                                                          \
++    heading_;                                                                  \
++  })
++
++/// A tap round the leader adds A to this frame's keys.
++static inline void FieldTouch_AddKeys(void) {
++  if (Touch_TappedUiRect(FIELD_TOUCH_ACT_X, FIELD_TOUCH_ACT_Y,
++                         FIELD_TOUCH_ACT_SIZE, FIELD_TOUCH_ACT_SIZE))
++    gKeysPressed |= KEY_A;
++}
++
++/// 1 while a finger is down: as a held button, it hurries a message's text
++/// and its pauses.
++static inline int MessageTouch_Held(void) {
++  int x, y;
++
++  return Touch_Held(&x, &y);
++}
++
++/// A tap anywhere moves a message on, as A does.
++static inline u16 MessageTouch_Keys(void) {
++  return Touch_TappedRect(0, 0, 0x7fff, 0x7fff) ? KEY_A : 0;
++}
++
++#else
++#define FIELD_TOUCH_STEER(actor, keyHeading, animation) (keyHeading)
++#define FieldTouch_AddKeys() ((void)0)
++#define MessageTouch_Keys() 0
++#define MessageTouch_Held() 0
++#endif
++
++#endif
+diff --git a/games/tbs/include/arena/menu_touch.h b/games/tbs/include/arena/menu_touch.h
+new file mode 100644
+index 0000000000..96b45b88e1
+--- /dev/null
++++ b/games/tbs/include/arena/menu_touch.h
+@@ -0,0 +1,86 @@
++#ifndef GUARD_ARENA_MENU_TOUCH_H
++#define GUARD_ARENA_MENU_TOUCH_H
++
++/// @file
++/// Touch for the field menu (Select: Psynergy, Item, Status) in the desktop
++/// and phone builds, as the other menus take it (arena_touch.h): a tap on
++/// another choice moves there, a tap on the chosen one presses A, so the
++/// menu's own key code runs. The GBA build has none of it.
++
++/// The party row: Menu_CreatePartyFigures(window, 2, 2, 8, 0) in the 13 by 5
++/// window at the top left (MenuCursor_Create), a figure every 24 pixels with
++/// its feet 32 pixels down, centred 16 pixels in. Each takes taps over 24 by
++/// 36 pixels.
++#define MENU_TOUCH_FIGURES_LEFT 4
++#define MENU_TOUCH_FIGURES_TOP 0
++#define MENU_TOUCH_FIGURE_WIDTH 24
++#define MENU_TOUCH_FIGURE_HEIGHT 36
++
++/// The Psynergy and item lists (listWindow at 13, 3): a row every 16 pixels,
++/// level with the hand, across the window's interior.
++#define MENU_TOUCH_LIST_LEFT (14 * 8)
++#define MENU_TOUCH_LIST_TOP 36
++#define MENU_TOUCH_LIST_WIDTH (15 * 8)
++#define MENU_TOUCH_LIST_ROWS(list)                                             \
++  ((list).entryCount - (list).page * LIST_PAGE_SIZE > LIST_PAGE_SIZE           \
++       ? LIST_PAGE_SIZE                                                        \
++       : (list).entryCount - (list).page * LIST_PAGE_SIZE)
++/// A tap on a row of a PagedList's page (moves list.row, or presses A).
++#define MENU_TOUCH_LIST(list)                                                  \
++  MenuTouch_PickCell(MENU_TOUCH_LIST_LEFT, MENU_TOUCH_LIST_TOP,                \
++                     MENU_TOUCH_LIST_WIDTH, 16, 1, MENU_TOUCH_LIST_ROWS(list), \
++                     &(list).row)
++
++/// The item commands (Use, Equip, Details over Give, Remove, Drop): rows 8
++/// pixels apart (the text at 32 and 40), columns taken as 46 pixels from 96.
++/// Small, as on the GBA; Touch_TappedUiCell widens the outer edges.
++#define MENU_TOUCH_COMMANDS_LEFT 96
++#define MENU_TOUCH_COMMANDS_TOP 32
++#define MENU_TOUCH_COMMAND_WIDTH 46
++#define MENU_TOUCH_COMMAND_HEIGHT 8
++
++#ifdef NATIVE
++#include "native/touch.h"
++
++/// A tap on a cell of a grid (screen pixels in the safe area): on another
++/// cell, moves *selection there (with the cursor sound) and returns 1, for
++/// the caller to redraw; on the selected one, presses A (gKeysPressed) and
++/// returns 0.
++static inline s32 MenuTouch_PickCell(s32 left, s32 top, s32 width, s32 height,
++                                     s32 columns, s32 count, s32 *selection) {
++  s32 cell = Touch_TappedUiCell(left, top, width, height, columns, count);
++
++  if (cell < 0)
++    return 0;
++  if (cell == *selection) {
++    gKeysPressed |= KEY_A;
++    return 0;
++  }
++  Sound_PlayFar(SE_MENU_CURSOR_MOVE);
++  *selection = cell;
++  return 1;
++}
++
++/// As MenuTouch_PickCell, for a figure of the party row.
++static inline s32 MenuTouch_PickMember(s32 count, s32 *selection) {
++  s32 index;
++
++  if (count <= 0)
++    return 0;
++  index = (*selection % count + count) % count;
++  if (!MenuTouch_PickCell(MENU_TOUCH_FIGURES_LEFT, MENU_TOUCH_FIGURES_TOP,
++                          MENU_TOUCH_FIGURE_WIDTH, MENU_TOUCH_FIGURE_HEIGHT,
++                          count, count, &index))
++    return 0;
++  *selection = index;
++  return 1;
++}
++
++#else
++#define MenuTouch_PickCell(left, top, width, height, columns, count,           \
++                           selection)                                          \
++  0
++#define MenuTouch_PickMember(count, selection) 0
++#endif
++
++#endif
+diff --git a/games/tbs/src/field/field_player_control.c b/games/tbs/src/field/field_player_control.c
+index 3b09adfae0..64ed59d0b4 100644
+--- a/games/tbs/src/field/field_player_control.c
++++ b/games/tbs/src/field/field_player_control.c
+@@ -3,6 +3,7 @@
+ // Part of field.c.
+ 
+ #include "field_internal.h"
++#include "arena/field_touch.h"
+ 
+ /// On the World Map, the keys whose R and L open the map screen and the
+ /// zoomed map (newly pressed from patch 1, held before), and how far ahead of
+@@ -131,6 +132,7 @@ s32 Field_CheckConfiguredKeys(void) {
+ 
+   if (state == NULL)
+     return 0;
++  FieldTouch_AddKeys(); // Arena romhack: tap round the leader for A
+   if (gKeysPressed & gMainRoutineState.selectKeys) {
+     state->fieldMenu = 1;
+     result = 1;
+@@ -243,7 +245,9 @@ s32 Actor_UpdatePlayerControl(struct Actor *actor) {
+   // Step 8 pixels the way the direction pad points, when that step and the
+   // ones 22.5 and 45 degrees either side are clear (debug L walks through
+   // walls); otherwise try headings up to 67.5 degrees off.
+-  angle = gWorldMap_KeyHeadings[DPAD_INDEX(gKeysHeld)];
++  // Arena romhack: or the way a drag steers (field_touch.h).
++  angle = FIELD_TOUCH_STEER(actor, gWorldMap_KeyHeadings[DPAD_INDEX(gKeysHeld)],
++                            movementAnimation);
+   if ((u16)angle == WORLD_MAP_KEY_HEADING_NONE) {
+     collision |= PLAYER_STEP_STOPPED;
+   } else {
+diff --git a/games/tbs/src/menu/menu_item.c b/games/tbs/src/menu/menu_item.c
+index 7a65a8fd41..adc2bcbb69 100644
+--- a/games/tbs/src/menu/menu_item.c
++++ b/games/tbs/src/menu/menu_item.c
+@@ -4,6 +4,7 @@
+ // Part of menu.c.
+ 
+ #include "menu_internal.h"
++#include "arena/menu_touch.h"
+ #include "shop/shop.h"
+ 
+ // Where the edition's text goes. The international editions have longer
+@@ -1077,6 +1078,8 @@ s32 ItemMenu_RunMemberSelection(u16 *memberIds, u16 *items) {
+       menu->memberY[selection] = MENU_MEMBER_RAISED_Y;
+     }
+     wait(1);
++    if (MenuTouch_PickMember(memberCount, &selection)) // Arena romhack
++      redraw = 1;
+     // L + A sorts, cycling through the four sort orders.
+     if (gKeysPressed & KEY_A) {
+       if (gKeysHeld & KEY_L) {
+@@ -1726,6 +1729,14 @@ s32 ItemMenu_ChooseCommand(void) {
+                         ITEM_COMMAND_CURSOR_Y(row));
+ #endif
+     wait(1);
++    // Arena romhack: a tap on a command (menu_touch.h).
++    if (MenuTouch_PickCell(MENU_TOUCH_COMMANDS_LEFT, MENU_TOUCH_COMMANDS_TOP,
++                           MENU_TOUCH_COMMAND_WIDTH, MENU_TOUCH_COMMAND_HEIGHT,
++                           3, 6, &commandIndex)) {
++      column = commandIndex % 3;
++      row = commandIndex / 3;
++      redraw = 1;
++    }
+ 
+     if ((gKeysPressed & KEY_A) != 0) {
+       if (commandStates[commandIndex] == ITEM_COMMAND_STATE_DISABLED) {
+@@ -2869,6 +2880,8 @@ s32 ItemMenu_RunList(s32 sideIndex) {
+       if (moved == -1) {
+         changed = 0;
+       }
++      if (MENU_TOUCH_LIST(state)) // Arena romhack: a tap on a row
++        changed = 1;
+ 
+       if ((gKeysPressed & KEY_A) != 0 &&
+           menu->items[state.selectedIndex] != 0) {
+diff --git a/games/tbs/src/menu/menu_psynergy.c b/games/tbs/src/menu/menu_psynergy.c
+index 953d6db94b..21a44329c3 100644
+--- a/games/tbs/src/menu/menu_psynergy.c
++++ b/games/tbs/src/menu/menu_psynergy.c
+@@ -4,6 +4,7 @@
+ // Part of menu.c.
+ 
+ #include "menu_internal.h"
++#include "arena/menu_touch.h"
+ 
+ /// A Psynergy shortcut, and the field's Psynergy request packed the same way:
+ /// its party member above bit 10, the Psynergy's id below.
+@@ -426,6 +427,8 @@ s32 PsynergyMenu_SelectMember(u16 *memberIds, u16 *unused) {
+     }
+     MenuCursor_Position(MENU_MEMBER_CURSOR_X(selection), 16);
+     wait(1);
++    if (MenuTouch_PickMember(memberCount, &selection)) // Arena romhack
++      redraw = 1;
+     if (gKeysPressed & KEY_A) {
+       if (menu->psynergyCount) {
+         Sound_PlayFar(SE_MENU_CONFIRM);
+@@ -547,6 +550,8 @@ s32 PsynergyMenu_SelectTarget(s32 targetMode) {
+     }
+     MenuCursor_Position(MENU_MEMBER_CURSOR_X(selection), 16);
+     wait(1);
++    if (MenuTouch_PickMember(count, &selection)) // Arena romhack
++      redraw = 1;
+     if (gKeysPressed & KEY_A) {
+       Sound_PlayFar(SE_MENU_CONFIRM);
+       result = menu->memberTable[selection];
+@@ -1128,6 +1133,9 @@ s32 PsynergyMenu_RunList(s32 sideIndex) {
+       if (moved == -1) {
+         changed = 0;
+       }
++      // Arena romhack: a tap on a row of the page (menu_touch.h).
++      if (MENU_TOUCH_LIST(state))
++        changed = 1;
+ 
+       // Select shows the shortcut help while held, for field Psynergy.
+       if (menu->mode == PSYNERGY_MODE_USE) {
+diff --git a/games/tbs/src/menu/menu_status.c b/games/tbs/src/menu/menu_status.c
+index 6f5199274e..8898788abc 100644
+--- a/games/tbs/src/menu/menu_status.c
++++ b/games/tbs/src/menu/menu_status.c
+@@ -4,6 +4,7 @@
+ // Part of menu.c.
+ 
+ #include "menu_internal.h"
++#include "arena/menu_touch.h"
+ 
+ /// From patch 1 the menu resets eight party figure rows rather than four, and
+ /// saves and clears more window tiles for the extra text tiles it then uses;
+@@ -503,6 +504,8 @@ s32 StatusScreen_RunPartyRow(void) {
+     }
+     MenuCursor_Position(MENU_MEMBER_CURSOR_X(memberIndex), 16);
+     wait(1);
++    if (MenuTouch_PickMember(memberCount, &memberIndex)) // Arena romhack
++      redraw = 1;
+     if (gKeysPressed & KEY_A) {
+       Sound_PlayFar(SE_MENU_CONFIRM);
+       result = 1;
+@@ -600,6 +603,8 @@ s32 PartyMemberChooser_ChooseMember(void) {
+     }
+     MenuCursor_Position(MENU_MEMBER_CURSOR_X(memberIndex), 16);
+     wait(1);
++    if (MenuTouch_PickMember(memberCount, &memberIndex)) // Arena romhack
++      redraw = 1;
+     if (gKeysPressed & KEY_A) {
+       Sound_PlayFar(SE_MENU_CONFIRM);
+       result = 1;
+diff --git a/games/tbs/src/window/screens_battle_summon_menu.c b/games/tbs/src/window/screens_battle_summon_menu.c
+index c992bc4655..dc914f483c 100644
+--- a/games/tbs/src/window/screens_battle_summon_menu.c
++++ b/games/tbs/src/window/screens_battle_summon_menu.c
+@@ -30,6 +30,7 @@ s32 BattleSummonMenu_Run(s32 unusedA, s32 unusedB, const u8 *standby) {
+   s32 glyph;
+   s32 count;
+   struct Window *window;
++  struct Window *back;
+   struct WindowState *state;
+   s32 drawnRow, drawnFirstEntry, selectedRow, firstEntry;
+   s32 cursorHandle;
+@@ -58,6 +59,7 @@ s32 BattleSummonMenu_Run(s32 unusedA, s32 unusedB, const u8 *standby) {
+   BATTLE_MENU_GET_CURSOR(firstEntry, selectedRow, preferredRow);
+   window = Window_Create(SUMMON_MENU_WINDOW_X, 11, SUMMON_MENU_WINDOW_WIDTH, 9,
+                          MENU_WINDOW_FLAGS);
++  back = BattleTouch_OpenBack(BATTLE_BACK_LIST_X, BATTLE_BACK_LIST_Y);
+ 
+   // Icon sprites for each row.
+   for (index = 0; index < SUMMON_LIST_ROWS; index++) {
+@@ -276,6 +278,8 @@ s32 BattleSummonMenu_Run(s32 unusedA, s32 unusedB, const u8 *standby) {
+ 
+     BATTLE_MENU_SET_CURSOR(firstEntry, selectedRow, preferredRow);
+     navigation = gBattleMenuState;
++    BattleTouch_List(window, SUMMON_LIST_ROWS, firstEntry, count, &selectedRow,
++                     &preferredRow);
+     pressed = gKeysPressed;
+     repeated = gKeysRepeat;
+ 
+@@ -363,6 +367,7 @@ s32 BattleSummonMenu_Run(s32 unusedA, s32 unusedB, const u8 *standby) {
+   VramCache_FreeEntry((u16)cursorHandle);
+   Window_Close(counts, 1);
+   Window_Close(description, 1);
++  BattleTouch_CloseBack(back);
+   Window_Close(window, 1);
+   wait(1);
+   return result;
+diff --git a/games/tbs/src/window/window_messages.c b/games/tbs/src/window/window_messages.c
+index 2e97ca8042..23206ac05a 100644
+--- a/games/tbs/src/window/window_messages.c
++++ b/games/tbs/src/window/window_messages.c
+@@ -3,6 +3,7 @@
+ // Part of window.c.
+ 
+ #include "window_internal.h"
++#include "arena/field_touch.h"
+ 
+ /// A capacity no message reaches: the largest s32.
+ #define MESSAGE_CAPACITY_UNLIMITED 0x7fffffff
+@@ -272,8 +273,8 @@ s32 Text_CheckPauseSkipped(struct Message *message) {
+ 
+   if (state->waitingForSound != 0 && Sound_GetBgmRestoreDelayFar() == 0)
+     cancelKeys = 1;
+-  if (gKeysHeld & (KEY_A | KEY_B | KEYS_SHOULDERS))
+-    cancelKeys = 1;
++  if ((gKeysHeld & (KEY_A | KEY_B | KEYS_SHOULDERS)) || MessageTouch_Held())
++    cancelKeys = 1; // Arena romhack: or a finger held down
+   if (cancelKeys != 0) {
+     message->countdown = 0;
+     return 1;
+@@ -293,6 +294,7 @@ s32 Text_CheckTextDismissed(struct Message *message) {
+   pressedKeys = gKeysPressed;
+   if (state->mindRead != 0)
+     pressedKeys = gKeysPressedLatch;
++  pressedKeys |= MessageTouch_Keys(); // Arena romhack: a tap moves it on
+   if (pressedKeys & (KEY_A | KEY_B | KEYS_SHOULDERS))
+     cancelKeys = 1;
+   if (cancelKeys != 0) {
+diff --git a/games/tbs/src/window/window_typing.c b/games/tbs/src/window/window_typing.c
+index 68e70b380e..5187988c2d 100644
+--- a/games/tbs/src/window/window_typing.c
++++ b/games/tbs/src/window/window_typing.c
+@@ -3,6 +3,7 @@
+ // Part of window.c.
+ 
+ #include "window_internal.h"
++#include "arena/field_touch.h"
+ 
+ /// The battle message canvas: 30 columns of four tiles, each column 32 pixel
+ /// rows of a word each.
+@@ -137,7 +138,7 @@ s32 Message_Type(struct Message *message) {
+     return TYPING_GOES_ON;
+   }
+   // With no button held, wait out the delay after the last glyph.
+-  if (gKeysHeld == 0 && message->glyphDelay != 0) {
++  if (gKeysHeld == 0 && !MessageTouch_Held() && message->glyphDelay != 0) {
+     message->glyphDelay--;
+     return TYPING_GOES_ON;
+   }
+diff --git a/port/README.md b/port/README.md
+index d967ec2860..0fb7a22db5 100644
+--- a/port/README.md
++++ b/port/README.md
+@@ -17,7 +17,9 @@ make -f port/Makefile                # out/native-tbs-en/tbs-native (SDL3)
+ 
+ The SDL3 build needs a **32-bit** SDL3 that `pkg-config sdl3` finds (or pass
+ `SDL_CFLAGS=... SDL_LIBS=...`). Keys: arrows, X (A), Z (B), Enter (Start),
+-Backspace (Select), A and S (L and R); hold Tab to fast-forward; Escape quits.
++Backspace or right Shift (Select), A and S (L and R); hold Tab to fast-forward;
++Escape quits; the left mouse button (or a finger) taps and drags, the right is
++B.
+ A gamepad works too.
+ 
+ ### Screen width
+@@ -61,8 +63,22 @@ frame, so each screen's own A code runs (`WindowTouch_Pick`, cells from a
+ window's interior; `Touch_TappedUiCell` widens small cells at the grid's edges
+ to the 24-pixel minimum). Taps work on the icon rows (`IconMenu_Run`: the
+ manager, the shop choice, shop commands, Yes/No), the shops' stock row and page
+-arrows, party row and bag grid, the arena's shops and member choosers, and the
+-Pause menu. In the SDL build the right mouse button is B.
++arrows, party row and bag grid, the arena's shops and member choosers, the
++Pause menu, the field menu's party row and Psynergy list
++(`include/arena/menu_touch.h`), and the battle menus. In the SDL build the right
++mouse button is B.
++
++A press that moves `TOUCH_DRAG_START` (8) pixels is a drag: it is never a tap,
++and `Touch_Drag` reports its heading and distance from a centre that trails the
++finger by at most `TOUCH_DRAG_REACH` (a virtual stick where the finger went
++down). In the field (`include/arena/field_touch.h`) a drag steers the leader in
++any direction (`FIELD_TOUCH_STEER` in `Actor_UpdatePlayerControl`), past
++`TOUCH_DRAG_RUN` running; a tap in the 96-pixel square round the middle of the
++safe area presses A (`Field_CheckConfiguredKeys`); a tap anywhere moves a
++message on and a held finger hurries its text (`window_messages.c`,
++`window_typing.c`). The headless build's `drag X0 Y0 X1 Y1 N` presses at
++(X0, Y0), slides to (X1, Y1) over six frames, holds there N frames and lets go.
++The arena repo's `docs/CONTROLS.md` lists every key, button and option.
+ 
+ The headless build takes the arena repo's smoke scripts (`scripts/smoke/*.txt`:
+ `wait`, `press`, `tap`, `mash`, `include`, `shot`, `peek`, `poke`) and writes
+diff --git a/port/include/native/touch.h b/port/include/native/touch.h
+index cdcdb5ca07..63fdd65910 100644
+--- a/port/include/native/touch.h
++++ b/port/include/native/touch.h
+@@ -12,6 +12,13 @@
+ /// with the 160-line screen filling its short side.
+ #define TOUCH_TARGET_MIN 24
+ 
++/// How far, in screen pixels, a press must move before it is a drag (which
++/// steers, and is never a tap); how far the drag's centre trails the finger;
++/// and the distance from that centre past which a drag in the field runs.
++#define TOUCH_DRAG_START 8
++#define TOUCH_DRAG_REACH 40
++#define TOUCH_DRAG_RUN 28
++
+ /// 1 when the pointer was let go this frame inside the rectangle (x, y,
+ /// width, height, screen pixels) it was pressed in; it is then used up, so
+ /// one tap answers one question.
+@@ -25,6 +32,12 @@ int Touch_TappedUiRect(int x, int y, int width, int height);
+ /// under the finger wins. The press and the release must be in the same cell.
+ int Touch_TappedUiCell(int left, int top, int cellWidth, int cellHeight,
+                        int columns, int count);
++/// 1 while the pointer is held as a drag (moved TOUCH_DRAG_START from where it
++/// was pressed) and away from the drag's centre: *heading is the way from the
++/// centre to the finger in 1/65536 turns (Right 0, Down a quarter turn, as
++/// the field's headings), *distance how far, in pixels (at most
++/// TOUCH_DRAG_REACH). A virtual stick wherever the finger went down.
++int Touch_Drag(int *heading, int *distance);
+ /// 1 while the pointer is down; its place in screen pixels.
+ int Touch_Held(int *x, int *y);
+ /// A Back button that stays on screen while the game runs its own loops (the
+diff --git a/port/src/native_platform.c b/port/src/native_platform.c
+index 191c6e2c5a..065c052d81 100644
+--- a/port/src/native_platform.c
++++ b/port/src/native_platform.c
+@@ -7,6 +7,7 @@
+ #include "native/native.h"
+ #include "native/dev.h"
+ #include "native/overlay.h"
++#include "native/touch.h"
+ 
+ #include <errno.h>
+ #include <stdarg.h>
+diff --git a/port/src/native_touch.c b/port/src/native_touch.c
+index 69efc706a6..ec94b2885b 100644
+--- a/port/src/native_touch.c
++++ b/port/src/native_touch.c
+@@ -5,9 +5,35 @@
+ #include "native/native.h"
+ #include "native/touch.h"
+ 
++#include <math.h>
++
++#define TWO_PI 6.28318530717958647692
++
+ static int sDown, sX, sY;
+ static int sPressX, sPressY;
+ static int sReleased; // let go this frame, not yet used up
++// A press that has moved TOUCH_DRAG_START from where it began is a drag: it
++// steers (Touch_Drag) and its release is not a tap. The anchor is the drag's
++// centre: it trails the finger, at most TOUCH_DRAG_REACH behind, so turning
++// round takes a short move however far the finger has gone.
++static int sDragging, sAnchorX, sAnchorY;
++
++static int DistanceSquared(int x0, int y0, int x1, int y1) {
++  return (x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0);
++}
++
++static void Drag_Follow(void) {
++  int dx = sX - sAnchorX, dy = sY - sAnchorY;
++  double length = sqrt((double)(dx * dx + dy * dy));
++
++  if (!sDragging && DistanceSquared(sPressX, sPressY, sX, sY) >=
++                        TOUCH_DRAG_START * TOUCH_DRAG_START)
++    sDragging = 1;
++  if (length > TOUCH_DRAG_REACH) {
++    sAnchorX = sX - (int)(dx * TOUCH_DRAG_REACH / length);
++    sAnchorY = sY - (int)(dy * TOUCH_DRAG_REACH / length);
++  }
++}
+ 
+ void Touch_Update(void) {
+   int x, y;
+@@ -15,18 +41,40 @@ void Touch_Update(void) {
+ 
+   sReleased = 0;
+   if (down && !sDown) {
+-    sPressX = x;
+-    sPressY = y;
++    sPressX = sAnchorX = x;
++    sPressY = sAnchorY = y;
++    sDragging = 0;
++  }
++  if (!down && sDown) {
++    sReleased = !sDragging;
++    sDragging = 0;
+   }
+-  if (!down && sDown)
+-    sReleased = 1;
+   sDown = down;
+   if (down) {
+     sX = x;
+     sY = y;
++    Drag_Follow();
+   }
+ }
+ 
++int Touch_Drag(int *heading, int *distance) {
++  int dx = sX - sAnchorX, dy = sY - sAnchorY;
++  double angle;
++
++  if (!sDown || !sDragging)
++    return 0;
++  *distance = (int)sqrt((double)(dx * dx + dy * dy));
++  if (*distance < TOUCH_DRAG_START)
++    return 0; // dragged back to the centre: stand still
++  angle = atan2((double)dy, (double)dx); // y down, so clockwise from Right
++  if (angle < 0)
++    angle += TWO_PI;
++  *heading = (int)(angle * 65536.0 / TWO_PI + 0.5) & 0xffff;
++  if (*heading == 0xffff)
++    *heading = 0; // 0xffff is the field's "no heading"
++  return 1;
++}
++
+ static int Inside(int px, int py, int x, int y, int width, int height) {
+   return px >= x && px < x + width && py >= y && py < y + height;
+ }
+diff --git a/port/src/platform_headless.c b/port/src/platform_headless.c
+index f27dceae52..531d94b9c2 100644
+--- a/port/src/platform_headless.c
++++ b/port/src/platform_headless.c
+@@ -1,10 +1,9 @@
+ /// @file
+ /// The headless platform: no window and no pacing. Input comes from a smoke
+ /// script in the libmgba driver's format (scripts/smoke in the arena repo:
+-/// wait, press, tap, mash, include, shot, peek, poke, reset; touch and screen
+-/// are ours),
+-/// and screenshots are
+-/// PNG files, so the same scripts drive the native build.
++/// wait, press, tap, mash, include, shot, peek, poke, reset; touch, drag and
++/// screen are ours), and screenshots are PNG files, so the same scripts drive
++/// the native build.
+ ///
+ ///   tbs-native [--script FILE] [--shots DIR] [--frames N] [--scale N]
+ ///
+@@ -225,13 +224,14 @@ static void Script_Load(const char *path) {
+   snprintf(dir, sizeof(dir), "%.*s", slash ? (int)(slash - path) : 1,
+            slash ? path : ".");
+   while (fgets(line, sizeof(line), f)) {
+-    char word[64], arg1[400], arg2[64], arg3[64];
++    char word[64], arg1[400], arg2[64], arg3[64], arg4[64], arg5[64];
+     int n;
+     char *hash = strchr(line, '#');
+ 
+     if (hash)
+       *hash = 0;
+-    n = sscanf(line, "%63s %399s %63s %63s", word, arg1, arg2, arg3);
++    n = sscanf(line, "%63s %399s %63s %63s %63s %63s", word, arg1, arg2, arg3,
++               arg4, arg5);
+     if (n <= 0)
+       continue;
+     if (!strcmp(word, "wait") && n >= 2) {
+@@ -250,6 +250,30 @@ static void Script_Load(const char *path) {
+       c->touchX = strtol(arg1, NULL, 0);
+       c->touchY = strtol(arg2, NULL, 0);
+       Hold(0, 20);
++    } else if (!strcmp(word, "drag") && n >= 6) {
++      // A drag: down at (x0, y0), moved to (x1, y1) a few pixels a frame,
++      // held there for N frames, then let go.
++      int x0 = strtol(arg1, NULL, 0), y0 = strtol(arg2, NULL, 0);
++      int x1 = strtol(arg3, NULL, 0), y1 = strtol(arg4, NULL, 0);
++      int step, steps = 6;
++
++      for (step = 0; step <= steps; step++) {
++        struct Command *c = Command_Add(CMD_HOLD);
++
++        c->frames = 1;
++        c->touch = 1;
++        c->touchX = x0 + (x1 - x0) * step / steps;
++        c->touchY = y0 + (y1 - y0) * step / steps;
++      }
++      {
++        struct Command *c = Command_Add(CMD_HOLD);
++
++        c->frames = strtoul(arg5, NULL, 0);
++        c->touch = 1;
++        c->touchX = x1;
++        c->touchY = y1;
++      }
++      Hold(0, 20);
+     } else if (!strcmp(word, "mash") && n >= 3) {
+       u32 i, times = strtoul(arg2, NULL, 0);
+       u16 keys = Keys_Parse(arg1);
+diff --git a/port/src/platform_sdl.c b/port/src/platform_sdl.c
+index 8abd54b620..940addf52c 100644
+--- a/port/src/platform_sdl.c
++++ b/port/src/platform_sdl.c
+@@ -2,12 +2,14 @@
+ /// The SDL3 platform: a window scaled by whole steps (keeping the GBA's
+ /// 3:2 picture), keyboard and gamepad input, and 60 frames a second.
+ ///
+-///   tbs-native [--scale N] [--fullscreen]
++///   tbs-native [--scale N] [--fullscreen] [--width W] [--ui classic|touch]
+ ///
+ /// Keys: arrows (D-pad), X (A), Z (B), Enter (Start), Backspace or right
+ /// Shift (Select), A and S (L and R); hold Tab to run without the frame
+ /// limit; Escape quits. A gamepad works as laid out on a GBA: south A, east
+-/// B, the shoulders L and R, Back for Select.
++/// B, the shoulders L and R, Back for Select. The left mouse button (touch
++/// arrives as it) is the pointer (native_touch.c: taps and drags); the right
++/// is B. The arena repo's docs/CONTROLS.md lists them all.
+ 
+ #include "native/native.h"
+ 
+-- 
+2.56.1
+

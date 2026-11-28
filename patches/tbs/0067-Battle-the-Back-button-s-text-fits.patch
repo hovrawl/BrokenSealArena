@@ -1,0 +1,49 @@
+From 642ec5401b419317192b75b4b0dfa26d46da0353 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sat, 28 Nov 2026 09:40:48 +1100
+Subject: [PATCH] Battle: the Back button's text fits
+
+The battle menus' Back window was 6 tiles wide, 4 inside, narrower than
+the B glyph and "Back". Make it 7 by 3 with the text 4 pixels in, as the
+shops' Back button, and the Back zone the same size.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ games/tbs/include/arena/battle_touch.h | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/games/tbs/include/arena/battle_touch.h b/games/tbs/include/arena/battle_touch.h
+index 1005b7f5d8..9890f26c50 100644
+--- a/games/tbs/include/arena/battle_touch.h
++++ b/games/tbs/include/arena/battle_touch.h
+@@ -93,6 +93,12 @@ static inline u32 BattleTouch_Advance(void) {
+   return 0;
+ }
+ 
++/// The Back button's window, in tiles, as the shops' (UiBackButton_Open): B
++/// Back is wider than a 6-tile window's 4-tile inside, so 7, with the text 4
++/// pixels in.
++#define BATTLE_BACK_WIDTH 7
++#define BATTLE_BACK_HEIGHT 3
++
+ /// The Back button of the battle menus: a small window with B Back at tile
+ /// (x, y) whose tap holds B for a frame (Touch_SetBackZone). Returns 0 in the
+ /// classic layout. Close with BattleTouch_CloseBack.
+@@ -101,9 +107,11 @@ static inline struct Window *BattleTouch_OpenBack(s32 x, s32 y) {
+ 
+   if (!UI_TOUCH_LAYOUT)
+     return 0;
+-  button = Window_Create(x, y, 6, 3, WINDOW_FLAG_INSTANT);
+-  Text_DrawMessageAsTiles(MsgArenaUiBack, button, 0, 0);
+-  Touch_SetBackZone(x * 8, y * 8, 48, 24);
++  button = Window_Create(x, y, BATTLE_BACK_WIDTH, BATTLE_BACK_HEIGHT,
++                         WINDOW_FLAG_INSTANT);
++  Text_DrawMessageAsTiles(MsgArenaUiBack, button, 4, 0);
++  Touch_SetBackZone(x * 8, y * 8, BATTLE_BACK_WIDTH * 8,
++                    BATTLE_BACK_HEIGHT * 8);
+   return button;
+ }
+ 
+-- 
+2.56.1
+

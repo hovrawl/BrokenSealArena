@@ -163,6 +163,15 @@ change costs nothing, before it costs a build.
   header button presses the key it shows (L, R, Select, B), so the screen's
   key code runs unchanged. Grids take taps with `WindowTouch_Pick`
   (`arena_touch.h`): a tap selects, a tap on the selection presses A.
+- Every menu takes taps the same way: a tap on another choice selects it, a
+  tap on the selected one presses A, so the screen's own key code runs. A
+  press that slides `TOUCH_DRAG_START` pixels is a drag and never a tap. Add a
+  new menu to that rule with the helper for its kind (`WindowTouch_Pick`,
+  `UiList_Step`, `BattleTouch_List`, `MenuTouch_PickCell` /
+  `MenuTouch_PickMember` for the field menu) and list it in `docs/CONTROLS.md`.
+- The field (`include/arena/field_touch.h`): drag to walk (any direction, far
+  drags run), tap the middle 96 pixels of the safe area for A, tap anywhere to
+  move a message on. No touch widgets are drawn in the field yet.
 - Widgets (`src/shop/arena_ui_kit.c`, included by `shop.c`; use these before
   writing a screen's own):
   - `UiHeader_Open()` makes the header; `UiHeader_Draw(header, buttons)` clears

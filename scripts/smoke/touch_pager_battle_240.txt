@@ -1,0 +1,24 @@
+# The battle lists' pager by touch (run with --ui touch --width 240): Isaac's
+# Psynergy list (two pages): the finger-sized arrows, up (previous page) over
+# the small left arrow and down (next page) at the bottom right; a tap on the
+# down arrow shows page 2, a tap on the up arrow page 1 again.
+include battle.txt
+touch 120 80
+wait 50
+touch 120 80
+wait 50
+touch 120 80
+wait 50
+touch 100 148
+wait 60
+touch 116 148
+wait 10
+touch 116 148
+wait 60
+shot /tmp/shots/q0.png
+touch 224 150
+wait 30
+shot /tmp/shots/q1.png
+touch 208 76
+wait 30
+shot /tmp/shots/q2.png

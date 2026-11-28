@@ -1,0 +1,22 @@
+# The field menu lists' pager by touch (run with --ui touch --width 240):
+# Garet's item list (two pages): the up arrow (previous page) over the small
+# left arrow on the top border, the down arrow (next page) at the bottom
+# right; a tap on the down arrow shows page 2, a tap on the up arrow page 1.
+include to_lobby.txt
+tap S
+wait 90
+touch 102 148
+wait 10
+touch 102 148
+wait 90
+touch 40 20
+wait 20
+touch 40 20
+wait 60
+shot /tmp/shots/r0.png
+touch 224 128
+wait 40
+shot /tmp/shots/r1.png
+touch 208 28
+wait 40
+shot /tmp/shots/r2.png

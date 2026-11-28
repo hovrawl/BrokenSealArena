@@ -1176,6 +1176,335 @@ spec is "Class viewer" in `docs/UI-SPECS.md`).
 - Verified (headless): `touch_battle_240/288.txt`, every icon of the Fight
   and member rows shows.
 
+## 62. Native: the field menu's Item screen opens
+
+- Select, then Item, crashed the desktop build (keys too):
+  `ItemMenu_RunCommands` hides `menu->selectedItemIcon` before
+  `ItemMenu_SelectMember` has made it, the first time round. The cartridge's
+  null write lands in the BIOS; under `UBFIX` it is skipped. GBA unchanged.
+- Verified (headless): Select, Item, Garet's items, the commands, Details.
+
+## 63. Native: drag to walk, tap to talk, touch on the field menu
+
+- Drags (`native/touch.h`): a press that moves 8 pixels is a drag and never a
+  tap; `Touch_Drag` gives its heading and distance from a centre that trails
+  the finger by at most 40 pixels (a virtual stick where the finger went down).
+- The field (`include/arena/field_touch.h`): a drag steers the leader in any
+  direction (`FIELD_TOUCH_STEER` in `Actor_UpdatePlayerControl`: the drag's
+  heading in place of the pad's), past 28 pixels running; a tap in the 96-pixel
+  square round the middle of the safe area presses A (talk, check), as Nathan
+  asked ("standing in front and tapping on the center-ish of the screen"). The
+  leader is not always at the centre (at the room's bottom edge the camera
+  stops), so a later step could aim at the leader's own place.
+- Messages: a tap anywhere moves one on (`Text_CheckTextDismissed`); a finger
+  held down hurries the text and pauses, as a held button.
+- The field menu (`include/arena/menu_touch.h`): the party row on the
+  Psynergy, Item and Status screens and the Psynergy target picker, the
+  Psynergy and item lists, and the item commands (rows 8 pixels apart, as on
+  the GBA: small for fingers) take taps the same way as every other menu.
+- The battle Summon list takes taps and has the lists' Back button.
+- Headless `drag X0 Y0 X1 Y1 N` script command; `docs/CONTROLS.md` lists every
+  key, button, gesture and option.
+- The GBA ROM is byte-identical (checked against the build before 62).
+  A hook written `gKeysPressed |= 0` was not: `gKeysPressed` is volatile, so
+  the GBA build kept a load and store; such hooks are empty statements there.
+- Verified (headless, `--ui touch`): `touch_walk_240/288.txt` (greeter lines
+  by taps, walk and run by drags to the attendant, tap to talk: her menu
+  opens), `touch_fieldmenu_240/288.txt`, `touch_fielditems_240/288.txt`,
+  `touch_djinn_240.txt` (buy Flint, Djinn list by taps, unleash, next round's
+  Summon list, its targets, Back twice), `touch_lists_240.txt` (the item list:
+  select, choose, Back). Earlier touch scripts (shop, manager, Pause, picker,
+  mechanics, battle) still pass. Not checked: the SDL window itself (only the
+  headless front end runs in the cloud).
+- Known: the battle Djinn list's Back button is hidden under its stat preview
+  (from 60; right-click or Z still go back). The field has no on-screen Start
+  or Select yet, so a touch-only player cannot open the Pause or field menu.
+
+## 64. Native: tap the background to go back
+
+Nathan: "clicking outside the menu and the chat ui (the background) should go
+back, like a phone"; in the field menu too.
+
+- A tap no screen used (still unconsumed at the next frame's key update) that
+  lands on the background holds B for one frame (`Touch_BackgroundTapped`,
+  `Keys_Update`). Background means, within 4 pixels of both ends of the press:
+  no open window (`ArenaWindow_Covers` in `arena_icon_menu.c`, from the window
+  slots) and only BG1 to BG3 or the backdrop in front in the last frame drawn
+  (`Ppu_IsBackground`: `ppu.c` keeps each pixel's front layer; BG0 is the
+  window layer, and sprites are icons, cursors and people).
+- Tried first: the layer test alone. It broke the battle Djinn list
+  (`touch_djinn_240`): an affine BG2 is in front of part of the list's window
+  there, so a tap on the list's empty row went back. The window slots fix it.
+- One switch for every screen: the manager's and attendant's icon rows, the
+  field menu, Pause, battle lists (to the command row), shops and so on.
+  A drag is never a tap, so steering never goes back; in the field with
+  nothing open the B is harmless.
+- Only `port/` files and a `NATIVE` block change: the GBA ROM is
+  byte-identical (checked).
+- Verified (headless, `--ui touch --width 240`): `touch_backtap_240.txt`
+  (manager row, field menu and Pause each closed by a floor tap) and
+  `touch_backtap_battle_240.txt` (Psynergy list, a tap on the sand: back to the
+  command row). The 18 touch scripts at 240 and 288 give identical shots to
+  the build before, except `touch_picker_240`'s last shot: its final tap
+  lands on the wall beside the manager's row, which now closes the row (as
+  intended). Not checked: the SDL window itself.
+
+## 65. Native: tap a person to face and talk to them
+
+Nathan, after trying 63: standing just below and to the side of the attendant,
+dragging would not turn Isaac to her; "tapping should hit test if an npc is
+underneath, and turn and interact with that npc". And: "Good that the empty
+tap brings up the standard menu" (kept).
+
+- `FieldTouch_TalkToTapped` (`include/arena/field_touch.h`, called first in
+  `FieldTouch_AddKeys`): for each actor with a single sprite, not the leader
+  and not `ACTOR_NOT_TARGETED`, within reach and with a talk event
+  (`Scene_FindActorTalkTrigger`), a tap on its figure (24 by 38 pixels round
+  the feet's place on screen: x and z less height, less the view's corner, as
+  the rooms' camera places it) turns the leader to face it
+  (`facing = Trig_Atan(dz, dx)`, as `Actor_FaceActorById`) and sets the talk
+  request (`state->talk = id | FIELD_TALK_REQUEST`), as A does once it has
+  found someone; the person's script runs and turns them to the leader.
+- Reach: 48 pixels, measured as A measures it (`ACTOR_NEAR_TALK` counts ten
+  thirteenths, 48 high at most). Tried first: turn and press A. It failed in
+  Nathan's spot: the attendant is 34 pixels away across her counter, past A's
+  32, so A opened the field menu. Requesting the talk directly fixes it.
+- A tap on a person out of reach is not used: it falls through to the middle
+  zone (A) or, on a sprite, does nothing. A tap on the floor near the middle
+  still presses A (the field menu when nothing is ahead).
+- Rooms only (the flat camera); the world map is skipped. Walking up to a
+  person out of reach would need a path (the leader's own steering by
+  `FIELD_TOUCH_STEER` toward them until in reach, stopping at walls): a
+  possible next step.
+- GBA ROM byte-identical (the code is under `NATIVE`).
+- Verified (headless, `--ui touch --width 240`): `touch_talkto_240.txt` walks
+  below and right of the attendant, steps so Isaac faces away, taps her: he
+  turns up-left to her and "What would you like to do?" opens with her icon
+  row; a floor tap closes it (64); a tap on the old man across the room does
+  nothing; a tap on empty floor near the middle opens the field menu. The 20
+  touch scripts and the two back-tap scripts give the same shots as after 64.
+
+## 66. Native: an icon row's tap goes to the icon under it
+
+Nathan: with the manager's row on Characters, a tap on the left part of the
+Djinn icon chose Characters.
+
+- `IconMenu_TouchedIcon` (from 51) gave each icon a 40-pixel square from 4
+  pixels round its picture and took the first that held the tap; the icons are
+  24 pixels apart, so neighbours' targets overlapped by 16 pixels and the
+  earlier icon won (the selected one is drawn larger too, which hid it). Now a
+  target reaches halfway to each neighbour (24 wide, `TOUCH_TARGET_MIN`) and
+  4 pixels past the picture at the row's ends; 40 high as before.
+- The battle command row was already right: it takes cells one spacing wide
+  (`BattleTouch_PickCell`).
+- Known, left (CONTROLS "Not yet"): a tap dead centre does not close the field
+  menu, since the leader's figure is there and sprites are not background (64).
+- GBA ROM byte-identical.
+- Verified (headless, `--ui touch --width 240`): `touch_iconedge_240.txt`
+  taps Djinn at x 78 (the halfway point is 76; Characters' old target reached
+  84) with Characters selected: before, Characters opened; now Djinn is
+  selected, and a second tap opens it. The 22 touch scripts give the same shots
+  as before.
+
+## 67. Battle: the Back button's text fits
+
+Nathan: the battle Back button's "B Back" ran over its window's right border.
+
+- `BattleTouch_OpenBack` made a 6-tile window, 4 tiles inside, narrower than
+  the B glyph and "Back". Now 7 by 3 with the text 4 pixels in, as the shops'
+  `UiBackButton_Open`; the Back zone matches the window (56 by 24).
+- Placement unchanged: at the command row (0, 14) and beside the lists and
+  targets (0, 9), 7 tiles still end before the command icons (x 80) and the
+  list window (x 72).
+- Found on the way: Nathan's play save (`tbs-native.sav` in the repo root,
+  where the desktop build is run from) was also the headless runs' save, so a
+  smoke script started from his file and the Gauntlet scripts wrote to it.
+  Runs now get a fresh save each (`TBS_SAVE`); see GOTCHAS.
+- Verified (headless, `--ui touch`, fresh saves): `touch_battle_240/288`,
+  `touch_djinn_240`, `touch_lists_240`, `touch_backtap_battle_240`: the button
+  on the command row, the Psynergy list and the targets, text inside the
+  border. GBA ROM byte-identical.
+
+## 68. Battle: taller list rows in the touch layout
+
+Nathan: "List UI should have taller list items when in touch layout."
+
+- The battle Psynergy, Item, Djinn and Summon lists drew 16-pixel rows (two
+  tile rows; text, PP cost, element and range icons on the first). Their row
+  numbers are now layout values (`arena/battle_touch.h`):
+  `BATTLE_LIST_ROW_TILES`, `BATTLE_LIST_TILE_Y(row)` / `_TEXT_Y(row)`,
+  `BATTLE_LIST_WINDOW_HEIGHT(rows)`, `BATTLE_LIST_HIGHLIGHT(window, row,
+  palette)`, `BATTLE_LIST_PLACE_CURSOR`, and the cell height in
+  `BattleTouch_List`. `BATTLE_LIST_ROWS` (upstream's enum, menu_list.h) is now
+  a page's rows, `BATTLE_LIST_MAX_ROWS` (5) sizes the arrays; the Summon list
+  likewise (`SUMMON_LIST_ROWS`, `SUMMON_LIST_MAX_ROWS` 4). So most upstream
+  lines stay as they were.
+- On the GBA and in the classic layout they are the old constants: the GBA
+  ROM is byte-identical (checked after the refactor and after the touch
+  values), and `--ui classic` shots are identical to before.
+- Touch layout with 24-pixel rows (`UI_ROW_HEIGHT` 24 or more, the default):
+  rows of three tiles, the text and tile icons on the middle one (centred),
+  the highlight bar the whole row, the hand at the row's text; three rows a
+  page (two for Summon, below the standby counts), the window two tiles
+  taller than its rows so the last row's bar stays off the border; paging as
+  before. `--ui-size 16` keeps the GBA's rows (UI.md rule 7).
+- Not done: the field menu's Psynergy and item lists (`menu_touch.h`) keep
+  16-pixel rows (CONTROLS "Not yet").
+- Smoke scripts: battle list taps now aim at the 24-pixel rows' centres
+  (`touch_battle_240/288`, `touch_lists_240`, `touch_djinn_240`). The old taps
+  at y 96 sat on a 16-pixel row boundary and took the second row; the new
+  ones pick the same rows as before, so every shot after a choice matches the
+  build before 68.
+- Verified (headless, fresh saves): Psynergy (three rows, page 1 of 2),
+  Item, Djinn (Flint, beside its stat preview) and Summon (Venus with its
+  cost) lists, each looked at: rows evenly spaced, text centred, the bar over
+  the whole row, the hand on the selected row, nothing clipped; targets and
+  Back from the lists as before.
+
+## 69. Native: double tap and hold for B in battle
+
+Nathan: "For battles, holding B allows auto scrolling text, I think a double
+tap + hold should simulate this."
+
+- `native_touch.c` (`BHold_Update`, `Touch_BHeld`; `Keys_Update` holds B
+  while it is set): a press that starts within 15 frames of a tap's release
+  and 16 pixels of its place, while a battle runs, and is held still for 10
+  frames, holds B until the finger lifts; that release is not a tap. Let go
+  sooner, it is an ordinary tap. A drag cancels it. The first tap does its
+  usual job (moves a message on).
+- Battle indicator: `ArenaWindow_InBattle` (`arena_icon_menu.c`): the window
+  system in battle mode (`WindowState.battleMode`, set by
+  `WindowSystem_InitBattle`, cleared when the field sets the windows up
+  again). No hook in the battle code.
+- Headless `hold X Y N`: the finger down N frames with no pause after (two
+  with a short `wait` between make a double tap).
+- GBA ROM byte-identical.
+- Verified (headless, `--ui touch --width 240`): `touch_bhold_240.txt` at the
+  battle's first message: tap, down again and held, the messages race by and
+  the command row is up 40 frames later; held on the party's row, B does
+  nothing there; a quick double tap on the Psynergy list's second row selects
+  and chooses it (the targets). `touch_bhold_control_240.txt` (one long press,
+  no double tap) is still on the first message at the same point. The 20 touch
+  scripts give the same shots as before.
+
+## 70. Native: the intro's logos and title picture at wide widths
+
+Nathan, at `--width 16:9`: the Golden Sun logo had black blocks cut out of
+it and a copy of its edge at the far right.
+
+- Cause: the logos, the sky intro and the title picture are the GBA's 30
+  tiles wide, but their maps were laid out `DISPLAY_TILE_WIDTH` columns (36
+  at 288) plus two padding entries into 32-entry rows, so every row ran into
+  the next and tile numbers ran past the picture (the black blocks). BG2's
+  32-tile map then wrapped at 256 pixels (the copy at the right).
+- The title scene (`scene/title.c`: publisher and Camelot logos, intro,
+  title) now runs at the GBA's width: `Screen_UseGbaWidth(1)` before the
+  logos, `(0)` after its fade-out. The game sees a 240-pixel screen, so all
+  of `title_intro.c` lays out as on the GBA unchanged; the frame keeps the
+  chosen width (`gNativeOutputWidth`, `OUTPUT_WIDTH`) and draws the 240
+  pixels in the middle with black either side (`Display_Line`); the SDL
+  window and headless shots use the output width; the pointer is moved by the
+  margin.
+- The file screen shows the same logo: there it loops 30 columns
+  (`LOGO_TILE_WIDTH`, title.h; the same constant on the GBA) and BG2 scrolls
+  it to the middle (`LOGO_SCROLL_X`); the logo's edges are black, so the map
+  wrapping either side shows black.
+- GBA ROM byte-identical.
+- Verified (headless, with a copy of a save so the title screen shows): at
+  288 and 256 the Nintendo and Camelot logos, the sky intro and the title
+  picture centred with black bars, the logo whole; the file screen's logo
+  whole and centred, its icon row as before. At 240 the intro and the file
+  screen are pixel-identical to before; the 240 and 288 touch scripts
+  (field, shops, manager, battle) give the same shots as before.
+
+## 71. Field menu: taller list rows in the touch layout
+
+- The field menu's Psynergy and item lists (`menu_psynergy.c`,
+  `menu_item.c`) take their rows from layout values in `menu/menu.h`:
+  `LIST_PAGE_SIZE` is now a page's rows (`MENU_LIST_PAGE_ROWS`), with
+  `LIST_PAGE_MAX` (5); `MENU_LIST_ROW_HEIGHT`, `MENU_LIST_TEXT_Y(row)`,
+  `MENU_LIST_CURSOR_Y(row)`, `MENU_LIST_HIGHLIGHT(...)`; the icons
+  (`Menu_SetPageIcons`, which spaces this page size's icons by the row height
+  and every other caller's, the Status lists', by 16) and the taps
+  (`MENU_TOUCH_LIST`) follow.
+- GBA and classic layout: the old five rows of 16 (GBA ROM byte-identical;
+  `--ui classic` shots identical). Touch layout with 24-pixel rows: three rows
+  of 24 a page, the name, icon, PP and hand a tile lower (centred), paging as
+  before; `--ui-size 16` keeps 16.
+- The highlight stays on the text's tile row, as on the GBA: a three-tile bar
+  lit blank tiles that these lists never clear (tried; a bar was left behind
+  on the first row).
+- Not changed: the item commands (Use, Equip, Details / Give, Remove, Drop).
+  Taller rows would need their window to grow into the list window below;
+  their taps already reach about 16 pixels a row (the grid's outer edges are
+  widened to `TOUCH_TARGET_MIN`).
+- Seen, not from this change: at 288 the field menu leaves fragments of
+  window text in the black margins either side of the safe area (in the
+  shots before 71 too).
+- Verified (headless, fresh saves): `touch_fieldmenu_240/288`,
+  `touch_fielditems_240/288`: Mia's Psynergy list (Ply, Cure Poison, Frost),
+  a tap on the second row selects it and a second tap uses it (the target
+  picker); Garet's item list (two pages), the second row selected and chosen
+  (the item commands); the shots after each choice show the same choices as
+  before. The other touch scripts give the same shots as before.
+
+## 72. Native: a tap skips the intro and goes on from the title
+
+Nathan: "touch during startup doesnt skip the intro nor gets passed the title
+screen".
+
+- While the title scene runs (`gNativeTitleScene`, set by `Screen_UseGbaWidth`
+  from 70), `Keys_Update` turns any tap into A and Start, which the logos, the
+  intro and the title read. No game hook. Verified with taps only (73).
+
+## 73. Save: the file list takes taps
+
+Nathan: "touch doesnt work on the save menu".
+
+- `FileList_SelectFile` (`screens_save.c`), the list of files behind the file
+  screen's Continue (and its other modes) and the Pause menu's Save: a tap on
+  a file the mode allows selects it, a tap on the selected file chooses it
+  (rows of 16 pixels, `WindowTouch_Cell`). The overwrite question is the Yes
+  and No icon row, which already takes taps; a tap on the background backs
+  out (64). GBA ROM byte-identical.
+- Smoke scripts, taps only (the Pause menu opened with Start):
+  `touch_boot_new_240.txt` (fresh save: logos and file screen by taps, New
+  Game, the greeter's lines by taps in a corner, Pause, Save, the first file
+  selected and chosen: "Your game was saved."; again: "OK to save over this
+  file?", Yes tapped, saved) and `touch_boot_continue_240.txt` (with a copy of
+  a save: logos, intro and title by taps, Continue, the file: Isaac in the
+  lobby). Looked at each shot. The other touch scripts give the same shots.
+- Not checked: the file screen's Copy and Erase (the same list, so they should
+  take taps too).
+
+## 74. Native: a finger-sized pager on paged lists
+
+Nathan: "Can we make the pager bigger" (the field Item list's small arrows and
+page numbers on the window's top border).
+
+- `UiPager` (`arena_ui_kit.c`, `ui_kit.h`), touch layout only: while a paged
+  list is open (`UiPager_Open` and `_Close` around the battle Psynergy, Item,
+  Djinn and Summon lists and the field menu's Psynergy and item lists), the
+  item menu's 16 by 16 up and down arrows (`gMenu_ArrowTiles`, drawn for the
+  window sprites' palette) show as the UI kit's lists page: the up arrow
+  (previous page) over the small left arrow on the top border, the down arrow
+  (next page) at the window's bottom right. Each takes taps over 24 by 24;
+  the small arrows and page numbers stay as they were.
+- Battle lists: `BattleTouch_List` steps it and turns a tap into Left or
+  Right. Field lists: `MENU_TOUCH_LIST` steps it, turns the page itself (with
+  the row kept on the page) and returns 2, and the list redraws the page
+  (before, the field lists' page arrows took no taps).
+- Tried first: the shops' arrows (`gShop_UpArrowTiles`): drawn for the shop's
+  palette, green elsewhere; and the Djinn menu's arrows: diagonal. Hopping
+  arrows took the up arrow into the window above, so they stay still.
+  Not done: a tap on a page number to jump to it.
+- GBA ROM byte-identical; `--ui classic` shots identical.
+- Verified (headless): `touch_pager_battle_240.txt` (Isaac's Psynergy, two
+  pages: the down arrow shows page 2, Cure; the up arrow page 1) and
+  `touch_pager_field_240.txt` (Garet's items, two pages: the down arrow shows
+  Herb, the up arrow the first page). Other touch scripts: the same shots,
+  apart from the arrows where a paged list is open.
+
 ## Planned
 
 - Save the Gauntlet rung; more tournaments.

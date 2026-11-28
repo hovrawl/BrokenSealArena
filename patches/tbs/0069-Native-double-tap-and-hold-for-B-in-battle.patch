@@ -1,0 +1,191 @@
+From 601030174dab6dbb14bf56ef4cc08c478e065d23 Mon Sep 17 00:00:00 2001
+From: Nathan Singh <nathan.singh@hotmail.com>
+Date: Sat, 28 Nov 2026 10:00:43 +1100
+Subject: [PATCH] Native: double tap and hold for B in battle
+
+In battle, a press that starts just after a tap, near it, and is held
+still holds B until the finger lifts, as a held button hurries battle
+messages; its release is not a tap. A quick double tap stays two taps.
+The battle is known from the window system's battle mode. The headless
+build gains a hold X Y N command.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ games/tbs/src/window/arena_icon_menu.c |  9 +++++
+ port/include/native/touch.h            |  6 +++
+ port/src/native_platform.c             |  2 +-
+ port/src/native_touch.c                | 56 +++++++++++++++++++++++++-
+ port/src/platform_headless.c           | 15 +++++--
+ 5 files changed, 82 insertions(+), 6 deletions(-)
+
+diff --git a/games/tbs/src/window/arena_icon_menu.c b/games/tbs/src/window/arena_icon_menu.c
+index c14fca3630..6e7af4f38e 100644
+--- a/games/tbs/src/window/arena_icon_menu.c
++++ b/games/tbs/src/window/arena_icon_menu.c
+@@ -91,4 +91,13 @@ int ArenaWindow_Covers(int x, int y, int margin) {
+   }
+   return 0;
+ }
++
++/// Desktop and touch: 1 while a battle runs, which has the window system in
++/// battle mode (WindowSystem_InitBattle; the field's reset clears it). For
++/// native/touch.h's double tap and hold.
++int ArenaWindow_InBattle(void) {
++  struct WindowState *state = WINDOW_STATE;
++
++  return state != 0 && state->battleMode != 0;
++}
+ #endif
+diff --git a/port/include/native/touch.h b/port/include/native/touch.h
+index 072bbc830c..2ba4259cf7 100644
+--- a/port/include/native/touch.h
++++ b/port/include/native/touch.h
+@@ -52,5 +52,11 @@ int Touch_BackTapped(void);
+ /// holds B for one frame. The B comes a frame after the tap, which no one
+ /// notices; a drag is never a tap, so steering never goes back.
+ int Touch_BackgroundTapped(void);
++/// Called by the frame's key update: 1 while a double tap is held in battle
++/// (the second press within a quarter second of the first tap and near it,
++/// then held still a sixth of a second), which holds B as a held button does
++/// (it hurries battle messages). Released sooner, the second press is an
++/// ordinary tap; the release of a B hold is not a tap.
++int Touch_BHeld(void);
+ 
+ #endif
+diff --git a/port/src/native_platform.c b/port/src/native_platform.c
+index c519d5344b..b0b0f743c8 100644
+--- a/port/src/native_platform.c
++++ b/port/src/native_platform.c
+@@ -284,7 +284,7 @@ static void Keys_Update(void) {
+   u16 pressed = Platform_ReadKeys() & 0x3ff;
+ 
+   Touch_Update();
+-  if (Touch_BackTapped() || Touch_BackgroundTapped())
++  if (Touch_BackTapped() || Touch_BackgroundTapped() || Touch_BHeld())
+     pressed |= 0x0002; // B
+   u16 keycnt = IO_REG16(REG_KEYCNT_OFFSET);
+ 
+diff --git a/port/src/native_touch.c b/port/src/native_touch.c
+index d34950572a..5f2203ca5f 100644
+--- a/port/src/native_touch.c
++++ b/port/src/native_touch.c
+@@ -59,20 +59,69 @@ static int BackgroundAround(int px, int py) {
+   return 1;
+ }
+ 
++// Double tap and hold in battle (Touch_BHeld): a press that starts within
++// TAP_AGAIN_FRAMES of a tap's release and TAP_AGAIN_DISTANCE of its place,
++// held still for HOLD_FRAMES, holds B until the finger lifts, and its release
++// is not a tap. Let go sooner, it is an ordinary tap, so tap to select then
++// tap to confirm is unchanged.
++#define TAP_AGAIN_FRAMES 15
++#define TAP_AGAIN_DISTANCE 16
++#define HOLD_FRAMES 10
++
++static u32 sFrame;
++static u32 sLastTapFrame;
++static int sLastTapX, sLastTapY, sHaveLastTap;
++static int sHoldCandidate, sHoldFrames, sBHeld;
++
++// The game's window code (arena_icon_menu.c): a battle is running.
++int ArenaWindow_InBattle(void);
++
++static void BHold_Update(int pressed, int released) {
++  if (pressed) {
++    sHoldCandidate =
++        sHaveLastTap && sFrame - sLastTapFrame <= TAP_AGAIN_FRAMES &&
++        DistanceSquared(sLastTapX, sLastTapY, sPressX, sPressY) <=
++            TAP_AGAIN_DISTANCE * TAP_AGAIN_DISTANCE &&
++        ArenaWindow_InBattle();
++    sHoldFrames = 0;
++  }
++  if (sDown && sHoldCandidate) {
++    if (sDragging)
++      sHoldCandidate = 0;
++    else if (++sHoldFrames >= HOLD_FRAMES)
++      sBHeld = 1;
++  }
++  if (released) {
++    if (sBHeld) {
++      sReleased = 0; // the end of a B hold is not a tap
++      sHaveLastTap = 0;
++    } else if (sReleased) {
++      sLastTapFrame = sFrame;
++      sLastTapX = sX;
++      sLastTapY = sY;
++      sHaveLastTap = 1;
++    }
++    sBHeld = 0;
++    sHoldCandidate = 0;
++  }
++}
++
+ void Touch_Update(void) {
+   int x, y;
+   int down = Platform_ReadPointer(&x, &y);
++  int pressed = down && !sDown, released = !down && sDown;
+ 
++  sFrame++;
+   // sReleased still set: last frame's tap was not used by any screen.
+   sBackgroundTap = sReleased && BackgroundAround(sX, sY) &&
+                    BackgroundAround(sPressX, sPressY);
+   sReleased = 0;
+-  if (down && !sDown) {
++  if (pressed) {
+     sPressX = sAnchorX = x;
+     sPressY = sAnchorY = y;
+     sDragging = 0;
+   }
+-  if (!down && sDown) {
++  if (released) {
+     sReleased = !sDragging;
+     sDragging = 0;
+   }
+@@ -82,8 +131,11 @@ void Touch_Update(void) {
+     sY = y;
+     Drag_Follow();
+   }
++  BHold_Update(pressed, released);
+ }
+ 
++int Touch_BHeld(void) { return sBHeld; }
++
+ int Touch_Drag(int *heading, int *distance) {
+   int dx = sX - sAnchorX, dy = sY - sAnchorY;
+   double angle;
+diff --git a/port/src/platform_headless.c b/port/src/platform_headless.c
+index 531d94b9c2..0800f9d60b 100644
+--- a/port/src/platform_headless.c
++++ b/port/src/platform_headless.c
+@@ -1,9 +1,9 @@
+ /// @file
+ /// The headless platform: no window and no pacing. Input comes from a smoke
+ /// script in the libmgba driver's format (scripts/smoke in the arena repo:
+-/// wait, press, tap, mash, include, shot, peek, poke, reset; touch, drag and
+-/// screen are ours), and screenshots are PNG files, so the same scripts drive
+-/// the native build.
++/// wait, press, tap, mash, include, shot, peek, poke, reset; touch, hold,
++/// drag and screen are ours), and screenshots are PNG files, so the same
++/// scripts drive the native build.
+ ///
+ ///   tbs-native [--script FILE] [--shots DIR] [--frames N] [--scale N]
+ ///
+@@ -250,6 +250,15 @@ static void Script_Load(const char *path) {
+       c->touchX = strtol(arg1, NULL, 0);
+       c->touchY = strtol(arg2, NULL, 0);
+       Hold(0, 20);
++    } else if (!strcmp(word, "hold") && n >= 4) {
++      // The finger down at (x, y) for N frames, then up, with no pause
++      // after: two in a row (with a short wait between) are a double tap.
++      struct Command *c = Command_Add(CMD_HOLD);
++
++      c->frames = strtoul(arg3, NULL, 0);
++      c->touch = 1;
++      c->touchX = strtol(arg1, NULL, 0);
++      c->touchY = strtol(arg2, NULL, 0);
+     } else if (!strcmp(word, "drag") && n >= 6) {
+       // A drag: down at (x0, y0), moved to (x1, y1) a few pixels a frame,
+       // held there for N frames, then let go.
+-- 
+2.56.1
+
